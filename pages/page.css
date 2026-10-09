@@ -237,6 +237,9 @@ main.newtab h2 { max-width: 680px; margin: 44px auto 12px; }
 
 /* ---- other pages */
 
+.ext-toggles { display: flex; gap: 16px; flex: none; }
+.ext-toggles .check { margin: 0; color: var(--dim); font-size: 13px; }
+
 main.error { padding-top: 16vh; }
 main.error h1 { font-size: 30px; }
 .error-url { word-break: break-all; color: var(--dim); }

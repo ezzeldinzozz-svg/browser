@@ -163,6 +163,7 @@ function render(state) {
   if (state.activeWebContentsId && ext.getAttribute('tab') !== String(state.activeWebContentsId)) {
     ext.setAttribute('tab', String(state.activeWebContentsId));
   }
+  hideExtensionButtons(state.hiddenActions || []);
   $('private-badge').hidden = !state.private;
 
   const shield = state.shield;
@@ -654,6 +655,21 @@ function certificateSection(cert) {
   });
   box.append(toggle, body);
   return box;
+}
+
+// Extension buttons the user chose to hide (Extensions page). The list element's shadow root is
+// open; its buttons carry the extension id.
+function hideExtensionButtons(ids) {
+  const root = $('extensions').shadowRoot;
+  if (!root) return;
+  let style = root.getElementById('operecs-hidden');
+  if (!style) {
+    style = document.createElement('style');
+    style.id = 'operecs-hidden';
+    root.append(style);
+  }
+  const css = ids.filter((id) => /^[a-p]{32}$/.test(id)).map((id) => `#${id}`).join(', ');
+  style.textContent = css ? `${css} { display: none !important; }` : '';
 }
 
 // Media hub: every tab playing (or paused) audio/video, with play/pause and a jump to the tab.

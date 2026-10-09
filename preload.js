@@ -112,6 +112,8 @@ if (location.protocol === 'browser:' && window === window.top) {
     onStatus: on('status'),
     listExtensions: call('ext:list'),
     removeExtension: call('ext:remove'),
+    setExtensionEnabled: call('ext:set-enabled'),
+    setExtensionHidden: call('ext:set-hidden'),
     openWebStore: call('ext:store'),
     onBookmarkEdit: on('bookmark-edit'),
     starPage: call('bm:star'),

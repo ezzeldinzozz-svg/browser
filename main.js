@@ -145,6 +145,8 @@ function defaultSettings() {
     downloadDir: null, // null = the OS Downloads folder
     searchSuggestions: false, // send what's typed in the address bar to the search engine (opt-in)
     customEngines: [], // [{ name, keyword, url with %s }]
+    disabledExtensions: [], // [{ id, name, version, description, path }] installed but turned off
+    hiddenActions: [], // extension ids whose toolbar button is hidden
     theme: 'system', // 'system' | 'light' | 'dark' (browser UI, internal pages, and sites that follow it)
   };
 }
@@ -592,6 +594,7 @@ function sendTabs(w) {
       };
     }),
     media: mediaTabs(w),
+    hiddenActions: store.data.settings.hiddenActions || [],
   });
 }
 
@@ -3460,7 +3463,29 @@ function setupIpc() {
   });
   handle('ext:list', fromInternal, () => extensionList());
   handle('ext:remove', fromInternal, async (_tab, id) => {
-    await uninstallExtension(String(id), { session: session.defaultSession });
+    id = String(id);
+    const disabled = (store.data.settings.disabledExtensions || []).find((d) => d.id === id);
+    if (disabled && !session.defaultSession.extensions.getExtension(id)) {
+      await session.defaultSession.extensions.loadExtension(disabled.path).catch(() => {}); // the uninstaller expects it loaded
+    }
+    await uninstallExtension(id, { session: session.defaultSession }).catch(() => {});
+    store.data.settings.disabledExtensions = (store.data.settings.disabledExtensions || []).filter((d) => d.id !== id);
+    store.data.settings.hiddenActions = (store.data.settings.hiddenActions || []).filter((x) => x !== id);
+    store.save();
+    sendAll();
+    return extensionList();
+  });
+  handle('ext:set-enabled', fromInternal, async (_tab, id, enabled) => {
+    await setExtensionEnabled(String(id), !!enabled);
+    return extensionList();
+  });
+  handle('ext:set-hidden', fromInternal, (_tab, id, hide) => {
+    const set = new Set(store.data.settings.hiddenActions || []);
+    if (hide) set.add(String(id));
+    else set.delete(String(id));
+    store.data.settings.hiddenActions = [...set];
+    store.save();
+    sendAll();
     return extensionList();
   });
   handle('ext:store', fromInternal, (tab) => createTab(tab.w, 'https://chromewebstore.google.com/') && undefined);
@@ -3903,6 +3928,7 @@ function setupExtensions() {
     },
   });
   ElectronChromeExtensions.handleCRXProtocol(session.defaultSession); // icons in the toolbar
+  keepDisabledExtensionsOff();
   installChromeWebStore({
     session: session.defaultSession,
     beforeInstall: async (details) => {
@@ -3928,12 +3954,50 @@ function setupExtensions() {
 }
 
 function extensionList() {
-  return session.defaultSession.extensions.getAllExtensions().map((e) => ({
+  const hidden = new Set(store.data.settings.hiddenActions || []);
+  const loaded = session.defaultSession.extensions.getAllExtensions().map((e) => ({
     id: e.id,
     name: e.name,
     version: e.version,
     description: e.manifest.description || '',
+    enabled: true,
+    hasAction: !!(e.manifest.action || e.manifest.browser_action),
+    hidden: hidden.has(e.id),
   }));
+  const off = (store.data.settings.disabledExtensions || [])
+    .filter((d) => !loaded.some((e) => e.id === d.id))
+    .map((d) => ({ id: d.id, name: d.name, version: d.version, description: d.description, enabled: false, hasAction: false, hidden: hidden.has(d.id) }));
+  return [...loaded, ...off].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// Turning an extension off unloads it but keeps its files; Operecs unloads it again whenever the
+// web store library loads it (startup, auto-update) until it's turned back on.
+async function setExtensionEnabled(id, enabled) {
+  const ses = session.defaultSession;
+  const list = (store.data.settings.disabledExtensions ||= []);
+  if (enabled) {
+    const entry = list.find((d) => d.id === id);
+    store.data.settings.disabledExtensions = list.filter((d) => d.id !== id);
+    store.save();
+    if (entry && !ses.extensions.getExtension(id)) await ses.extensions.loadExtension(entry.path).catch(() => {});
+  } else {
+    const ext = ses.extensions.getExtension(id);
+    if (!ext) return;
+    if (!list.some((d) => d.id === id)) {
+      list.push({ id, name: ext.name, version: ext.version, description: ext.manifest.description || '', path: ext.path });
+    }
+    store.save();
+    ses.extensions.removeExtension(id);
+  }
+  sendAll();
+}
+
+function keepDisabledExtensionsOff() {
+  session.defaultSession.extensions.on('extension-loaded', (_e, ext) => {
+    if ((store.data.settings.disabledExtensions || []).some((d) => d.id === ext.id)) {
+      setImmediate(() => session.defaultSession.extensions.removeExtension(ext.id));
+    }
+  });
 }
 
 // ---------------------------------------------------------------- links from other apps
