@@ -142,6 +142,24 @@
       </select>
     </label>
     <input id="dns-custom" type="text" placeholder="https://dns.example/dns-query" spellcheck="false" hidden>
+    <label class="dns">Proxy
+      <select id="proxy-mode">
+        <option value="system">Use the system's settings</option>
+        <option value="direct">No proxy</option>
+        <option value="manual">Manual proxy server…</option>
+        <option value="pac">Automatic configuration (PAC)…</option>
+      </select>
+    </label>
+    <form id="proxy-manual" class="perm-add" hidden>
+      <input id="proxy-server" type="text" placeholder="host:port, or socks5://host:port" spellcheck="false">
+      <input id="proxy-bypass" type="text" placeholder="Bypass, e.g. &lt;local&gt;;*.example.com" spellcheck="false">
+      <button type="submit">Save</button>
+    </form>
+    <form id="proxy-pac" class="perm-add" hidden>
+      <input id="proxy-pac-url" type="text" placeholder="https://example.com/proxy.pac" spellcheck="false">
+      <button type="submit">Save</button>
+    </form>
+    <p id="proxy-saved" class="hint" hidden>Proxy settings saved.</p>
     <p id="tpc-restart" class="hint" hidden>Takes effect after restarting Operecs. <button id="tpc-restart-now">Restart now</button></p>
     <p class="hint">Sites where blocking is turned off (use the shield in the toolbar to change a site):</p>
     <div id="allowlist"></div>

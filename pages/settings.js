@@ -40,6 +40,12 @@ async function loadSettings() {
   if (!zoomSelect.options.length) for (const z of [50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200]) zoomSelect.append(new Option(`${z}%`, String(z)));
   zoomSelect.value = String(s.defaultZoom);
   document.getElementById('dns').value = s.dns;
+  document.getElementById('proxy-mode').value = s.proxyMode || 'system';
+  document.getElementById('proxy-server').value = s.proxyServer || '';
+  document.getElementById('proxy-bypass').value = s.proxyBypass || '';
+  document.getElementById('proxy-pac-url').value = s.proxyPac || '';
+  document.getElementById('proxy-manual').hidden = s.proxyMode !== 'manual';
+  document.getElementById('proxy-pac').hidden = s.proxyMode !== 'pac';
   document.getElementById('dns-custom').value = s.dnsCustom || '';
   document.getElementById('dns-custom').hidden = s.dns !== 'custom';
   document.getElementById('home-page').value = s.homePage || '';
@@ -517,3 +523,33 @@ async function loadDictionary() {
   }
 }
 loadDictionary();
+
+// ---- proxy
+const proxySaved = () => {
+  const note = document.getElementById('proxy-saved');
+  note.hidden = false;
+  setTimeout(() => (note.hidden = true), 2500);
+};
+document.getElementById('proxy-mode').addEventListener('change', async (e) => {
+  const mode = e.target.value;
+  document.getElementById('proxy-manual').hidden = mode !== 'manual';
+  document.getElementById('proxy-pac').hidden = mode !== 'pac';
+  // manual/PAC take effect once an address is saved
+  if (mode === 'system' || mode === 'direct') {
+    await browserAPI.setSetting('proxyMode', mode);
+    proxySaved();
+  }
+});
+document.getElementById('proxy-manual').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  await browserAPI.setSetting('proxyServer', document.getElementById('proxy-server').value.trim());
+  await browserAPI.setSetting('proxyBypass', document.getElementById('proxy-bypass').value.trim());
+  await browserAPI.setSetting('proxyMode', 'manual');
+  proxySaved();
+});
+document.getElementById('proxy-pac').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  await browserAPI.setSetting('proxyPac', document.getElementById('proxy-pac-url').value.trim());
+  await browserAPI.setSetting('proxyMode', 'pac');
+  proxySaved();
+});

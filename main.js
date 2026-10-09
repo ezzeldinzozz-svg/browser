@@ -147,6 +147,10 @@ function defaultSettings() {
     customEngines: [], // [{ name, keyword, url with %s }]
     disabledExtensions: [], // [{ id, name, version, description, path }] installed but turned off
     hiddenActions: [], // extension ids whose toolbar button is hidden
+    proxyMode: 'system', // 'system' | 'direct' | 'manual' | 'pac'
+    proxyServer: '', // e.g. "proxy.example.com:8080" or "socks5://127.0.0.1:1080"
+    proxyBypass: '', // e.g. "<local>;*.example.com"
+    proxyPac: '', // PAC script address
     theme: 'system', // 'system' | 'light' | 'dark' (browser UI, internal pages, and sites that follow it)
   };
 }
@@ -971,8 +975,28 @@ function applyLanguages(ses) {
   }
 }
 
+// Proxy: the system's settings by default; or none, a manual server, or a PAC script address.
+function proxyConfig() {
+  const s = store.data.settings;
+  switch (s.proxyMode) {
+    case 'direct':
+      return { mode: 'direct' };
+    case 'manual':
+      return s.proxyServer ? { mode: 'fixed_servers', proxyRules: s.proxyServer, proxyBypassRules: s.proxyBypass || '<local>' } : { mode: 'system' };
+    case 'pac':
+      return s.proxyPac ? { mode: 'pac_script', pacScript: s.proxyPac } : { mode: 'system' };
+    default:
+      return { mode: 'system' };
+  }
+}
+
+function applyProxy(ses) {
+  ses.setProxy(proxyConfig()).then(() => ses.closeAllConnections()).catch((err) => console.warn('Proxy:', err.message));
+}
+
 function configureSession(ses) {
   ses.setCertificateVerifyProc(onVerifyCertificate);
+  applyProxy(ses);
   // Present as plain Chrome (sites such as Google sign-in reject the Electron token), with the
   // user's languages.
   applyLanguages(ses);
@@ -3387,6 +3411,10 @@ function setupIpc() {
       (key === 'startup' && ['continue', 'newtab', 'pages'].includes(value)) ||
       (key === 'autoplay' && ['block-audible', 'allow'].includes(value)) ||
       (key === 'theme' && ['system', 'light', 'dark'].includes(value)) ||
+      (key === 'proxyMode' && ['system', 'direct', 'manual', 'pac'].includes(value)) ||
+      (key === 'proxyServer' && typeof value === 'string' && value.length <= 300 && /^[\w.:\-\[\]=;/ ]*$/.test(value)) ||
+      (key === 'proxyBypass' && typeof value === 'string' && value.length <= 500 && !/[\r\n]/.test(value)) ||
+      (key === 'proxyPac' && typeof value === 'string' && (value === '' || /^(https?|file):\/\/\S+$/i.test(value))) ||
       (key === 'memorySaverMinutes' && [15, 30, 60, 120, 240].includes(value)) ||
       (key === 'languages' && Array.isArray(value) && value.length <= 10 && value.every((l) => /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(l))) ||
       (key === 'defaultZoom' && [50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200].includes(value)) ||
@@ -3400,6 +3428,10 @@ function setupIpc() {
     store.save();
     if (key === 'dns' || key === 'dnsCustom') applyDns();
     if (key === 'theme') nativeTheme.themeSource = value;
+    if (key.startsWith('proxy')) {
+      applyProxy(session.defaultSession);
+      windows.filter((w) => w.private).forEach((w) => applyProxy(w.ses));
+    }
     if (key === 'languages' || key === 'spellcheck') {
       applyLanguages(session.defaultSession);
       windows.filter((w) => w.private).forEach((w) => applyLanguages(w.ses));
@@ -3459,6 +3491,7 @@ function setupIpc() {
     store.save();
     applyDns();
     nativeTheme.themeSource = 'system';
+    applyProxy(session.defaultSession);
     windows.forEach((w) => {
       layout(w);
       sendTabs(w);

@@ -410,7 +410,7 @@ Ordered by priority, then by what unblocks what.
 - [ ] **P2** Same prompt when closing a whole window or quitting
 - [ ] **P1** JavaScript dialogs styled and tab-modal *(Electron limit: `alert`/`confirm` use native app-modal dialogs and `prompt()` isn't supported; Electron has no hook to replace them)*
 - [x] **P1** Form re-submission warning on reload after POST (Electron used to cancel such reloads silently; we confirm and resend the form data)
-- [ ] **P1** Proxy settings (system proxy honored by default; manual/PAC option)
+- [x] **P1** Proxy settings (system by default; no proxy, manual server, PAC) in Settings → Privacy
 - [ ] **P1** Captive portal detection (hotel/airport Wi-Fi sign-in)
 - [ ] **P1** Offline page (with a little game is optional)
 - [ ] **P1** Web Serial/USB/HID/Bluetooth device chooser (`select-bluetooth-device`, `select-hid-device` handlers) or deny with a message
