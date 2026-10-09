@@ -73,14 +73,24 @@
     "win": {
       "target": [
         "nsis"
-      ]
+      ],
+      "artifactName": "${productName}-Setup-${version}.${ext}"
     },
     "linux": {
       "target": [
         "AppImage",
         "deb"
       ],
-      "category": "Network"
+      "category": "Network",
+      "maintainer": "ezzeldinzozz-svg <282520688+ezzeldinzozz-svg@users.noreply.github.com>",
+      "executableName": "browser",
+      "synopsis": "A basic cross-platform web browser",
+      "mimeTypes": [
+        "text/html",
+        "application/xhtml+xml",
+        "x-scheme-handler/http",
+        "x-scheme-handler/https"
+      ]
     },
     "publish": null,
     "protocols": [
@@ -103,7 +113,12 @@
         "name": "HTML document",
         "role": "Viewer"
       }
-    ]
+    ],
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "deleteAppDataOnUninstall": false
+    }
   },
   "dependencies": {
     "@ghostery/adblocker-electron": "2.18.2",

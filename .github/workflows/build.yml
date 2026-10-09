@@ -1,0 +1,62 @@
+name: Build and smoke test
+
+# Builds Windows and Linux packages on real machines, starts each build and checks the basics
+# (scripts/smoke-test.js), and keeps the packages as downloadable artifacts. macOS builds and
+# releases are made locally with `npm run release` (the signing keys never leave the Mac).
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Package (NSIS installer)
+        run: npx electron-builder --win --x64 --publish never
+      - name: Smoke test
+        run: node scripts/smoke-test.js dist/win-unpacked/Browser.exe
+      - uses: actions/upload-artifact@v4
+        with:
+          name: browser-windows
+          path: dist/*.exe
+          if-no-files-found: error
+
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Package (AppImage and .deb)
+        run: npx electron-builder --linux --x64 --publish never
+      # Ubuntu 24.04 restricts unprivileged user namespaces, which Chromium's sandbox needs.
+      # Allow them on the runner so the test runs with the sandbox on, as for real users who
+      # install the .deb (its chrome-sandbox helper) or have namespaces enabled.
+      - name: Allow user namespaces for Chromium's sandbox
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: Smoke test
+        run: xvfb-run -a node scripts/smoke-test.js dist/linux-unpacked/browser
+      - uses: actions/upload-artifact@v4
+        with:
+          name: browser-linux
+          path: |
+            dist/*.AppImage
+            dist/*.deb
+          if-no-files-found: error
