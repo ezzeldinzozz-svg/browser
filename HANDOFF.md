@@ -16,6 +16,9 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 - Tabs, address bar (URL or search with the chosen engine: DuckDuckGo default, Google, Bing, Brave, Ecosia, Kagi, Startpage), back/forward/reload/stop, keyboard shortcuts
 - Tab strip: drag to reorder, pinned tabs (kept left, restored), audio indicator with click-to-mute, right-click menu (new tab to the right, reload, duplicate, pin, mute, move to new window, close / others / to the right, reopen closed)
 - Bookmarks, history, downloads page, find in page, new-tab page, settings page
+- Popups: `window.open` with size features (`disposition: 'new-window'`) becomes a real popup BrowserWindow (keeps `window.opener` for sign-in flows; title shows the site; its links open as tabs); everything else opens as a tab
+- Settings live in `defaultSettings()` (also used by Reset); autoplay policy and default zoom apply to newly opened pages; settings page has a search box
+- New tab page: most-visited tiles from history (`topSites()`), hide with ×
 - Privacy/network: Global Privacy Control (Sec-GPC header via `webRequest.onBeforeSendHeaders`, `navigator.globalPrivacyControl` via capture-preload.js), secure DNS (`app.configureHostResolver`)
 - Store safety: each save keeps the previous file as `browser-data.json.bak`; an unreadable file is renamed `.damaged-<time>` and the backup is loaded
 - Help menu: `browser://shortcuts`, report a problem, privacy, `browser://licenses` (npm licenses generated into `gen/licenses.json` by `scripts/build.js`; Chromium's `LICENSES.chromium.html` bundled via `extraResources`)

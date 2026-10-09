@@ -52,7 +52,7 @@ Ordered by priority, then by what unblocks what.
 - [ ] **P1** Tear off by dragging a tab out; drag a tab into another window
 - [x] Tab search (Cmd/Ctrl+Shift+A lists open tabs by window) and "Switch to tab" in the address bar
 - [ ] **P1** Close multiple selected tabs (Shift/Cmd-click to select)
-- [ ] **P1** Popups that need `window.opener` (OAuth sign-in) open as real popup windows (known issue)
+- [x] Sign-in popups (`window.open` with size features) open as real popup windows that keep `window.opener`; the title shows the site
 - [x] Swipe back/forward on macOS (three-finger "swipe between pages" setting)
 - [ ] **P2** Two-finger swipe with an overscroll arrow (Chrome-style)
 - [ ] **P2** Tab groups (named, colored, collapsible, saved)
@@ -199,7 +199,8 @@ Ordered by priority, then by what unblocks what.
 - [x] In-use indicator in the address bar with a Stop button
 - [x] Picture-in-picture from the video context menu
 - [ ] **P2** Picture-in-picture toolbar button
-- [ ] **P1** Autoplay policy setting (block audible autoplay by default, per-site allow)
+- [x] Autoplay setting: block media with sound until the user interacts (default) or allow
+- [ ] **P2** Per-site autoplay exceptions
 - [ ] **P1** Media keys / Now Playing integration on macOS (verify Chromium's hardware media key handling is on)
 - [ ] **P1** Global media controls (toolbar popup for playing tabs)
 - [x] Video/audio context menu: play/pause, mute, loop, show controls, picture in picture, open/save/copy address
@@ -219,7 +220,8 @@ Ordered by priority, then by what unblocks what.
 - [ ] **P2** Save as PDF from a print preview
 - [ ] **P1** Print preview with page range/layout options (Chrome-style), not just the system dialog
 - [ ] **P1** Reader mode (Mozilla Readability, font/size/theme controls)
-- [ ] **P1** Default font and minimum font size settings; default zoom level
+- [x] Default zoom level setting
+- [ ] **P2** Default font and minimum font size
 - [ ] **P2** Translate page (on-device or a privacy-friendly service; no free Google Translate) *(Electron limit)*
 - [ ] **P2** Screenshot tool (visible area / full page / selection)
 - [ ] **P2** Read aloud (Text-to-Speech)
@@ -259,8 +261,8 @@ Ordered by priority, then by what unblocks what.
 - [ ] **P1** Home page / new-tab page choice
 - [ ] **P1** Downloads location + ask where to save
 - [ ] **P1** Languages (UI language, website languages, spellcheck)
-- [ ] **P1** Search within settings
-- [ ] **P1** Reset settings to defaults
+- [x] Search within settings
+- [x] Reset settings to defaults
 - [ ] **P2** Custom themes / colors per profile; compact mode
 - [ ] **P2** Keyboard shortcut customization
 
@@ -268,7 +270,8 @@ Ordered by priority, then by what unblocks what.
 
 - [x] New tab page with search box and bookmark tiles
 - [x] Dark mode support for new tab and all internal pages (follows the system)
-- [ ] **P1** Most-visited / pinned shortcut tiles (with favicons), remove/edit tiles
+- [x] Most-visited tiles on the new tab page (one per site), × to hide
+- [ ] **P2** Favicons on tiles, pin/edit tiles
 - [ ] **P1** Customization: background image/color, show/hide shortcuts
 - [ ] **P2** Option to use a custom URL as the new tab page
 - [ ] **P2** Privacy stats (trackers blocked, time saved) like Brave
@@ -323,8 +326,9 @@ Ordered by priority, then by what unblocks what.
 - [x] macOS: registered as a browser candidate (`CFBundleURLTypes` http/https, HTML document types)
 - [ ] **P0** Windows registry `RegisteredApplications`/ProgId and Linux `.desktop` `x-scheme-handler` (verify with real builds)
 - [x] Open local HTML files from Finder / the Dock icon (`open-file`)
-- [ ] **P1** Drag a file onto the window to open it
-- [ ] **P1** Drag & drop: URLs/text onto the tab strip or address bar to open; drag links/images out of pages; drag files into upload fields (verify)
+- [ ] **P1** Drag a file onto the window to open it (allowed by the navigation guard; not verified, automation can't simulate an OS file drop)
+- [x] Drop a link or text onto the tab strip to open it in a new tab
+- [ ] **P2** Drag links/images out of pages; verify dragging files into upload fields
 - [x] Dock menu (macOS): New Window, New Private Window
 - [ ] **P1** Jump List (Windows) with the same items
 - [ ] **P1** Share menu (macOS `ShareMenu`, Windows share) for the current page

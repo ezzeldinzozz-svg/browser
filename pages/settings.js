@@ -24,6 +24,10 @@ async function loadSettings() {
   document.getElementById('show-home').checked = s.showHomeButton;
   document.getElementById('confirm-close').checked = s.confirmClose;
   document.getElementById('gpc').checked = s.gpc;
+  document.getElementById('autoplay').value = s.autoplay;
+  const zoomSelect = document.getElementById('default-zoom');
+  if (!zoomSelect.options.length) for (const z of [50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200]) zoomSelect.append(new Option(`${z}%`, String(z)));
+  zoomSelect.value = String(s.defaultZoom);
   document.getElementById('dns').value = s.dns;
   document.getElementById('dns-custom').value = s.dnsCustom || '';
   document.getElementById('dns-custom').hidden = s.dns !== 'custom';
@@ -307,3 +311,42 @@ document.getElementById('dns-custom').addEventListener('change', async (e) => {
   await browserAPI.setSetting('dnsCustom', value);
   await browserAPI.setSetting('dns', 'custom');
 });
+
+// ---- Sites: autoplay and default zoom
+document.getElementById('autoplay').addEventListener('change', (e) => browserAPI.setSetting('autoplay', e.target.value));
+document.getElementById('default-zoom').addEventListener('change', (e) => browserAPI.setSetting('defaultZoom', Number(e.target.value)));
+
+// ---- Reset
+document.getElementById('reset-settings').addEventListener('click', async (e) => {
+  if (e.target.dataset.confirm !== '1') {
+    e.target.dataset.confirm = '1';
+    e.target.textContent = 'Click again to reset every setting';
+    return;
+  }
+  await browserAPI.resetSettings();
+  location.reload();
+});
+
+// ---- Search: shows only the sections (an h2 and what follows it) that mention the words
+(() => {
+  const main = document.querySelector('main');
+  const sections = [];
+  let current = null;
+  for (const node of [...main.children]) {
+    if (node.id === 'settings-search' || node.tagName === 'H1') continue;
+    if (node.tagName === 'H2') {
+      current = { heading: node, nodes: [node] };
+      sections.push(current);
+    } else if (current) {
+      current.nodes.push(node);
+    }
+  }
+  const text = (s) => s.nodes.map((n) => n.textContent + ' ' + [...n.querySelectorAll('option')].map((o) => o.textContent).join(' ')).join(' ').toLowerCase();
+  document.getElementById('settings-search').addEventListener('input', (e) => {
+    const words = e.target.value.toLowerCase().split(/\s+/).filter(Boolean);
+    for (const s of sections) {
+      const show = words.every((w) => text(s).includes(w));
+      for (const n of s.nodes) n.classList.toggle('filtered-out', !show);
+    }
+  });
+})();

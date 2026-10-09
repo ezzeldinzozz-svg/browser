@@ -2,6 +2,7 @@
 
 const path = require('path');
 const fs = require('fs');
+const os = require('os');
 const { pathToFileURL } = require('url');
 const {
   app,
@@ -82,6 +83,31 @@ const isMac = process.platform === 'darwin';
 
 // ---------------------------------------------------------------- storage
 
+// Settings a new profile starts with (and what Reset settings restores).
+function defaultSettings() {
+  return {
+    restoreSession: true,
+    blockThirdPartyCookies: true,
+    startup: null, // 'continue' | 'newtab' | 'pages' (null: derived from restoreSession)
+    startupPages: [],
+    showHomeButton: false,
+    homePage: '', // '' = the New Tab page
+    permissionDefaults: {}, // type -> 'block' (absent = ask)
+    adblock: true,
+    searchEngine: 'duckduckgo',
+    showBookmarksBar: true,
+    confirmClose: true, // "Close 5 tabs?" / "Quit with 8 tabs open?"
+    gpc: true, // Global Privacy Control: Sec-GPC header + navigator.globalPrivacyControl
+    autoplay: 'block-audible', // 'block-audible' (until the user interacts) | 'allow'
+    defaultZoom: 100, // percent, for sites without their own zoom
+    hiddenTiles: [], // sites removed from the new tab page's most-visited tiles
+    dns: 'automatic', // 'automatic' | 'off' | 'cloudflare' | 'quad9' | 'custom'
+    dnsCustom: '',
+    askDownloadLocation: false,
+    downloadDir: null, // null = the OS Downloads folder
+  };
+}
+
 class Store {
   constructor(file) {
     this.file = file;
@@ -114,25 +140,7 @@ class Store {
         }
       }
     }
-    this.data.settings = {
-      restoreSession: true,
-      blockThirdPartyCookies: true,
-      startup: null, // 'continue' | 'newtab' | 'pages' (null: derived from restoreSession)
-      startupPages: [],
-      showHomeButton: false,
-      homePage: '', // '' = the New Tab page
-      permissionDefaults: {}, // type -> 'block' (absent = ask)
-      adblock: true,
-      searchEngine: 'duckduckgo',
-      showBookmarksBar: true,
-      confirmClose: true, // "Close 5 tabs?" / "Quit with 8 tabs open?"
-      gpc: true, // Global Privacy Control: Sec-GPC header + navigator.globalPrivacyControl
-      dns: 'automatic', // 'automatic' | 'off' | 'cloudflare' | 'quad9' | 'custom'
-      dnsCustom: '',
-      askDownloadLocation: false,
-      downloadDir: null, // null = the OS Downloads folder
-      ...this.data.settings,
-    };
+    this.data.settings = { ...defaultSettings(), ...this.data.settings };
   }
   save() {
     clearTimeout(this.timer);
@@ -612,6 +620,7 @@ function createTab(w, url, { background = false, after = null, history = null, l
       contextIsolation: true,
       nodeIntegration: false,
       spellcheck: true,
+      autoplayPolicy: store.data.settings.autoplay === 'allow' ? 'no-user-gesture-required' : 'document-user-activation-required',
     },
   });
   const wc = view.webContents;
@@ -639,16 +648,21 @@ function createTab(w, url, { background = false, after = null, history = null, l
   w.win.contentView.addChildView(view);
   if (extensions && !w.private) extensions.addTab(wc, w.win);
 
-  wc.setWindowOpenHandler(({ url: target, disposition }) => {
-    if (!isBlockedNavigation(wc.getURL(), target)) {
-      const resolved = resolveInput(target);
-      if (resolved) createTab(tab.w, resolved, { after: tab, background: disposition === 'background-tab' });
-    }
+  wc.setWindowOpenHandler(({ url: target, disposition, features }) => {
+    if (isBlockedNavigation(wc.getURL(), target)) return { action: 'deny' };
+    // window.open() with size features (sign-in popups such as "Sign in with Google") opens a
+    // real popup that keeps window.opener, which those flows need to report back.
+    if (disposition === 'new-window' && isWeb(target)) return { action: 'allow', overrideBrowserWindowOptions: popupOptions(features, tab.w) };
+    const resolved = resolveInput(target);
+    if (resolved) createTab(tab.w, resolved, { after: tab, background: disposition === 'background-tab' });
     return { action: 'deny' };
   });
+  wc.on('did-create-window', (popup) => setupPopup(popup, tab));
   wc.on('context-menu', (_e, params) => showPageMenu(tab, params));
   // Websites (in any frame, or via redirect) may never load the browser's own pages.
   const guard = (e) => {
+    // A file dropped onto the page navigates without an initiating frame; pages can't open files.
+    if (/^file:/i.test(e.url) && !e.initiator && e.isMainFrame) return;
     if (isBlockedNavigation(wc.getURL(), e.url)) e.preventDefault();
   };
   wc.on('will-frame-navigate', guard);
@@ -748,6 +762,61 @@ function createTab(w, url, { background = false, after = null, history = null, l
   else selectTab(w, tab.id);
   saveSession();
   return tab;
+}
+
+// ---- popups
+
+function popupOptions(features, w) {
+  const num = (k, d) => {
+    const m = String(features || '').match(new RegExp(`(?:^|,)\\s*${k}\\s*=\\s*(\\d+)`, 'i'));
+    return m ? Number(m[1]) : d;
+  };
+  return {
+    width: Math.min(Math.max(num('width', 500), 200), 1600),
+    height: Math.min(Math.max(num('height', 600), 150), 1200),
+    autoHideMenuBar: true,
+    backgroundColor: w.private ? '#25153f' : undefined,
+    webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, spellcheck: true },
+  };
+}
+
+// A popup shows which site it is in its title (it has no address bar), can't open the
+// browser's own pages, and opens its own links as tabs in the opener's window.
+function setupPopup(popup, opener) {
+  const pwc = popup.webContents;
+  const titled = () => {
+    if (popup.isDestroyed()) return;
+    const host = siteOf(pwc.getURL()) || pwc.getURL();
+    const title = pwc.getTitle();
+    popup.setTitle(title && title !== pwc.getURL() ? `${host} \u2014 ${title}` : host);
+  };
+  pwc.on('page-title-updated', (e) => {
+    e.preventDefault();
+    titled();
+  });
+  pwc.on('did-navigate', titled);
+  const guard = (e) => {
+    if (isBlockedNavigation(pwc.getURL(), e.url)) e.preventDefault();
+  };
+  pwc.on('will-frame-navigate', guard);
+  pwc.on('will-redirect', guard);
+  pwc.setWindowOpenHandler(({ url: target }) => {
+    const w = opener.w;
+    if (!isBlockedNavigation(pwc.getURL(), target) && liveWindow(w)) {
+      const resolved = resolveInput(target);
+      if (resolved) createTab(w, resolved, { after: opener });
+    }
+    return { action: 'deny' };
+  });
+  pwc.on('context-menu', (_e, params) => {
+    if (!params.isEditable && !params.selectionText) return;
+    Menu.buildFromTemplate([
+      { label: 'Cut', enabled: params.editFlags.canCut, click: () => pwc.cut() },
+      { label: 'Copy', enabled: params.editFlags.canCopy, click: () => pwc.copy() },
+      { label: 'Paste', enabled: params.editFlags.canPaste, click: () => pwc.paste() },
+    ]).popup({ window: popup });
+  });
+  titled();
 }
 
 // Links opened from the same tab line up after each other, like other browsers.
@@ -1157,9 +1226,12 @@ function zoom(w, delta, tab = activeTab(w)) {
   sendTabs(w);
 }
 
+const zoomLevelOf = (percent) => Math.log(percent / 100) / Math.log(1.2);
+
 function applySiteZoom(tab) {
   const site = siteOf(tab.wc.getURL());
-  const level = (site && !tab.w.private && store.data.zoom[site]) || 0;
+  const own = site && !tab.w.private ? store.data.zoom[site] : undefined;
+  const level = own !== undefined ? own : zoomLevelOf(store.data.settings.defaultZoom || 100);
   if (tab.wc.getZoomLevel() !== level) tab.wc.setZoomLevel(level);
 }
 
@@ -1935,6 +2007,24 @@ async function clearBrowsingData(w, { range = 'hour', history, downloads, cookie
   sendAll();
 }
 
+// Most-visited sites for the new tab page: one tile per site, by visit count.
+function topSites() {
+  const hidden = new Set(store.data.settings.hiddenTiles);
+  const sites = new Map();
+  for (const h of store.data.history) {
+    const site = siteOf(h.url);
+    if (!site || hidden.has(site)) continue;
+    const entry = sites.get(site) || { site, url: new URL(h.url).origin + '/', title: '', visits: 0 };
+    entry.visits++;
+    if (!entry.title && new URL(h.url).pathname === '/') entry.title = h.title;
+    sites.set(site, entry);
+  }
+  return [...sites.values()]
+    .sort((a, b) => b.visits - a.visits)
+    .slice(0, 8)
+    .map(({ site, url, title }) => ({ site, url, title: title || site }));
+}
+
 // ---------------------------------------------------------------- address bar suggestions
 
 const SUGGESTION_LIMIT = 6;
@@ -2206,6 +2296,10 @@ function setupIpc() {
     store.save();
   });
   handle('tab:switch', fromChrome, (w, tabId) => switchToTab(w, tabId));
+  handle('tab:open-url', fromChrome, (w, text) => {
+    const url = resolveInput(String(text || ''));
+    if (url && !isInternalScheme(url)) createTab(w, url);
+  });
   handle('address:menu', fromChrome, (w) => showAddressMenu(w));
   handle('screen:choose', fromChrome, (w, pickId, sourceId) => resolveScreenPick(w, pickId, sourceId ? String(sourceId) : null));
   handle('site:info', fromChrome, (w) => siteInfo(w));
@@ -2360,6 +2454,8 @@ function setupIpc() {
       (['restoreSession', 'adblock', 'askDownloadLocation', 'blockThirdPartyCookies', 'showHomeButton', 'confirmClose', 'gpc'].includes(key) &&
         typeof value === 'boolean') ||
       (key === 'startup' && ['continue', 'newtab', 'pages'].includes(value)) ||
+      (key === 'autoplay' && ['block-audible', 'allow'].includes(value)) ||
+      (key === 'defaultZoom' && [50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200].includes(value)) ||
       (key === 'dns' && ['automatic', 'off', 'custom', ...Object.keys(DNS_PROVIDERS)].includes(value)) ||
       (key === 'dnsCustom' && typeof value === 'string' && (value === '' || /^https:\/\/[^\s]+$/i.test(value))) ||
       (key === 'homePage' && typeof value === 'string' && (value === '' || /^(https?|file):\/\//i.test(value))) ||
@@ -2402,6 +2498,21 @@ function setupIpc() {
   handle('startup:current-pages', fromInternal, (tab) =>
     tab.w.tabs.map((t) => t.wc.getURL()).filter((u) => isWeb(u)),
   );
+  handle('settings:reset', fromInternal, () => {
+    store.data.settings = defaultSettings();
+    store.save();
+    applyDns();
+    windows.forEach((w) => {
+      layout(w);
+      sendTabs(w);
+    });
+    buildMenu();
+  });
+  handle('data:top-sites', fromInternal, () => topSites());
+  handle('data:hide-tile', fromInternal, (_tab, site) => {
+    if (!store.data.settings.hiddenTiles.includes(site)) store.data.settings.hiddenTiles.push(String(site));
+    store.save();
+  });
   handle('app:relaunch', fromInternal, () => {
     app.relaunch();
     app.quit();

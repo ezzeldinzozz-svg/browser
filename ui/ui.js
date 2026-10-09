@@ -905,3 +905,16 @@ address.addEventListener('contextmenu', (e) => {
   e.preventDefault();
   api.addressMenu();
 });
+
+// Dropping a link (or text) onto the tab strip opens it in a new tab.
+$('tabstrip').addEventListener('dragover', (e) => {
+  if (dragId !== null) return; // reordering tabs is handled per tab
+  if ([...e.dataTransfer.types].some((t) => t === 'text/uri-list' || t === 'text/plain')) e.preventDefault();
+});
+$('tabstrip').addEventListener('drop', (e) => {
+  if (dragId !== null) return;
+  const text = (e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain') || '').split('\n')[0].trim();
+  if (!text) return;
+  e.preventDefault();
+  api.openInNewTab(text);
+});

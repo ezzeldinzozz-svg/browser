@@ -9,6 +9,7 @@
 <body>
   <main>
     <h1>Settings</h1>
+    <input id="settings-search" type="search" placeholder="Search settings" autocomplete="off">
     <h2>About Browser</h2>
     <div class="about">
       <div>
@@ -42,6 +43,18 @@
 
     <h2>Tabs and windows</h2>
     <label class="check"><input id="confirm-close" type="checkbox"> Ask before closing a window or quitting with several tabs open</label>
+
+    <h2>Sites</h2>
+    <label class="dns">Autoplay
+      <select id="autoplay">
+        <option value="block-audible">Block videos with sound until I interact with the page</option>
+        <option value="allow">Allow autoplay</option>
+      </select>
+    </label>
+    <label class="dns">Default zoom
+      <select id="default-zoom"></select>
+    </label>
+    <p class="hint">Changes apply to pages opened after you change them.</p>
 
     <h2>Appearance</h2>
     <label class="check"><input id="show-home" type="checkbox"> Show Home button</label>
@@ -107,6 +120,9 @@
       <select id="perm-add-value"><option value="allow">Allow</option><option value="block">Block</option></select>
       <button type="submit">Add exception</button>
     </form>
+    <h2>Reset</h2>
+    <p class="hint">Restore every setting to its default. Bookmarks, history, passwords in extensions and site data stay.</p>
+    <button id="reset-settings">Reset settings</button>
   </main>
   <script src="settings.js"></script>
 </body>
