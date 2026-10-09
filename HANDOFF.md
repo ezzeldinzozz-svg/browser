@@ -51,7 +51,7 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 - Popups that need `window.opener` (some OAuth logins) open as plain tabs
 - Google sign-in may block Electron despite the Chrome user agent
 - No DRM (Netflix/Spotify), no Chrome extensions (Electron limits, see research)
-- Windows/Linux builds pass automated smoke tests in CI but haven't been used by a person yet; auto-update is macOS only
+- Windows/Linux builds pass automated smoke and self-update tests in CI but haven't been used by a person yet; the Linux .deb doesn't auto-update (no apt repository), the AppImage does
 - Default Electron icon; product name "Browser" is a placeholder
 - macOS asks once for keychain access ("Browser Safe Storage", the cookie-encryption key) when moving to v0.4.0, the first build signed with our self-signed certificate. Choose "Always Allow"; later versions keep the same identity and shouldn't ask again
 - Ad blocking: prebuilt lists skip generic cosmetic rules (site-specific hiding works); no details popup yet
@@ -60,7 +60,7 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 
 The full prioritized checklist is in `FEATURES.md` (P0/P1/P2). Short version:
 
-1. Attach Windows/Linux packages to releases and auto-update them (CI builds them already); Intel/universal Mac build
+1. Intel/universal Mac build; Windows code signing (SignPath, free for open source) to avoid SmartScreen warnings
 2. Verify password-manager extensions end to end (Bitwarden sign-in + autofill), pin/hide extension buttons
 3. Passkeys (need a Developer ID-signed app on macOS)
 3. Windows/Linux builds + their updaters (electron-updater works unsigned there)
@@ -78,7 +78,8 @@ See `research/browser-lessons.md` for the full research on how Brave and others 
 | `bookmarks.js` | Bookmark tree (folders, bar/other roots), migration from the flat v0.5 list, Chromium JSON and HTML import, HTML export |
 | `adblock.js` | Ad/tracker blocking: loads/caches the Ghostery engine, hooks it into each session's `webRequest`, serves cosmetic filters to its preload |
 | `preload.js` | Exposes `window.browserAPI` only to `browser://` pages; main re-checks every IPC sender. Bundled with esbuild into `gen/preload.js` (`npm run build`, run by `npm start`/`dist`/`release`) because it imports the extension toolbar element |
-| `updater.js` | macOS self-updater (see Releases below) |
+| `updater.js` | Self-updater: macOS (swap the .app), Windows (silent NSIS reinstall), Linux AppImage (swap the file) |
+| `update-format.js` | What update signatures sign (`signature2`: platform + version + file + SHA-256); shared by the app and release scripts |
 | `ui/` | Toolbar UI, served at `browser://ui/` (tab strip, address bar, permission bar, find bar) |
 | `pages/` | Internal pages at `browser://<name>/` → `pages/<name>.html` (newtab, history, bookmarks, downloads, settings, error) |
 | `scripts/after-pack.js` | electron-builder afterPack hook: flips fuses (`scripts/fuses.js`), then signs the mac app with our self-signed certificate |
@@ -89,7 +90,7 @@ Key decisions:
 - **License: GPL-3.0-or-later** since v0.10 (required by `electron-chrome-extensions`, which is GPL-3.0; up to v0.9 the project was MIT).
 - **Electron over Rust/system webview:** same Chromium engine on all three OSes; Linux webviews are weak. Revisit only if "lightweight/native" becomes the product's identity.
 - **Security model:** websites never get the IPC API; only `browser://` pages do, checked by sender in main. Websites can't navigate/frame/redirect to `browser://`.
-- **Updates without paying Apple:** our own Ed25519 signature on the zip + bundle id/version/codesign checks; the app swaps itself after quitting. From v0.4.0 the update must also be code-signed by the same certificate as the running app.
+- **Updates without paid certificates:** our own Ed25519 signatures. `signature2` covers platform, version, file name and SHA-256, so an older signed file can't be passed off as newer; Mac manifests also keep the original signature (over the zip) for copies older than v0.11. On macOS the update must also be code-signed by the same certificate as the running app. Each platform has its own manifest: `latest-mac.json`, `latest-win.json`, `latest-linux.json`.
 - **Self-signed code signing certificate** ("Browser Self-Signed Code Signing", 10 years): gives every build the same code identity, so the keychain trusts updates. It isn't trusted by Gatekeeper, so the first-install warning remains until we pay for a Developer ID.
 - **Versioning:** semantic versioning. PATCH (0.4.**1**) for fix-only releases (the `npm run release` default), MINOR (0.**5**.0) when a release adds features, MAJOR 1.0 when it's ready for everyday users.
 - **Private windows** use `session.fromPartition('private-N')` (no `persist:` prefix = memory only), one partition per window, cleared on close. Their pages must be closed explicitly when the window closes (views don't close with the window).
@@ -137,7 +138,7 @@ macOS DMG needs a Mac (Apple Silicon builds are arm64).
 |---|---|
 | `npm start` | Run in development |
 | `npm run dist:mac` | Build `dist/Browser-<version>-arm64.dmg` without publishing |
-| `npm run release` | Bump patch version, build, sign, tag, push, create GitHub release (installed apps update within ~6 h, or via Browser → Check for Updates…) |
+| `npm run release` | Bump patch version, tag and push (CI builds Windows/Linux), build the Mac app, download CI's packages, sign all update manifests, publish one GitHub release for all platforms. Takes ~20–30 min (CI + uploading ~600 MB) |
 | `npm run release -- 0.3.0` | Release a specific version |
 
 Release needs a clean git tree. Uploading the DMG and zip (~130 MB each) can take 10+ minutes;
@@ -157,8 +158,14 @@ regularly for security fixes, then release.
 Windows installer (`Browser-Setup-<version>.exe`) and the Linux AppImage + `.deb` on real
 runners, starts each build with `scripts/smoke-test.js` (toolbar, new tab, extension element,
 navigation, API isolation, settings, ad-block lists), and uploads the packages as run artifacts.
-macOS is still built and released locally (`npm run release`) so the signing keys stay on the Mac.
-Windows/Linux packages aren't attached to releases or auto-updated yet.
+It also runs a real self-update on Windows and Linux: it installs an old build (0.0.1), serves the
+current build as an update signed with a throwaway key from a local server (`BROWSER_UPDATE_TEST=1`
+plus `BROWSER_UPDATE_URL`/`BROWSER_UPDATE_KEY`, honored only together), clicks "Restart to update"
+and checks the new version is installed and running.
+
+Release tags (`v*`) run the same workflow; `npm run release` waits for it, downloads the Windows
+and Linux packages, signs every platform's update manifest locally and publishes them with the Mac
+build. The signing keys never leave the Mac.
 
 ## Testing notes
 

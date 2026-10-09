@@ -333,7 +333,8 @@ Ordered by priority, then by what unblocks what.
 
 - [x] macOS self-updater: Ed25519-signed zip from GitHub Releases, bundle/version/codesign checks, applied on quit, "Restart to update" button
 - [x] Check for Updates… menu item (macOS)
-- [ ] **P0** Windows and Linux auto-update (electron-updater / AppImage; deb/rpm repos or Flatpak)
+- [x] Windows (silent NSIS reinstall) and Linux AppImage self-update, signed like macOS; end-to-end update test in CI on both
+- [ ] **P2** apt/rpm repository or Flathub so the .deb/other packages update too
 - [ ] **P1** Staged rollout and forced update for critical security releases
 - [ ] **P1** Opt-in crash reporting (`crashReporter` → Sentry/Backtrace), asked in onboarding, named in the privacy policy
 - [x] Update status in the UI: toolbar pill with download progress / "Restart to update"; Settings → About shows up to date, errors and "move to Applications"
