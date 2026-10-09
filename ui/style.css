@@ -21,6 +21,18 @@
   }
 }
 
+/* Private windows: a distinct purple frame so they're never mistaken for normal ones. */
+body.private {
+  --bg: #25153f;
+  --bg-active: #362359;
+  --bg-hover: #2f1d4d;
+  --fg: #f1ecfa;
+  --fg-dim: #b9add0;
+  --input-bg: #25153f;
+  --accent: #c4a7ff;
+  --border: #4a3570;
+}
+
 * { box-sizing: border-box; }
 html, body {
   margin: 0;
@@ -171,6 +183,32 @@ button {
 }
 #authbar button:hover { background: var(--bg-hover); }
 #authbar button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg-active); }
+
+#private-badge {
+  flex: none;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 12px;
+  font-weight: 600;
+}
+#private-badge[hidden] { display: none; }
+
+#toolbar #shield {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  width: auto;
+  min-width: 30px;
+  padding: 0 6px;
+  border-radius: 15px;
+  color: var(--accent);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+#toolbar #shield[hidden] { display: none; }
+#toolbar #shield.off { color: var(--fg-dim); opacity: 0.6; }
 
 #downloads { position: relative; }
 #downloads.active { color: var(--accent); }

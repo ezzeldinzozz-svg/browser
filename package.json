@@ -27,6 +27,7 @@
       "main.js",
       "preload.js",
       "updater.js",
+      "adblock.js",
       "update-public-key.pem",
       "ui/**",
       "pages/**",
@@ -78,5 +79,8 @@
       "category": "Network"
     },
     "publish": null
+  },
+  "dependencies": {
+    "@ghostery/adblocker-electron": "2.18.2"
   }
 }

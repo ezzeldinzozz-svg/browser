@@ -7,6 +7,16 @@ const address = $('address');
 
 function render(state) {
   const active = state.tabs.find((t) => t.id === state.activeId);
+  document.body.classList.toggle('private', state.private);
+  $('private-badge').hidden = !state.private;
+
+  const shield = state.shield;
+  $('shield').hidden = !shield.available;
+  $('shield').classList.toggle('off', !shield.on);
+  $('shield-count').textContent = shield.on && shield.blocked ? String(shield.blocked) : '';
+  $('shield').title = shield.on
+    ? `Blocked ${shield.blocked} ads and trackers on ${shield.site}. Click to turn off for this site.`
+    : `Ad blocking is off for ${shield.site}. Click to turn it on.`;
 
   tablist.textContent = '';
   for (const t of state.tabs) {
@@ -115,6 +125,7 @@ $('find-prev').addEventListener('click', () => api.find(findInput.value, { forwa
 $('find-close').addEventListener('click', () => api.closeFind());
 $('downloads').addEventListener('click', () => api.openDownloads());
 $('update').addEventListener('click', () => api.installUpdate());
+$('shield').addEventListener('click', () => api.toggleSiteBlocking());
 
 let currentAuth = null;
 api.onFocusAuth(() => $('auth-user').focus());

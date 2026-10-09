@@ -47,7 +47,8 @@ button:hover { border-color: var(--accent); }
 .empty { color: var(--dim); padding: 24px 0; }
 h2 { font-size: 16px; font-weight: 500; }
 .hint { color: var(--dim); margin-top: 0; }
-.check { display: flex; align-items: center; gap: 8px; margin-bottom: 28px; cursor: pointer; }
+.check { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; cursor: pointer; }
+#allowlist { margin-bottom: 28px; }
 .check input { width: 16px; height: 16px; margin: 0; }
 .row a.t { display: block; }
 .row .t.muted { color: var(--dim); }

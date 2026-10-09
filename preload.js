@@ -29,6 +29,8 @@ if (location.protocol === 'browser:' && window === window.top) {
     openDownloads: call('downloads:open'),
     installUpdate: call('update:install'),
     respondAuth: call('auth:respond'),
+    toggleSiteBlocking: call('adblock:toggle-site'),
+    removeAdblockException: call('data:adblock-allow-remove'),
     getSettings: call('data:settings'),
     setSetting: call('data:settings-set'),
     getDownloads: call('data:downloads'),
