@@ -141,3 +141,26 @@ if (location.protocol === 'browser:' && window === window.top) {
     setDefaultBrowser: call('default:set'),
   });
 }
+
+// Interface language: translate the browser's own pages and toolbar in place, right-to-left for
+// Arabic. (Runs in this isolated world; the page's DOM is shared.)
+if (location.protocol === 'browser:' && window === window.top) {
+  const i18n = require('./i18n');
+  let locale = null;
+  try {
+    locale = ipcRenderer.sendSync('i18n:get');
+  } catch {
+    locale = null;
+  }
+  if (locale && locale.lang !== 'en') {
+    const dict = i18n.compile(locale.strings);
+    const start = () => {
+      document.documentElement.lang = locale.lang;
+      if (i18n.RTL.has(locale.lang)) document.documentElement.dir = 'rtl';
+      i18n.watchDom(dict, document);
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
+    else start();
+  }
+}
+

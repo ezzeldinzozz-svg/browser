@@ -42,6 +42,7 @@ process.on('uncaughtException', (err) => {
 
 const updater = require('./updater');
 const adblock = require('./adblock');
+const i18n = require('./i18n');
 const bookmarks = require('./bookmarks');
 const { ElectronChromeExtensions } = require('electron-chrome-extensions');
 const { installChromeWebStore, uninstallExtension } = require('electron-chrome-web-store');
@@ -151,6 +152,7 @@ function defaultSettings() {
     proxyServer: '', // e.g. "proxy.example.com:8080" or "socks5://127.0.0.1:1080"
     proxyBypass: '', // e.g. "<local>;*.example.com"
     proxyPac: '', // PAC script address
+    uiLanguage: 'auto', // 'auto' (the system's) | 'en' | 'ar'
     theme: 'system', // 'system' | 'light' | 'dark' (browser UI, internal pages, and sites that follow it)
   };
 }
@@ -363,6 +365,47 @@ async function removeSiteData(w, site) {
     for (const scheme of ['https', 'http']) await ses.clearStorageData({ origin: `${scheme}://${host}` }).catch(() => {});
   }
 }
+
+// ---------------------------------------------------------------- interface language
+
+// settings.uiLanguage: 'auto' (follow the system) or a language with a locales/<lang>.json.
+const UI_LANGUAGES = { en: 'English', ar: 'العربية' };
+let uiLang = 'en';
+let uiRaw = null; // the locale file, sent to pages
+let uiDict = null; // compiled, for menus and dialogs here
+
+function setupUiLanguage() {
+  const pref = store.data.settings.uiLanguage || 'auto';
+  const system = (app.getPreferredSystemLanguages()[0] || app.getLocale() || 'en').toLowerCase().split('-')[0];
+  uiLang = pref !== 'auto' && UI_LANGUAGES[pref] ? pref : UI_LANGUAGES[system] ? system : 'en';
+  uiRaw = null;
+  uiDict = null;
+  if (uiLang !== 'en') {
+    try {
+      uiRaw = JSON.parse(fs.readFileSync(path.join(__dirname, 'locales', `${uiLang}.json`), 'utf8'));
+      uiDict = i18n.compile(uiRaw);
+    } catch (err) {
+      console.warn('Interface language:', err.message);
+      uiLang = 'en';
+    }
+  }
+  // Every menu and message box goes through these, so their text is translated in one place.
+  if (!setupUiLanguage.patched) {
+    setupUiLanguage.patched = true;
+    const build = Menu.buildFromTemplate.bind(Menu);
+    Menu.buildFromTemplate = (template) => build(i18n.translateMenuTemplate(uiDict, template));
+    const tr = (o) =>
+      o && uiDict
+        ? { ...o, message: i18n.translate(uiDict, o.message), detail: i18n.translate(uiDict, o.detail), buttons: o.buttons && o.buttons.map((b) => i18n.translate(uiDict, b)), title: i18n.translate(uiDict, o.title) }
+        : o;
+    for (const name of ['showMessageBox', 'showMessageBoxSync']) {
+      const original = dialog[name].bind(dialog);
+      dialog[name] = (win, options) => (options === undefined && win && !win.contentView ? original(tr(win)) : original(win, tr(options)));
+    }
+  }
+}
+
+const t = (text) => i18n.translate(uiDict, text);
 
 // ---------------------------------------------------------------- international domain names
 
@@ -3273,6 +3316,11 @@ function handle(channel, guard, fn) {
 }
 
 function setupIpc() {
+  // preload.js on browser:// pages asks which interface language to show
+  ipcMain.on('i18n:get', (e) => {
+    const internal = e.senderFrame && /^browser:/.test(e.senderFrame.url);
+    e.returnValue = internal ? { lang: uiLang, strings: uiRaw } : null;
+  });
   ipcMain.on('gpc:enabled', (e) => {
     e.returnValue = !!(store && store.data.settings.gpc);
   });
@@ -3540,6 +3588,8 @@ function setupIpc() {
     startupMode: startupMode(),
     downloadDirShown: downloadDir(),
     systemLanguages: app.getPreferredSystemLanguages(),
+    uiLanguages: Object.entries(UI_LANGUAGES).map(([id, name]) => ({ id, name })),
+    uiLanguageNow: uiLang,
   }));
   handle('downloads:choose-folder', fromInternal, async (tab) => {
     const { canceled, filePaths } = await dialog.showOpenDialog(tab.w.win, {
@@ -3563,6 +3613,7 @@ function setupIpc() {
       (key === 'startup' && ['continue', 'newtab', 'pages'].includes(value)) ||
       (key === 'autoplay' && ['block-audible', 'allow'].includes(value)) ||
       (key === 'theme' && ['system', 'light', 'dark'].includes(value)) ||
+      (key === 'uiLanguage' && (value === 'auto' || Object.hasOwn(UI_LANGUAGES, value))) ||
       (key === 'proxyMode' && ['system', 'direct', 'manual', 'pac'].includes(value)) ||
       (key === 'proxyServer' && typeof value === 'string' && value.length <= 300 && /^[\w.:\-\[\]=;/ ]*$/.test(value)) ||
       (key === 'proxyBypass' && typeof value === 'string' && value.length <= 500 && !/[\r\n]/.test(value)) ||
@@ -4058,6 +4109,7 @@ app.whenReady().then(() => {
   protocol.handle(SCHEME, serveInternal);
   store = new Store(path.join(app.getPath('userData'), 'browser-data.json'));
   nativeTheme.themeSource = store.data.settings.theme || 'system';
+  setupUiLanguage();
   app.setAboutPanelOptions({
     applicationName: DISPLAY_NAME,
     applicationVersion: app.getVersion(),

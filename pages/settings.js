@@ -24,6 +24,9 @@ async function loadSettings() {
   document.getElementById('startup-pages').value = (s.startupPages || []).join('\n');
   document.getElementById('show-home').checked = s.showHomeButton;
   document.getElementById('theme').value = s.theme || 'system';
+  const uiSelect = document.getElementById('ui-language');
+  if (uiSelect.options.length === 1) for (const l of s.uiLanguages) uiSelect.append(new Option(l.name, l.id));
+  uiSelect.value = s.uiLanguage || 'auto';
   document.getElementById('confirm-close').checked = s.confirmClose;
   document.getElementById('gpc').checked = s.gpc;
   document.getElementById('search-suggestions').checked = s.searchSuggestions;
@@ -558,3 +561,10 @@ document.getElementById('export-all').addEventListener('click', async () => {
   const dir = await browserAPI.exportAllData();
   document.getElementById('export-result').textContent = dir ? `Saved to ${dir}` : '';
 });
+
+// ---- interface language (applies after a restart)
+document.getElementById('ui-language').addEventListener('change', async (e) => {
+  await browserAPI.setSetting('uiLanguage', e.target.value);
+  document.getElementById('ui-language-restart').hidden = false;
+});
+document.getElementById('ui-language-restart-now').addEventListener('click', () => browserAPI.relaunch());

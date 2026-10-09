@@ -37,6 +37,8 @@
       "update-public-key.pem",
       "ui/**",
       "pages/**",
+      "i18n.js",
+      "locales/**",
       "package.json"
     ],
     "asar": true,

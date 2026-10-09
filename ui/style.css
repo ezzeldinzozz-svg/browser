@@ -568,3 +568,18 @@ browser-action-list::part(badge) { font-size: 9px; }
 .dp-item:hover { background: var(--surface-hover); }
 .dp-item.sel { border-color: var(--violet); background: var(--violet-soft); box-shadow: 0 0 0 3px var(--violet-soft); }
 .dp-status { margin-top: 10px; color: var(--quiet); font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; }
+
+/* right-to-left interface languages: the toolbar mirrors, addresses still read left to right */
+[dir=rtl] #omnibox { direction: ltr; }
+[dir=rtl] #address::placeholder { direction: rtl; }
+[dir=rtl] #back .ico, [dir=rtl] #forward .ico { transform: scaleX(-1); }
+[dir=rtl] .sg { direction: rtl; }
+[dir=rtl] #sitepopup, [dir=rtl] #dlpanel, [dir=rtl] #bmpopup { text-align: right; }
+
+/* Arabic script must not be letter-spaced (it breaks the joined letters) */
+:lang(ar) * { letter-spacing: 0 !important; }
+/* names written by people or sites keep their own direction */
+[dir=rtl] .tab .title, [dir=rtl] .tile .name, [dir=rtl] #sites a, [dir=rtl] .row .t, [dir=rtl] .row .u,
+[dir=rtl] #bmbar .bm span, [dir=rtl] .media-title, [dir=rtl] #dlpanel .nm, [dir=rtl] .sg .tt { unicode-bidi: plaintext; }
+.wordmark { direction: ltr; unicode-bidi: isolate; }
+:lang(ar) h2, :lang(ar) .section-label, :lang(ar) .sec-title, :lang(ar) #private-badge, :lang(ar) .dp-status { font-family: inherit; text-transform: none; }

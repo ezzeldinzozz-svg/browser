@@ -610,6 +610,7 @@ async function openSitePopup() {
     if (info.private) data.append(el('div', 'note', 'Changes here last until this private window closes.'));
     pop.append(data);
   }
+  anchorPopup(pop, $('site'));
   pop.hidden = false;
   $('backdrop').hidden = false;
   setOverlay();
@@ -674,6 +675,21 @@ function hideExtensionButtons(ids) {
   style.textContent = css ? `${css} { display: none !important; }` : '';
 }
 
+// Popups open under the button that opened them, on whichever side it is (the toolbar is
+// mirrored in right-to-left languages).
+function anchorPopup(pop, button) {
+  const r = button && button.getBoundingClientRect();
+  if (!r || !r.width) return;
+  pop.style.top = `${Math.round(r.bottom + 6)}px`;
+  if (r.left + r.width / 2 > innerWidth / 2) {
+    pop.style.right = `${Math.max(8, Math.round(innerWidth - r.right))}px`;
+    pop.style.left = 'auto';
+  } else {
+    pop.style.left = `${Math.max(8, Math.round(r.left))}px`;
+    pop.style.right = 'auto';
+  }
+}
+
 // Media hub: every tab playing (or paused) audio/video, with play/pause and a jump to the tab.
 let lastMedia = [];
 const PLAY = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg>';
@@ -704,6 +720,7 @@ function openMediaPopup() {
   const pop = $('sitepopup');
   pop.classList.add('right', 'media');
   renderMediaPopup();
+  anchorPopup(pop, $('media'));
   pop.hidden = false;
   $('backdrop').hidden = false;
   setOverlay();
@@ -744,6 +761,7 @@ async function openShieldPopup() {
     sec.append(btn, el('div', 'note', info.on ? 'Turn off if the site doesn\u2019t work right. The page reloads.' : 'The page reloads.'));
     pop.append(sec);
   }
+  anchorPopup(pop, $('shield'));
   pop.hidden = false;
   $('backdrop').hidden = false;
   setOverlay();
@@ -928,6 +946,7 @@ function closeDownloadPanel() {
 $('downloads').addEventListener('click', async () => {
   if (!$('dlpanel').hidden) return closeDownloadPanel();
   await renderDownloadPanel();
+  anchorPopup($('dlpanel'), $('downloads'));
   $('dlpanel').hidden = false;
   $('backdrop').hidden = false;
   setOverlay();
@@ -1030,6 +1049,7 @@ function showBookmarkPopup(info) {
   select.value = info.parentId || 'bar';
   $('bm-folder-row').hidden = !info.parentId;
   $('bm-remove').textContent = info.type === 'folder' ? 'Delete' : 'Remove';
+  anchorPopup($('bmpopup'), $('star'));
   $('bmpopup').hidden = false;
   $('backdrop').hidden = false;
   setOverlay();

@@ -362,9 +362,9 @@ Ordered by priority, then by what unblocks what.
 
 ## 21. Internationalization
 
-- [ ] **P1** All UI strings in a translation layer (toolbar, menus, internal pages, dialogs)
-- [ ] **P1** UI language follows the OS (`app.getLocale()`), with an override setting
-- [ ] **P1** Right-to-left layout support for the toolbar and internal pages (Arabic, Hebrew)
+- [x] **P1** Translation layer: `i18n.js` + `locales/<lang>.json` (English text → translation, `{name}` patterns). Pages/toolbar translated in place by preload.js; menus and message boxes in main. Arabic done (~450 strings); a few dynamic strings stay English
+- [x] **P1** UI language follows the OS, with an override (Settings → Languages; applies after restart)
+- [x] **P1** Right-to-left layout for the toolbar and internal pages (addresses stay left-to-right; popups anchor to their buttons)
 - [ ] **P2** Ship translations for top languages
 - [ ] **P2** Locale-aware date/size formatting everywhere (history uses `toLocaleString` already)
 

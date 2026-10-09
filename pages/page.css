@@ -169,10 +169,10 @@ button.big { height: 44px; padding: 0 26px; font-size: 15px; margin-top: 10px; }
 .startup { margin-bottom: 20px; }
 .startup .check { margin-bottom: 10px; }
 .startup .check input[type=radio] { width: 17px; height: 17px; margin: 0; }
-#startup-pages-box { margin: 6px 0 0 27px; }
+#startup-pages-box { margin-top: 6px; margin-inline-start: 27px; }
 #startup-pages-box textarea { width: 100%; font: inherit; resize: vertical; }
 #startup-pages-box button { margin-top: 8px; }
-.homepage { margin: -4px 0 28px 27px; }
+.homepage { margin-top: -4px; margin-bottom: 28px; margin-inline-start: 27px; }
 .homepage input { height: 34px; font-size: 13px; }
 .dns { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
 .dns select { margin: 0; }
@@ -271,3 +271,14 @@ details pre { white-space: pre-wrap; font-family: var(--mono); font-size: 10.5px
 /* accessibility: honour reduced motion and forced colors (Windows high contrast) */
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
 @media (forced-colors: active) { button, select, input, .row, .card, .tile { border: 1px solid CanvasText; } a { color: LinkText; } }
+
+/* right-to-left interface languages */
+[dir=rtl] .error-url, [dir=rtl] #dns-custom, [dir=rtl] #proxy-server, [dir=rtl] #proxy-pac-url, [dir=rtl] #engine-url, [dir=rtl] #home-page { direction: ltr; text-align: right; }
+
+/* Arabic script must not be letter-spaced (it breaks the joined letters) */
+:lang(ar) * { letter-spacing: 0 !important; }
+/* names written by people or sites keep their own direction */
+[dir=rtl] .tab .title, [dir=rtl] .tile .name, [dir=rtl] #sites a, [dir=rtl] .row .t, [dir=rtl] .row .u,
+[dir=rtl] #bmbar .bm span, [dir=rtl] .media-title, [dir=rtl] #dlpanel .nm, [dir=rtl] .sg .tt { unicode-bidi: plaintext; }
+.wordmark { direction: ltr; unicode-bidi: isolate; }
+:lang(ar) h2, :lang(ar) .section-label, :lang(ar) .sec-title, :lang(ar) #private-badge, :lang(ar) .dp-status { font-family: inherit; text-transform: none; }

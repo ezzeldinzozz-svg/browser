@@ -77,6 +77,10 @@
     <p class="hint">Sleeping tabs reload when you open them. Pinned tabs, tabs playing sound and tabs using your camera or microphone stay awake. View → Task Manager shows what each tab uses.</p>
 
     <h2>Languages</h2>
+    <label class="dns">Language of Operecs
+      <select id="ui-language" aria-label="Language of Operecs"><option value="auto">Same as the system</option></select>
+    </label>
+    <p id="ui-language-restart" class="hint" hidden>Takes effect after restarting Operecs. <button id="ui-language-restart-now">Restart now</button></p>
     <label class="dns">Preferred languages for websites
       <input id="languages" type="text" spellcheck="false" placeholder="e.g. en-US, ar">
     </label>
