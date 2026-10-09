@@ -159,7 +159,7 @@ regularly for security fixes, then release.
   installed app uses `~/Library/Application Support/Browser`. Never delete or edit the installed
   app's profile while testing; it holds the user's real bookmarks/history/permissions.
 
-- Most testing is scripted over the Chrome DevTools Protocol: launch with
+- Most testing is scripted over the Chrome DevTools Protocol: run `npm run build` once, then launch with
   `npx electron . --remote-debugging-port=9333` and evaluate in `browser://ui/` or a tab.
 - If the window is hidden behind other windows on macOS, renderer sizes look stale; add
   `--disable-features=MacWebContentsOcclusion` when testing layout.

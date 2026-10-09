@@ -284,7 +284,6 @@ Ordered by priority, then by what unblocks what.
 - [x] Chrome extensions via `electron-chrome-extensions` (GPL-3.0): toolbar buttons, popups, badges, context menu items, tabs/windows APIs; install from the Chrome Web Store ("Add to Chrome", with a confirmation listing permissions); `browser://extensions` lists and removes them; not in private windows
 - [ ] **P1** Pin/hide extension buttons, per-extension site access, enable/disable without removing
 - [ ] **P1** Verify popular extensions: Bitwarden sign-in + autofill, Proton Pass, 1Password (needs its desktop app), Dark Reader, uBlock Origin Lite
-- [ ] **P2** Chrome Web Store installs *(Electron limit: official non-goal)*
 - [ ] **P2** Userscripts (Min-style) as an extension alternative
 - [ ] **P2** DevTools dock position preference (docked/undocked) and a DevTools toolbar button
 
