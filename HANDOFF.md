@@ -16,6 +16,9 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 - Tabs, address bar (URL or search with the chosen engine: DuckDuckGo default, Google, Bing, Brave, Ecosia, Kagi, Startpage), back/forward/reload/stop, keyboard shortcuts
 - Tab strip: drag to reorder, pinned tabs (kept left, restored), audio indicator with click-to-mute, right-click menu (new tab to the right, reload, duplicate, pin, mute, move to new window, close / others / to the right, reopen closed)
 - Bookmarks, history, downloads page, find in page, new-tab page, settings page
+- Page robustness: crash page with Reload, "Page unresponsive" (Wait / Exit Page), "Leave site?" on navigation for pages with unsaved changes
+- Back/forward history list (right-click or long-press), per-site zoom remembered (badge in the address bar resets it), window size/position remembered
+- Downloads: choose the download folder, optional "Ask where to save each file"; history page can remove single entries
 - Default browser: macOS registers http/https and HTML files (`build.protocols`, `build.fileAssociations`); Settings has a "Make default" button (installed app only). Links from other apps arrive via `open-url` (macOS) or launch/`second-instance` arguments (Windows/Linux) and open in the last normal window
 - Screen sharing: macOS 15+ uses the system picker (`useSystemPicker`); elsewhere a picker of screens/windows in the toolbar view
 - Clear browsing data (Settings → Clear browsing data, Cmd/Ctrl+Shift+Backspace): time range for history and the download list; cookies/site data and cache clear for all time (Electron can't clear them by date)

@@ -134,6 +134,9 @@ function render(state) {
   $('star').classList.toggle('on', state.bookmarked);
   $('star').textContent = state.bookmarked ? '★' : '☆';
 
+  $('zoom').hidden = state.zoom === 100;
+  $('zoom').textContent = `${state.zoom}%`;
+
   shownUrl = active ? active.url : '';
   if (document.activeElement !== address) address.value = shownUrl;
   renderSiteButton(state.security);
@@ -556,3 +559,34 @@ $('sp-share').addEventListener('click', () => screenChoice && closeScreenPicker(
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && screenPick) closeScreenPicker(null);
 });
+
+// ---- back/forward: right-click or long-press shows the history list
+
+for (const [id, dir] of [['back', 'back'], ['forward', 'forward']]) {
+  const btn = $(id);
+  let pressTimer = null;
+  btn.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    api.historyMenu(dir);
+  });
+  btn.addEventListener('mousedown', (e) => {
+    if (e.button !== 0) return;
+    pressTimer = setTimeout(() => {
+      pressTimer = 'fired';
+      api.historyMenu(dir);
+    }, 450);
+  });
+  btn.addEventListener('mouseup', () => {
+    if (pressTimer !== 'fired') clearTimeout(pressTimer);
+  });
+  btn.addEventListener('mouseleave', () => {
+    if (pressTimer !== 'fired') clearTimeout(pressTimer);
+  });
+  // a long press opens the list instead of navigating
+  btn.addEventListener('click', (e) => {
+    if (pressTimer === 'fired') e.stopImmediatePropagation();
+    pressTimer = null;
+  }, true);
+}
+
+$('zoom').addEventListener('click', () => api.resetZoom());

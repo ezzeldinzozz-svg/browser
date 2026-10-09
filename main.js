@@ -13,6 +13,7 @@ const {
   ipcMain,
   Menu,
   protocol,
+  screen,
   session,
   shell,
   webContents,
@@ -81,6 +82,7 @@ class Store {
       session: null,
       settings: {},
       adblockAllowlist: [],
+      zoom: {}, // site -> zoom level (0 = 100%)
     };
     this.timer = null;
     try {
@@ -88,7 +90,14 @@ class Store {
     } catch {
       // first run or unreadable file: start empty
     }
-    this.data.settings = { restoreSession: true, adblock: true, searchEngine: 'duckduckgo', ...this.data.settings };
+    this.data.settings = {
+      restoreSession: true,
+      adblock: true,
+      searchEngine: 'duckduckgo',
+      askDownloadLocation: false,
+      downloadDir: null, // null = the OS Downloads folder
+      ...this.data.settings,
+    };
   }
   save() {
     clearTimeout(this.timer);
@@ -211,9 +220,17 @@ function sendTabs(w) {
     private: w.private,
     bookmarked: store.data.bookmarks.some((b) => b.url === currentUrl),
     canBookmark: isWeb(currentUrl),
-    prompt: prompt ? { id: prompt.id, text: `${new URL(prompt.origin).host} wants to ${promptText(prompt.keys)}` } : null,
+    prompt: prompt
+      ? {
+          id: prompt.id,
+          text: prompt.scheme
+            ? `${new URL(prompt.origin).host} wants to open \u201c${prompt.scheme}:\u201d links in another app`
+            : `${new URL(prompt.origin).host} wants to ${promptText(prompt.keys)}`,
+        }
+      : null,
     auth: auth ? { id: auth.id, host: auth.host, realm: auth.realm, insecure: auth.insecure } : null,
     find: current ? current.find : null,
+    zoom: current ? Math.round(Math.pow(1.2, current.wc.getZoomLevel()) * 100) : 100,
     // lock icon in the address bar
     security: /^https:/i.test(currentUrl)
       ? 'secure'
@@ -281,8 +298,7 @@ function layout(w) {
 function createWindow({ private: isPrivate = false, session: saved = null, ses: reuse = null, empty = false } = {}) {
   const ses = isPrivate ? reuse || createPrivateSession() : session.defaultSession;
   const win = new BaseWindow({
-    width: 1280,
-    height: 800,
+    ...restoredBounds(saved),
     minWidth: 480,
     minHeight: 320,
     title: isPrivate ? 'Browser — Private' : 'Browser',
@@ -321,7 +337,12 @@ function createWindow({ private: isPrivate = false, session: saved = null, ses: 
   win.on('focus', () => {
     lastFocused = w;
   });
-  win.on('resize', () => layout(w));
+  win.on('resize', () => {
+    layout(w);
+    saveSessionSoon();
+  });
+  win.on('move', saveSessionSoon);
+  if (saved && saved.maximized) win.maximize();
   // Leaving window fullscreen (green button, F11) also ends a page's video fullscreen.
   win.on('leave-full-screen', () => exitFullscreen(activeTab(w)));
   win.on('close', () => onWindowClose(w));
@@ -336,6 +357,15 @@ function createWindow({ private: isPrivate = false, session: saved = null, ses: 
   }
   if (!isPrivate) sessionFrozen = false;
   return w;
+}
+
+// Saved size/position, used only if it's still on a connected display.
+function restoredBounds(saved) {
+  const b = saved && saved.bounds;
+  if (!b) return { width: 1280, height: 800 };
+  const area = screen.getDisplayMatching(b).workArea;
+  const visible = b.x < area.x + area.width - 100 && b.x + b.width > area.x + 100 && b.y >= area.y - 10 && b.y < area.y + area.height - 100;
+  return visible ? b : { width: b.width, height: b.height };
 }
 
 function onWindowClose(w) {
@@ -475,6 +505,7 @@ function createTab(w, url, { background = false, after = null, history = null } 
     if (details.isMainFrame && !details.isSameDocument) tab.blocked = 0;
   });
   wc.on('did-navigate', (_e, u) => {
+    applySiteZoom(tab);
     tab.favicon = tab.faviconSrc = '';
     dismissPrompts(tab); // a prompt must never carry over to a different page
     cancelAuth(tab);
@@ -504,6 +535,37 @@ function createTab(w, url, { background = false, after = null, history = null } 
     if (tab.w.win.isFullScreen()) tab.w.win.setFullScreen(false);
     layout(tab.w);
   });
+  wc.on('render-process-gone', (_e, details) => {
+    if (details.reason === 'clean-exit') return;
+    const url = tab.wc.getURL();
+    tab.wc.loadURL(internalURL('error', { url: isInternalScheme(url) ? '' : url, desc: 'crashed' })).catch(() => {});
+  });
+  wc.on('unresponsive', async () => {
+    if (tab.unresponsiveAsked) return;
+    tab.unresponsiveAsked = true;
+    const { response } = await dialog.showMessageBox(tab.w.win, {
+      type: 'warning',
+      message: 'Page unresponsive',
+      detail: `${siteOf(wc.getURL()) || 'This page'} isn't responding. You can wait for it or close it.`,
+      buttons: ['Wait', 'Exit Page'],
+      defaultId: 0,
+      cancelId: 0,
+    });
+    tab.unresponsiveAsked = false;
+    if (response === 1 && !wc.isDestroyed()) wc.forcefullyCrashRenderer();
+  });
+  wc.on('will-prevent-unload', (e) => {
+    const choice = dialog.showMessageBoxSync(tab.w.win, {
+      type: 'question',
+      message: 'Leave site?',
+      detail: 'Changes you made may not be saved.',
+      buttons: ['Leave', 'Stay'],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    if (choice === 0) e.preventDefault(); // preventDefault ignores the page's beforeunload
+  });
+  wc.on('zoom-changed', (_e, direction) => zoom(tab.w, direction === 'in' ? 0.5 : -0.5, tab));
   wc.on('did-fail-load', (_e, code, desc, failedUrl, isMainFrame) => {
     if (!isMainFrame || code === -3 /* aborted */ || isInternalScheme(failedUrl)) return;
     wc.loadURL(internalURL('error', { url: failedUrl, desc })).catch(() => {});
@@ -713,10 +775,24 @@ function focusAddress(w) {
   w.chromeView.webContents.send('focus-address');
 }
 
-function zoom(w, delta) {
-  const tab = activeTab(w);
+// Zoom is remembered per site (normal windows only) and applied whenever a tab opens that site.
+function zoom(w, delta, tab = activeTab(w)) {
   if (!tab) return;
-  tab.wc.setZoomLevel(delta === 0 ? 0 : tab.wc.getZoomLevel() + delta);
+  const level = delta === 0 ? 0 : Math.max(-7, Math.min(9, tab.wc.getZoomLevel() + delta));
+  tab.wc.setZoomLevel(level);
+  const site = siteOf(tab.wc.getURL());
+  if (site && !w.private) {
+    if (level === 0) delete store.data.zoom[site];
+    else store.data.zoom[site] = level;
+    store.save();
+  }
+  sendTabs(w);
+}
+
+function applySiteZoom(tab) {
+  const site = siteOf(tab.wc.getURL());
+  const level = (site && !tab.w.private && store.data.zoom[site]) || 0;
+  if (tab.wc.getZoomLevel() !== level) tab.wc.setZoomLevel(level);
 }
 
 function exitFullscreen(tab) {
@@ -787,10 +863,19 @@ function saveSession(exclude = null) {
       if (t.id === w.activeId) active = tabs.length;
       tabs.push(h);
     }
-    if (tabs.length) saved.push({ tabs, active });
+    if (tabs.length) {
+      const bounds = w.win.isMaximized() || w.win.isFullScreen() ? w.win.getNormalBounds() : w.win.getBounds();
+      saved.push({ tabs, active, bounds, maximized: w.win.isMaximized() });
+    }
   }
   store.data.session = { windows: saved };
   store.save();
+}
+
+let saveSessionTimer = null;
+function saveSessionSoon() {
+  clearTimeout(saveSessionTimer);
+  saveSessionTimer = setTimeout(() => saveSession(), 400);
 }
 
 function savedWindows() {
@@ -877,7 +962,8 @@ function onPermissionRequest(wc, permission, callback, details) {
     same.callbacks.push(callback);
     return;
   }
-  tab.prompts.push({ id: nextPromptId++, origin, keys: pending, callbacks: [callback] });
+  const scheme = permission === 'openExternal' && details.externalURL ? details.externalURL.split(':')[0] : null;
+  tab.prompts.push({ id: nextPromptId++, origin, keys: pending, scheme, callbacks: [callback] });
   if (tab.id === tab.w.activeId) {
     layout(tab.w);
     sendTabs(tab.w);
@@ -1209,8 +1295,12 @@ const reservedPaths = new Set();
 let nextDownloadId = 1;
 let downloadNotifyTimer = null;
 
-function uniqueDownloadPath(name) {
-  const dir = app.getPath('downloads');
+function downloadDir() {
+  const dir = store.data.settings.downloadDir;
+  return dir && fs.existsSync(dir) ? dir : app.getPath('downloads');
+}
+
+function uniqueDownloadPath(name, dir = downloadDir()) {
   const ext = path.extname(name);
   const base = path.basename(name, ext);
   let candidate = path.join(dir, name);
@@ -1283,7 +1373,13 @@ function markAsDownloaded(filePath, url) {
 }
 
 function onWillDownload(_e, item, wc) {
-  const finalPath = uniqueDownloadPath(item.getFilename() || 'download');
+  let finalPath = uniqueDownloadPath(item.getFilename() || 'download');
+  if (store.data.settings.askDownloadLocation) {
+    const owner = tabOfWc(wc)?.w || focusedWindow();
+    const chosen = dialog.showSaveDialogSync(owner ? owner.win : undefined, { defaultPath: finalPath });
+    if (!chosen) return item.cancel();
+    finalPath = chosen;
+  }
   reservedPaths.add(finalPath);
   const dangerous = isRiskyFile(finalPath);
   const savePath = dangerous ? `${finalPath}.unconfirmed` : finalPath;
@@ -1583,6 +1679,26 @@ function setupIpc() {
   });
   handle('nav:back', fromChrome, (w) => activeTab(w)?.wc.navigationHistory.goBack());
   handle('nav:forward', fromChrome, (w) => activeTab(w)?.wc.navigationHistory.goForward());
+  handle('nav:history-menu', fromChrome, (w, dir) => {
+    const tab = activeTab(w);
+    if (!tab) return;
+    const nav = tab.wc.navigationHistory;
+    const entries = nav.getAllEntries();
+    const current = nav.getActiveIndex();
+    const indexes = [];
+    if (dir === 'back') for (let i = current - 1; i >= 0 && indexes.length < 15; i--) indexes.push(i);
+    else for (let i = current + 1; i < entries.length && indexes.length < 15; i++) indexes.push(i);
+    if (indexes.length === 0) return;
+    Menu.buildFromTemplate([
+      ...indexes.map((i) => ({
+        label: trimLabel(entries[i].title || displayUrl(entries[i].url) || entries[i].url, 60),
+        click: () => nav.goToIndex(i),
+      })),
+      { type: 'separator' },
+      { label: 'Show Full History', click: () => openInternalPage(w, 'history') },
+    ]).popup({ window: w.win });
+  });
+  handle('zoom:reset', fromChrome, (w) => zoom(w, 0));
   handle('nav:reload', fromChrome, (w) => {
     const t = activeTab(w);
     if (!t) return;
@@ -1640,10 +1756,25 @@ function setupIpc() {
     adblockAllowlist: store.data.adblockAllowlist,
     searchEngines: Object.entries(SEARCH_ENGINES).map(([id, e]) => ({ id, name: e.name })),
     searchEngineName: searchEngine().name,
+    downloadDirShown: downloadDir(),
   }));
+  handle('downloads:choose-folder', fromInternal, async (tab) => {
+    const { canceled, filePaths } = await dialog.showOpenDialog(tab.w.win, {
+      defaultPath: downloadDir(),
+      properties: ['openDirectory', 'createDirectory'],
+    });
+    if (canceled || !filePaths[0]) return null;
+    store.data.settings.downloadDir = filePaths[0];
+    store.save();
+    return filePaths[0];
+  });
+  handle('data:history-remove', fromInternal, (_tab, url) => {
+    store.data.history = store.data.history.filter((h) => h.url !== url);
+    store.save();
+  });
   handle('data:settings-set', fromInternal, (_tab, key, value) => {
     const valid =
-      (['restoreSession', 'adblock'].includes(key) && typeof value === 'boolean') ||
+      (['restoreSession', 'adblock', 'askDownloadLocation'].includes(key) && typeof value === 'boolean') ||
       (key === 'searchEngine' && Object.hasOwn(SEARCH_ENGINES, value));
     if (!valid) return;
     store.data.settings[key] = value;

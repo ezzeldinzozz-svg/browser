@@ -24,6 +24,8 @@ async function loadSettings() {
     for (const e of s.searchEngines) engine.append(new Option(e.name, e.id));
   }
   engine.value = s.searchEngine;
+  document.getElementById('download-dir').textContent = s.downloadDirShown;
+  document.getElementById('ask-download').checked = s.askDownloadLocation;
   adblock.checked = s.adblock;
   allowlist.textContent = '';
   if (s.adblockAllowlist.length === 0) {
@@ -180,3 +182,13 @@ document.getElementById('default-set').addEventListener('click', async () => {
 });
 refreshDefault();
 window.addEventListener('focus', refreshDefault);
+
+// ---- Downloads
+
+document.getElementById('download-dir-change').addEventListener('click', async () => {
+  const dir = await browserAPI.chooseDownloadFolder();
+  if (dir) document.getElementById('download-dir').textContent = dir;
+});
+document.getElementById('ask-download').addEventListener('change', (e) =>
+  browserAPI.setSetting('askDownloadLocation', e.target.checked),
+);

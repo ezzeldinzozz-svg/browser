@@ -143,6 +143,13 @@ body.private #site.insecure { color: #ff8a80; }
 #omnibox.has-site #address { padding-left: 34px; }
 #omnibox.has-site.insecure #address { padding-left: 98px; }
 
+#toolbar #zoom {
+  position: absolute; right: 4px; top: 3px; z-index: 1;
+  width: auto; height: 24px; padding: 0 8px; border-radius: 12px;
+  font-size: 11px; color: var(--fg-dim); border: 1px solid var(--border);
+}
+#toolbar #zoom[hidden] { display: none; }
+
 #suggest {
   position: absolute; top: 34px; left: 0; right: 0; z-index: 10;
   padding: 6px 0; border: 1px solid var(--border); border-radius: 12px;

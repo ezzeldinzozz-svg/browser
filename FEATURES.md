@@ -46,7 +46,7 @@ Ordered by priority, then by what unblocks what.
 - [ ] **P2** "Mute site" (all tabs of a site)
 - [x] Duplicate tab (keeps back/forward history)
 - [ ] **P0** Tab overflow handling (shrink, then scroll) with many tabs; tab tooltips with URL
-- [ ] **P0** Long-press / right-click back and forward buttons for the history list
+- [x] Long-press / right-click back and forward buttons for the history list
 - [x] Pin tabs (small, left-aligned, survive restart; Close Other Tabs keeps them)
 - [x] Move tab to new window (context menu; the page keeps running)
 - [ ] **P1** Tear off by dragging a tab out; drag a tab into another window
@@ -67,7 +67,7 @@ Ordered by priority, then by what unblocks what.
 - [x] Multiple windows: New Window (Cmd/Ctrl+N), Close Window (Cmd/Ctrl+Shift+W), each with its own tabs; all normal windows restored on launch
 - [x] macOS: closing the last window keeps the app running; Dock click opens a new window
 - [x] Private window (Cmd/Ctrl+Shift+N): purple frame, in-memory session per window, no history/session/permission/download records kept, wiped on close; "Open Link in Private Window"
-- [ ] **P0** Remember window size/position (per-window tabs are already restored)
+- [x] Remember window size/position/maximized per window (only restored if still on a connected display)
 - [x] Window menu (macOS): list windows, Minimize, Zoom, Bring All to Front
 - [ ] **P1** Native-feeling title bar: tabs in the title bar with traffic lights (macOS `titleBarStyle: hiddenInset`), Windows overlay controls
 - [ ] **P1** "Close window with N tabs?" / "Quit with N tabs?" confirmation (opt-out)
@@ -113,7 +113,8 @@ Ordered by priority, then by what unblocks what.
 - [x] Visits recorded (http/https, including in-page navigations), titles updated, 5,000 entry cap
 - [x] History page with text search (title + URL)
 - [x] Clear all history
-- [ ] **P0** Delete single entries (and "remove all from this site")
+- [x] Delete single entries (removes every visit to that page)
+- [ ] **P1** "Remove all from this site"
 - [x] Clear browsing data (Settings, Cmd/Ctrl+Shift+Backspace): time range × history, download list, cookies & site data, cache (cookies/cache always all time: Electron limit)
 - [ ] **P2** Clear site permissions from the same dialog
 - [ ] **P1** Group by day with date headers; infinite scroll beyond 500 items
@@ -129,7 +130,7 @@ Ordered by priority, then by what unblocks what.
 - [x] Interrupted-on-quit downloads marked as failed
 - [x] Dangerous-file warning: risky types download as `.unconfirmed` until Keep/Discard (toolbar bar + downloads page)
 - [x] Downloads marked as from the internet (macOS quarantine attribute, Windows Mark of the Web) so Gatekeeper/SmartScreen check them
-- [ ] **P0** Option "Ask where to save each file" and a choose-download-folder setting
+- [x] Option "Ask where to save each file" and a choose-download-folder setting
 - [ ] **P0** Download bubble/panel from the toolbar (not just a full page), with "download finished" feedback
 - [ ] **P1** Retry/resume interrupted downloads (`session.createInterruptedDownload`)
 - [ ] **P1** Remove a single entry; delete file from disk; drag a finished download into another app
@@ -167,7 +168,7 @@ Ordered by priority, then by what unblocks what.
 - [ ] **P0** Permission defaults per type (ask/block for all sites) and add/edit exceptions, not just reset
 - [ ] **P0** Block third-party cookies by default (or partition them); cookie settings page with per-site exceptions
 - [ ] **P0** Decide `file://` policy: typed `file://` URLs load today; block web pages from navigating to `file:` and restrict to top-level user navigation
-- [ ] **P0** External protocol handling (`mailto:`, `zoommtg:`, `slack:`): ask before opening another app, remember choice
+- [x] External protocol handling (`mailto:`, `zoommtg:`, `slack:`): asks before opening another app (names the link type), remembers per site
 - [ ] **P1** HTTPS-Only / HTTPS-upgrade mode with a "continue to http" interstitial
 - [ ] **P1** Full certificate viewer (issuer and expiry are shown in the site info popup)
 - [ ] **P1** Safe browsing / phishing & malware protection (Web Risk API, paid, or ship without and say so) *(Electron limit)*
@@ -205,7 +206,7 @@ Ordered by priority, then by what unblocks what.
 - [x] Print (Cmd/Ctrl+P and context menu, system print dialog)
 - [x] View page source; Inspect Element
 - [ ] **P0** PDF viewer: verify Electron's built-in PDF viewer opens PDFs in tabs (and downloads vs. view behavior)
-- [ ] **P0** Zoom level indicator in the address bar with reset; persist per-site zoom across restarts
+- [x] Zoom level indicator in the address bar (click to reset); per-site zoom persists across restarts (not in private windows)
 - [ ] **P1** Save page as (Cmd/Ctrl+S: complete HTML, single file/MHTML, text) via `webContents.savePage`
 - [ ] **P1** Export/Save as PDF (`printToPDF`), also from the print preview
 - [ ] **P1** Print preview with page range/layout options (Chrome-style), not just the system dialog
@@ -283,7 +284,7 @@ Ordered by priority, then by what unblocks what.
 - [x] Session restore on relaunch with per-tab back/forward history (toggle)
 - [x] Atomic store writes (`.tmp` + rename), debounced saves, flush on quit
 - [x] Failed loads show a "can't be reached" page with retry
-- [ ] **P0** Tab crash page ("Aw, snap" with reload) on `render-process-gone`; unresponsive page dialog ("Wait / Kill")
+- [x] Tab crash page ("This page crashed" with Reload) on `render-process-gone`; unresponsive page dialog (Wait / Exit Page)
 - [ ] **P0** Crash recovery: restore after an app crash, with "Restore pages?" prompt when the last exit was not clean
 - [ ] **P0** Storage: JSON → SQLite (history/bookmarks/passwords scale, fewer full rewrites)
 - [ ] **P1** Lazy-load restored tabs (only load the active tab at startup)
@@ -374,7 +375,8 @@ Ordered by priority, then by what unblocks what.
 
 - [ ] **P0** Home button (optional) and keyboard shortcut to go home
 - [ ] **P0** Status bubble showing the link URL on hover (bottom-left)
-- [ ] **P0** "Leave site? Changes you made may not be saved" (`will-prevent-unload`) dialog
+- [x] "Leave site? Changes you made may not be saved" (`will-prevent-unload`) dialog on navigation/reload
+- [ ] **P1** Same prompt when closing a tab or window with unsaved changes
 - [ ] **P0** JavaScript dialogs (`alert`/`confirm`/`prompt`) styled and tab-modal, with "prevent this page from creating more dialogs"
 - [ ] **P1** Form re-submission warning on reload after POST
 - [ ] **P1** Proxy settings (system proxy honored by default; manual/PAC option)

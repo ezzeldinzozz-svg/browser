@@ -37,7 +37,15 @@ function render() {
     time.className = 'time';
     time.textContent = new Date(h.time).toLocaleString();
 
-    row.append(main, time);
+    const remove = document.createElement('button');
+    remove.textContent = 'Remove';
+    remove.title = 'Remove this page from history';
+    remove.addEventListener('click', async () => {
+      await browserAPI.removeHistoryEntry(h.url);
+      load();
+    });
+
+    row.append(main, time, remove);
     list.append(row);
   }
 }
