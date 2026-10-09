@@ -74,7 +74,6 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 - macOS packaging (ad-hoc signed DMG) and a free self-updater using our own Ed25519 key + GitHub Releases (tested end to end: 0.1.9 → 0.2.0). Visible status: a toolbar pill shows "Updating… N%" while downloading and "Restart to update" when ready; Settings → About Browser shows the version, last check and a Check for updates button
 
 **Known issues**
-- Notification permission reads as "denied" (not "default") until a site is allowed/blocked, so some sites hide their "enable notifications" button
 - Restored tabs may show pages from cache (same as Chrome), including pages that needed a sign-in
 - Popups that need `window.opener` (some OAuth logins) open as plain tabs
 - Google sign-in may block Electron despite the Chrome user agent

@@ -319,9 +319,9 @@ Ordered by priority, then by what unblocks what.
 ## 18. Notifications
 
 - [x] Notification permission prompt per site
-- [ ] **P0** Fix: notification permission reads "denied" instead of "default" before asking (known issue)
+- [x] **P0** Fix: notification permission reads "default"/"prompt" before the site is decided (capture-preload.js)
 - [x] **P1** Web notifications shown as native OS notifications with the site name; click focuses the tab (page notifications; service-worker notifications not yet)
-- [ ] **P1** Quieter notification prompts (Chrome/Firefox: block prompts from sites with abusive patterns, no prompt without user gesture)
+- [x] **P1** Quieter notification prompts: no prompt unless the user clicked or typed on the page in the last 5 s
 - [ ] **P2** Notifications settings list and "Notifications from this browser" OS settings link
 
 ## 19. OS integration

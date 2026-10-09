@@ -82,10 +82,19 @@ if (/^https?:$/.test(location.protocol)) {
 // when the user clicks one. Electron shows them as native notifications but knows nothing of tabs.
 // Notifications sent from service workers (registration.showNotification) aren't covered.
 
+// Until the user has decided for the site, Chromium reports "denied" (Electron's permission
+// check is yes/no); pages then hide their "turn on notifications" button. Report "default" /
+// "prompt" instead while the site hasn't been asked.
 if (/^https?:$/.test(location.protocol) && typeof window.Notification === 'function') {
+  let undecided = false;
+  try {
+    undecided = ipcRenderer.sendSync('notification:undecided') === true;
+  } catch {
+    undecided = false;
+  }
   try {
     contextBridge.executeInMainWorld({
-      func: (report, host) => {
+      func: (report, host, undecided) => {
         const Native = window.Notification;
         class Notification extends Native {
           constructor(title, options) {
@@ -94,10 +103,28 @@ if (/^https?:$/.test(location.protocol) && typeof window.Notification === 'funct
             super(title, opts);
             this.addEventListener('click', () => report());
           }
+          static get permission() {
+            const real = Native.permission;
+            return real === 'denied' && undecided ? 'default' : real;
+          }
+          static requestPermission(cb) {
+            return Native.requestPermission().then((result) => {
+              undecided = false;
+              if (typeof cb === 'function') cb(result);
+              return result;
+            });
+          }
         }
         window.Notification = Notification;
+        const query = Permissions.prototype.query;
+        Permissions.prototype.query = function (desc) {
+          return query.call(this, desc).then((status) => {
+            if (!undecided || !desc || (desc.name !== 'notifications' && desc.name !== 'push') || status.state !== 'denied') return status;
+            return Object.create(status, { state: { get: () => 'prompt' } });
+          });
+        };
       },
-      args: [() => ipcRenderer.send('notification:click'), location.hostname.replace(/^www\./, '')],
+      args: [() => ipcRenderer.send('notification:click'), location.hostname.replace(/^www\./, ''), undecided],
     });
   } catch {
     // page world not available

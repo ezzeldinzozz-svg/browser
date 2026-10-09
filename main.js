@@ -1030,7 +1030,10 @@ function createTab(w, url, { background = false, after = null, history = null, l
   // A page may start one download on its own; more need the user's OK unless they clicked or
   // typed in between (like Chrome).
   wc.on('input-event', (_e, input) => {
-    if (input.type === 'mouseDown' || input.type === 'rawKeyDown' || input.type === 'keyDown' || input.type === 'touchStart') tab.pageDownloads = 0;
+    if (input.type === 'mouseDown' || input.type === 'rawKeyDown' || input.type === 'keyDown' || input.type === 'touchStart') {
+      tab.pageDownloads = 0;
+      tab.lastInput = Date.now();
+    }
   });
   wc.on('did-navigate', (_e, u) => {
     if (isWeb(u)) tab.httpsUpgrade = null;
@@ -1866,6 +1869,12 @@ function onPermissionRequest(wc, permission, callback, details) {
   const tab = tabOfWc(wc);
   const origin = originOf(details.requestingUrl || wc.getURL());
   if (!tab || !origin) return callback(false);
+
+  // Notification prompts only right after the user did something on the page; sites that ask on
+  // load are refused quietly this time (nothing remembered), like Chrome's quieter prompts.
+  if (permission === 'notifications' && Date.now() - (tab.lastInput || 0) > 5000 && !decisionFor(tab.w, origin, 'notifications')) {
+    return callback(false);
+  }
 
   const keys = permissionKeys(permission, details.mediaTypes);
   // A site's own decision wins; otherwise the per-type default from Settings (ask or block).
@@ -2940,6 +2949,13 @@ function handle(channel, guard, fn) {
 function setupIpc() {
   ipcMain.on('gpc:enabled', (e) => {
     e.returnValue = !!(store && store.data.settings.gpc);
+  });
+
+  // capture-preload.js: has neither the site nor the per-type default decided on notifications?
+  ipcMain.on('notification:undecided', (e) => {
+    const tab = tabOfWc(e.sender);
+    const origin = e.senderFrame ? originOf(e.senderFrame.url) : null;
+    e.returnValue = !!(tab && origin && !decisionFor(tab.w, origin, 'notifications') && permissionDefault('notifications') !== 'block');
   });
 
   // Sent by capture-preload.js when the user clicks one of the page's notifications.
