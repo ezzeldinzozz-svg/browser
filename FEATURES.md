@@ -175,7 +175,7 @@ Ordered by priority, then by what unblocks what.
 - [ ] **P2** Manual per-site cookie exceptions list
 - [x] `file://` policy: typed addresses and files opened from the OS load; web pages can't navigate, redirect, frame or open `file:` URLs
 - [x] External protocol handling (`mailto:`, `zoommtg:`, `slack:`): asks before opening another app (names the link type), remembers per site
-- [ ] **P1** HTTPS-Only / HTTPS-upgrade mode with a "continue to http" interstitial
+- [x] HTTPS-Only (on by default): http:// sites load over https://; sites without https get a warning page with "Continue to site"; local/intranet hosts exempt
 - [ ] **P1** Full certificate viewer (issuer and expiry are shown in the site info popup)
 - [ ] **P1** Safe browsing / phishing & malware protection (Web Risk API, paid, or ship without and say so) *(Electron limit)*
 - [x] Secure DNS setting: Automatic / Cloudflare / Quad9 / custom DoH / Off (`app.configureHostResolver`)
@@ -231,9 +231,9 @@ Ordered by priority, then by what unblocks what.
 
 - [x] Spellcheck in editable fields with suggestions and Add to Dictionary
 - [x] Edit menu (undo/redo/cut/copy/paste/select all) and page text context menu (copy, search for selection)
-- [ ] **P1** Spellcheck language selection (Windows/Linux need `setSpellCheckerLanguages`; macOS uses system) and toggle off
+- [x] Spellcheck on/off; languages follow the preferred-language list (Windows/Linux; macOS uses the system checker)
 - [ ] **P1** Manage custom dictionary words
-- [ ] **P1** Preferred languages for websites (`Accept-Language`)
+- [x] Preferred languages for websites (`Accept-Language`), defaulting to the system's
 - [ ] **P1** Context menu: "Look Up" / dictionary (macOS `showDefinitionForSelection`), Speech, emoji & symbols, writing direction
 - [ ] **P2** Paste as plain text (Cmd/Ctrl+Shift+V)
 
@@ -245,8 +245,10 @@ Ordered by priority, then by what unblocks what.
 - [x] ARIA basics: `tablist`/`tab` roles with `aria-selected`, labels on icon buttons, permission bar as an alert
 - [ ] **P1** Full screen-reader pass (VoiceOver/NVDA) and labels for every bar
 - [ ] **P1** VoiceOver / NVDA / Orca pass on toolbar and internal pages
-- [ ] **P1** Respect high contrast / increased contrast / forced colors in the toolbar and internal pages
-- [ ] **P1** Respect `prefers-reduced-motion`; font size follows OS text size where possible
+- [x] Forced colors (Windows high contrast) in the toolbar and internal pages
+- [ ] **P2** macOS increased contrast styles
+- [x] Respect `prefers-reduced-motion` in the toolbar and internal pages
+- [ ] **P2** Font size follows the OS text size
 - [ ] **P2** Live captions *(Electron limit: Chrome's on-device captions not available)*
 
 ## 13. Settings
@@ -304,8 +306,9 @@ Ordered by priority, then by what unblocks what.
 - [x] Crash recovery: after an unclean exit the browser offers "Restore pages" (or restores automatically when continuing where you left off)
 - [ ] **P0** Storage: JSON → SQLite (history/bookmarks/passwords scale, fewer full rewrites)
 - [x] Lazy-load restored tabs (only the active tab of each window loads at startup)
-- [ ] **P1** Tab sleeping / memory saver: discard background tabs after N minutes, exclusions list
-- [ ] **P1** Task manager (per-tab memory/CPU via `app.getAppMetrics`, end process)
+- [x] Memory saver: background tabs sleep after 15 min–4 h (default 30); pinned, audible and capturing tabs stay awake
+- [ ] **P2** Per-site "always keep awake" list
+- [x] Task manager (View menu): memory/CPU per process with tab and extension names, End process for tabs
 - [x] Corrupt-store recovery: previous version kept as `.bak`; an unreadable file is set aside and the backup loaded
 - [ ] **P2** Energy saver mode on battery (throttle background tabs, limit frame rate)
 - [ ] **P2** Preload/prefetch settings

@@ -18,7 +18,9 @@ let engine = null;
 let cacheFile = '';
 // shouldBlock(webContentsId) -> boolean: is blocking on for the page in that tab?
 // onBlocked(webContentsId): a request was blocked in that tab.
-let hooks = { shouldBlock: () => false, onBlocked: () => {} };
+// beforeRequest(details) -> { redirectURL } | null: runs first for every request (Electron
+// allows one onBeforeRequest listener per session, so other features hook in here).
+let hooks = { shouldBlock: () => false, onBlocked: () => {}, beforeRequest: () => null };
 
 const fetchImpl = (url, init) => net.fetch(url, init);
 
@@ -66,6 +68,8 @@ function attach(ses) {
   ses.registerPreloadScript({ type: 'frame', filePath: PRELOAD_PATH });
 
   ses.webRequest.onBeforeRequest({ urls: ['<all_urls>'] }, (details, callback) => {
+    const early = hooks.beforeRequest ? hooks.beforeRequest(details) : null;
+    if (early) return callback(early);
     if (!engine || !details.webContentsId || !hooks.shouldBlock(details.webContentsId)) return callback({});
     const request = fromElectronDetails(details);
     if (request.type === 'other') request.guessTypeOfRequest();

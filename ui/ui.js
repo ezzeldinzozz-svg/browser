@@ -14,7 +14,7 @@ let dragId = null;
 
 function renderTab(t, isActive) {
   const el = document.createElement('div');
-  el.className = 'tab' + (isActive ? ' active' : '') + (t.pinned ? ' pinned' : '');
+  el.className = 'tab' + (isActive ? ' active' : '') + (t.pinned ? ' pinned' : '') + (t.sleeping ? ' sleeping' : '');
   el.title = t.url && t.url !== t.title ? `${t.title}\n${t.url}` : t.title;
   el.setAttribute('role', 'tab');
   el.setAttribute('aria-selected', String(isActive));

@@ -24,6 +24,14 @@ async function loadSettings() {
   document.getElementById('show-home').checked = s.showHomeButton;
   document.getElementById('confirm-close').checked = s.confirmClose;
   document.getElementById('gpc').checked = s.gpc;
+  document.getElementById('https-only').checked = s.httpsOnly;
+  document.getElementById('memory-saver').checked = s.memorySaver;
+  document.getElementById('memory-saver-minutes').value = String(s.memorySaverMinutes);
+  document.getElementById('languages').value = s.languages.join(', ');
+  document.getElementById('languages-hint').textContent = s.languages.length
+    ? 'Sites can use these to pick a language. Leave empty to use your system languages.'
+    : `Using your system languages: ${s.systemLanguages.join(', ')}. Type a list to change it.`;
+  document.getElementById('spellcheck').checked = s.spellcheck;
   document.getElementById('autoplay').value = s.autoplay;
   const zoomSelect = document.getElementById('default-zoom');
   if (!zoomSelect.options.length) for (const z of [50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200]) zoomSelect.append(new Option(`${z}%`, String(z)));
@@ -350,3 +358,19 @@ document.getElementById('reset-settings').addEventListener('click', async (e) =>
     }
   });
 })();
+
+// ---- HTTPS-Only, memory saver, languages
+document.getElementById('https-only').addEventListener('change', (e) => browserAPI.setSetting('httpsOnly', e.target.checked));
+document.getElementById('memory-saver').addEventListener('change', (e) => browserAPI.setSetting('memorySaver', e.target.checked));
+document.getElementById('memory-saver-minutes').addEventListener('change', (e) => browserAPI.setSetting('memorySaverMinutes', Number(e.target.value)));
+document.getElementById('spellcheck').addEventListener('change', (e) => browserAPI.setSetting('spellcheck', e.target.checked));
+document.getElementById('languages').addEventListener('change', async (e) => {
+  const list = e.target.value.split(/[,\s]+/).map((l) => l.trim()).filter(Boolean);
+  const valid = list.every((l) => /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(l));
+  e.target.setCustomValidity(valid ? '' : 'Use language codes like en-US, fr or ar');
+  e.target.reportValidity();
+  if (valid) {
+    await browserAPI.setSetting('languages', list);
+    loadSettings();
+  }
+});

@@ -35,7 +35,7 @@ const PRELOAD = path.join(__dirname, 'gen', 'preload.js'); // bundled from prelo
 // The browser's own pages live at browser://<name>/ and are served from pages/<name>.html.
 // The toolbar is browser://ui/. Only these origins may call the privileged IPC API.
 const SCHEME = 'browser';
-const INTERNAL = new Set(['newtab', 'history', 'bookmarks', 'downloads', 'settings', 'error', 'welcome', 'privacy', 'extensions', 'shortcuts', 'licenses']);
+const INTERNAL = new Set(['newtab', 'history', 'bookmarks', 'downloads', 'settings', 'error', 'welcome', 'privacy', 'extensions', 'shortcuts', 'licenses', 'tasks']);
 const UI_URL = `${SCHEME}://ui/`;
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -99,6 +99,11 @@ function defaultSettings() {
     confirmClose: true, // "Close 5 tabs?" / "Quit with 8 tabs open?"
     gpc: true, // Global Privacy Control: Sec-GPC header + navigator.globalPrivacyControl
     autoplay: 'block-audible', // 'block-audible' (until the user interacts) | 'allow'
+    httpsOnly: true, // try https:// for http:// sites; warn before using http
+    memorySaver: true, // put background tabs to sleep
+    memorySaverMinutes: 30,
+    languages: [], // preferred website languages (Accept-Language); empty = the system's
+    spellcheck: true,
     defaultZoom: 100, // percent, for sites without their own zoom
     hiddenTiles: [], // sites removed from the new tab page's most-visited tiles
     dns: 'automatic', // 'automatic' | 'off' | 'cloudflare' | 'quad9' | 'custom'
@@ -312,6 +317,7 @@ function sendTabs(w) {
         canGoBack: canGo(t.wc, 'back'),
         canGoForward: canGo(t.wc, 'forward'),
         pinned: t.pinned,
+        sleeping: !!t.pending,
         capture: captureState(t),
         audible: t.wc.isCurrentlyAudible(),
         muted: t.wc.isAudioMuted(),
@@ -587,12 +593,29 @@ function applyDns() {
   }
 }
 
+// Accept-Language for websites and spellcheck languages: the user's list, or the system's.
+function preferredLanguages() {
+  const list = store.data.settings.languages.length ? store.data.settings.languages : app.getPreferredSystemLanguages();
+  return list.length ? list : ['en-US'];
+}
+
+function applyLanguages(ses) {
+  const ua = app.userAgentFallback.replace(/ Electron\/\S+/, '').replace(` ${app.getName()}/${app.getVersion()}`, '');
+  ses.setUserAgent(ua, preferredLanguages().join(','));
+  ses.setSpellCheckerEnabled(store.data.settings.spellcheck);
+  // macOS uses the system spellchecker, which picks languages itself
+  if (!isMac) {
+    const available = new Set(ses.availableSpellCheckerLanguages);
+    const langs = preferredLanguages().flatMap((l) => [l, l.split('-')[0]]).filter((l) => available.has(l));
+    if (langs.length) ses.setSpellCheckerLanguages([...new Set(langs)].slice(0, 3));
+  }
+}
+
 function configureSession(ses) {
   ses.setCertificateVerifyProc(onVerifyCertificate);
-  // Present as plain Chrome: sites such as Google sign-in reject the Electron token.
-  ses.setUserAgent(
-    app.userAgentFallback.replace(/ Electron\/\S+/, '').replace(` ${app.getName()}/${app.getVersion()}`, ''),
-  );
+  // Present as plain Chrome (sites such as Google sign-in reject the Electron token), with the
+  // user's languages.
+  applyLanguages(ses);
   ses.setPermissionRequestHandler(onPermissionRequest);
   ses.setPermissionCheckHandler(onPermissionCheck);
   ses.on('will-download', onWillDownload);
@@ -636,6 +659,8 @@ function createTab(w, url, { background = false, after = null, history = null, l
     find: { open: false, text: '', active: 0, matches: 0 },
     fullscreen: false,
     blocked: 0, // ads/trackers blocked on the current page
+    created: Date.now(),
+    lastShown: Date.now(), // when the tab was last the active one (memory saver)
     capture: new Map(), // frame key -> { camera, microphone, screen } reported by capture-preload.js
     pinned: !!(history && history.pinned),
     openerId: after ? after.id : null,
@@ -683,6 +708,7 @@ function createTab(w, url, { background = false, after = null, history = null, l
     if (details.isMainFrame && !details.isSameDocument) tab.blocked = 0;
   });
   wc.on('did-navigate', (_e, u) => {
+    if (isWeb(u)) tab.httpsUpgrade = null;
     tab.capture.clear();
     applySiteZoom(tab);
     tab.favicon = tab.faviconSrc = '';
@@ -747,6 +773,13 @@ function createTab(w, url, { background = false, after = null, history = null, l
   wc.on('zoom-changed', (_e, direction) => zoom(tab.w, direction === 'in' ? 0.5 : -0.5, tab));
   wc.on('did-fail-load', (_e, code, desc, failedUrl, isMainFrame) => {
     if (!isMainFrame || code === -3 /* aborted */ || isInternalScheme(failedUrl)) return;
+    const upgrade = tab.httpsUpgrade;
+    tab.httpsUpgrade = null;
+    if (upgrade && /^https:/i.test(failedUrl) && new URL(failedUrl).host === upgrade.host) {
+      // the site has no working https version: ask before using http
+      wc.loadURL(internalURL('error', { url: upgrade.from, desc: 'https-only' })).catch(() => {});
+      return;
+    }
     wc.loadURL(internalURL('error', { url: failedUrl, desc })).catch(() => {});
   });
 
@@ -858,7 +891,9 @@ function selectTab(w, id) {
   const tab = getTab(w, id);
   if (!tab) return;
   if (w.activeId !== id) {
-    exitFullscreen(activeTab(w));
+    const previous = activeTab(w);
+    if (previous) previous.lastShown = Date.now();
+    exitFullscreen(previous);
     w.statusText = '';
   }
   w.activeId = id;
@@ -1557,6 +1592,117 @@ function cancelAuth(tab) {
   if (tab.auth.length === 0) return;
   for (const req of tab.auth.splice(0)) req.callback();
   if (tab.id === tab.w.activeId) layout(tab.w);
+}
+
+// ---------------------------------------------------------------- task manager
+
+// Every process with what it's for: tabs by title, plus the browser's own processes.
+function taskList() {
+  const owners = new Map(); // pid -> labels
+  const add = (pid, label, tabPid) => {
+    if (!pid) return;
+    const entry = owners.get(pid) || { labels: [], tab: false };
+    entry.labels.push(label);
+    entry.tab ||= tabPid;
+    owners.set(pid, entry);
+  };
+  for (const t of allTabs()) {
+    if (t.wc.isDestroyed()) continue;
+    const title = t.pending ? `${t.pending.entries[t.pending.index].title || 'Tab'} (sleeping)` : t.wc.getTitle() || displayUrl(t.wc.getURL()) || 'New Tab';
+    add(t.wc.getOSProcessId(), `Tab: ${title}`, true);
+  }
+  for (const wc of webContents.getAllWebContents()) {
+    const url = wc.getURL();
+    if (url.startsWith('chrome-extension://')) {
+      const ext = session.defaultSession.extensions.getExtension(new URL(url).host);
+      add(wc.getOSProcessId(), `Extension: ${ext ? ext.name : new URL(url).host}`, false);
+    }
+  }
+  const names = { Browser: 'Browser (main process)', Tab: 'Page process (shared or closing)', GPU: 'GPU', Utility: 'Utility', Zygote: 'Zygote', 'Pepper Plugin': 'Plugin' };
+  return app
+    .getAppMetrics()
+    .map((m) => {
+      const owner = owners.get(m.pid);
+      return {
+        pid: m.pid,
+        name: owner ? owner.labels.join(', ') : m.serviceName ? `${names[m.type] || m.type}: ${m.serviceName}` : names[m.type] || m.type,
+        memoryMB: Math.round((m.memory.workingSetSize || 0) / 1024),
+        cpu: Math.round(m.cpu.percentCPUUsage * 10) / 10,
+        canEnd: !!(owner && owner.tab),
+      };
+    })
+    .sort((a, b) => b.memoryMB - a.memoryMB);
+}
+
+// ---------------------------------------------------------------- memory saver
+
+// A sleeping tab keeps its history in tab.pending (like a restored tab) and its page is
+// replaced by an empty one; selecting it loads it again.
+function sleepTab(tab) {
+  const history = tabHistory(tab);
+  if (!history || tab.pending) return;
+  const favicon = tab.favicon;
+  tab.pending = { entries: history.entries, index: history.index };
+  tab.wc.loadURL('about:blank').then(() => {
+    if (tab.wc.isDestroyed()) return;
+    tab.wc.navigationHistory.clear();
+    tab.favicon = favicon;
+    sendTabs(tab.w);
+  }, () => {});
+}
+
+function canSleep(tab) {
+  const w = tab.w;
+  return (
+    tab.id !== w.activeId &&
+    !tab.pending &&
+    !tab.pinned &&
+    !tab.wc.isDestroyed() &&
+    !tab.wc.isCurrentlyAudible() &&
+    !captureState(tab) &&
+    !tab.prompts.length &&
+    !tab.auth.length &&
+    isWeb(tab.wc.getURL())
+  );
+}
+
+setInterval(() => {
+  if (!store || !store.data.settings.memorySaver) return;
+  const limit = (store.data.settings.memorySaverMinutes || 30) * 60000;
+  for (const tab of allTabs()) {
+    if (canSleep(tab) && Date.now() - (tab.lastShown || tab.created || Date.now()) > limit) sleepTab(tab);
+  }
+}, 60000).unref();
+
+// ---------------------------------------------------------------- HTTPS-Only
+
+const httpsExceptions = new Set(); // hosts the user chose to visit over http (until restart)
+
+// Hosts that normally have no public certificate: this machine, local networks, intranet names.
+function localHost(host) {
+  return (
+    host === 'localhost' ||
+    !host.includes('.') ||
+    /\.(local|localhost|test|internal|lan|home\.arpa)$/i.test(host) ||
+    /^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|169\.254\.|\[)/.test(host)
+  );
+}
+
+// Main-frame http:// requests become https://; if that fails, did-fail-load shows a warning
+// page with "Continue to site".
+function upgradeToHttps(details) {
+  if (!store.data.settings.httpsOnly || details.resourceType !== 'mainFrame' || !/^http:\/\//i.test(details.url)) return null;
+  let url;
+  try {
+    url = new URL(details.url);
+  } catch {
+    return null;
+  }
+  if (localHost(url.hostname) || httpsExceptions.has(url.host)) return null;
+  const tab = allTabs().find((t) => !t.wc.isDestroyed() && t.wc.id === details.webContentsId);
+  if (tab) tab.httpsUpgrade = { from: details.url, host: url.host };
+  url.protocol = 'https:';
+  return { redirectURL: url.href };
 }
 
 // ---------------------------------------------------------------- ad blocking
@@ -2434,6 +2580,7 @@ function setupIpc() {
     thirdPartyCookiesBlockedNow: thirdPartyCookiesBlocked,
     startupMode: startupMode(),
     downloadDirShown: downloadDir(),
+    systemLanguages: app.getPreferredSystemLanguages(),
   }));
   handle('downloads:choose-folder', fromInternal, async (tab) => {
     const { canceled, filePaths } = await dialog.showOpenDialog(tab.w.win, {
@@ -2451,10 +2598,12 @@ function setupIpc() {
   });
   handle('data:settings-set', fromInternal, (_tab, key, value) => {
     const valid =
-      (['restoreSession', 'adblock', 'askDownloadLocation', 'blockThirdPartyCookies', 'showHomeButton', 'confirmClose', 'gpc'].includes(key) &&
+      (['restoreSession', 'adblock', 'askDownloadLocation', 'blockThirdPartyCookies', 'showHomeButton', 'confirmClose', 'gpc', 'httpsOnly', 'memorySaver', 'spellcheck'].includes(key) &&
         typeof value === 'boolean') ||
       (key === 'startup' && ['continue', 'newtab', 'pages'].includes(value)) ||
       (key === 'autoplay' && ['block-audible', 'allow'].includes(value)) ||
+      (key === 'memorySaverMinutes' && [15, 30, 60, 120, 240].includes(value)) ||
+      (key === 'languages' && Array.isArray(value) && value.length <= 10 && value.every((l) => /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(l))) ||
       (key === 'defaultZoom' && [50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200].includes(value)) ||
       (key === 'dns' && ['automatic', 'off', 'custom', ...Object.keys(DNS_PROVIDERS)].includes(value)) ||
       (key === 'dnsCustom' && typeof value === 'string' && (value === '' || /^https:\/\/[^\s]+$/i.test(value))) ||
@@ -2465,6 +2614,10 @@ function setupIpc() {
     store.data.settings[key] = value;
     store.save();
     if (key === 'dns' || key === 'dnsCustom') applyDns();
+    if (key === 'languages' || key === 'spellcheck') {
+      applyLanguages(session.defaultSession);
+      windows.filter((w) => w.private).forEach((w) => applyLanguages(w.ses));
+    }
     sendAll();
   });
   handle('data:adblock-allow-remove', fromInternal, (_tab, site) => {
@@ -2534,6 +2687,16 @@ function setupIpc() {
   });
   handle('data:clear-browsing', fromInternal, (tab, opts) => clearBrowsingData(tab.w, opts || {}));
   handle('data:history', fromInternal, () => store.data.history);
+  handle('data:tasks', fromInternal, () => taskList());
+  handle('tasks:end', fromInternal, (_tab, pid) => {
+    const target = allTabs().find((t) => !t.wc.isDestroyed() && t.wc.getOSProcessId() === pid);
+    if (target) target.wc.forcefullyCrashRenderer(); // the tab shows "This page crashed" with Reload
+  });
+  handle('https:allow', fromInternal, (tab, url) => {
+    if (!/^http:\/\//i.test(url)) return;
+    httpsExceptions.add(new URL(url).host);
+    tab.wc.loadURL(url).catch(() => {});
+  });
   handle('data:licenses', fromInternal, async () => JSON.parse(await fs.promises.readFile(path.join(__dirname, 'gen', 'licenses.json'), 'utf8')));
   handle('data:history-remove-site', fromInternal, (_tab, site) => {
     store.data.history = store.data.history.filter((h) => siteOf(h.url) !== site);
@@ -2660,6 +2823,7 @@ function buildMenu() {
         { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', click: inWindow((w) => zoom(w, -0.5)) },
         { label: 'Actual Size', accelerator: 'CmdOrCtrl+0', click: inWindow((w) => zoom(w, 0)) },
         { type: 'separator' },
+        { label: 'Task Manager', accelerator: isMac ? undefined : 'Shift+Esc', click: open('tasks') },
         {
           label: 'Developer Tools',
           accelerator: isMac ? 'Alt+Cmd+I' : 'F12',
@@ -2848,6 +3012,7 @@ app.whenReady().then(() => {
     cacheFile: path.join(app.getPath('userData'), 'adblock-engine.bin'),
     shouldBlock,
     onBlocked,
+    beforeRequest: upgradeToHttps,
   });
   applyDns();
   configureSession(session.defaultSession);

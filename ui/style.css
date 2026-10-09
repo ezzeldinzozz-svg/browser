@@ -34,6 +34,11 @@ body.private {
 }
 
 * { box-sizing: border-box; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+@media (forced-colors: active) {
+  .tab, button, #address, #suggest, #sitepopup, #dlpanel, #bmpopup { border: 1px solid CanvasText !important; forced-color-adjust: auto; }
+  .tab.active { outline: 2px solid Highlight; }
+}
 html, body {
   margin: 0;
   height: 100%;
@@ -178,6 +183,7 @@ button {
 .tab.pinned .audio { position: absolute; margin: -14px -22px 0 0; width: 14px; height: 14px; }
 .tab { position: relative; }
 .tab.dragging { opacity: 0.4; }
+.tab.sleeping img, .tab.sleeping .title { opacity: 0.55; }
 .tab.drop-before { box-shadow: inset 2px 0 0 var(--accent); }
 .tab.drop-after { box-shadow: inset -2px 0 0 var(--accent); }
 .spinner {

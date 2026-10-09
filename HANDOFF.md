@@ -16,6 +16,9 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 - Tabs, address bar (URL or search with the chosen engine: DuckDuckGo default, Google, Bing, Brave, Ecosia, Kagi, Startpage), back/forward/reload/stop, keyboard shortcuts
 - Tab strip: drag to reorder, pinned tabs (kept left, restored), audio indicator with click-to-mute, right-click menu (new tab to the right, reload, duplicate, pin, mute, move to new window, close / others / to the right, reopen closed)
 - Bookmarks, history, downloads page, find in page, new-tab page, settings page
+- HTTPS-Only: `adblock.js` exposes a `beforeRequest` hook (Electron allows one onBeforeRequest per session); `upgradeToHttps` rewrites main-frame http:// to https:// and remembers it on the tab, so a failed upgrade shows `browser://error?desc=https-only` with "Continue to site" (session-only exception)
+- Memory saver: background tabs past the idle limit are put to sleep like restored tabs (`tab.pending` + about:blank); task manager at `browser://tasks` (`app.getAppMetrics` mapped to tabs/extensions)
+- Languages: `applyLanguages()` sets Accept-Language (via `setUserAgent`) and spellcheck per session
 - Popups: `window.open` with size features (`disposition: 'new-window'`) becomes a real popup BrowserWindow (keeps `window.opener` for sign-in flows; title shows the site; its links open as tabs); everything else opens as a tab
 - Settings live in `defaultSettings()` (also used by Reset); autoplay policy and default zoom apply to newly opened pages; settings page has a search box
 - New tab page: most-visited tiles from history (`topSites()`), hide with ×

@@ -56,6 +56,23 @@
     </label>
     <p class="hint">Changes apply to pages opened after you change them.</p>
 
+    <h2>Performance</h2>
+    <label class="check"><input id="memory-saver" type="checkbox"> Memory saver: let tabs I haven't used for a while sleep</label>
+    <label class="dns">Put tabs to sleep after
+      <select id="memory-saver-minutes">
+        <option value="15">15 minutes</option><option value="30">30 minutes</option><option value="60">1 hour</option>
+        <option value="120">2 hours</option><option value="240">4 hours</option>
+      </select>
+    </label>
+    <p class="hint">Sleeping tabs reload when you open them. Pinned tabs, tabs playing sound and tabs using your camera or microphone stay awake. View → Task Manager shows what each tab uses.</p>
+
+    <h2>Languages</h2>
+    <label class="dns">Preferred languages for websites
+      <input id="languages" type="text" spellcheck="false" placeholder="e.g. en-US, ar">
+    </label>
+    <p id="languages-hint" class="hint"></p>
+    <label class="check"><input id="spellcheck" type="checkbox"> Check spelling as I type</label>
+
     <h2>Appearance</h2>
     <label class="check"><input id="show-home" type="checkbox"> Show Home button</label>
     <div class="homepage">
@@ -95,6 +112,7 @@
     <label class="check"><input id="adblock" type="checkbox"> Block ads and trackers</label>
     <label class="check"><input id="tpc" type="checkbox"> Block third-party cookies (sites can still ask to use theirs when embedded)</label>
     <label class="check"><input id="gpc" type="checkbox"> Ask sites not to sell or share my data (Global Privacy Control)</label>
+    <label class="check"><input id="https-only" type="checkbox"> Always use secure connections (HTTPS-Only: warn before opening sites that only support HTTP)</label>
     <label class="dns">Secure DNS
       <select id="dns">
         <option value="automatic">Automatic (when your network's DNS supports it)</option>

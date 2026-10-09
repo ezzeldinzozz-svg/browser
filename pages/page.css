@@ -69,6 +69,11 @@ h2 { font-size: 16px; font-weight: 500; }
 .filtered-out { display: none !important; }
 .dns { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
 .dns select { margin: 0; }
+.dns input[type=text] { width: 240px; height: 30px; font-size: 13px; border-radius: 6px; }
+
+/* accessibility: honour reduced motion and forced colors (Windows high contrast) */
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+@media (forced-colors: active) { button, select, input, .row, .card, .tile { border: 1px solid CanvasText; } a { color: LinkText; } }
 #dns-custom { margin: 0 0 20px; height: 30px; font-size: 13px; border-radius: 6px; }
 .homepage input { height: 30px; border-radius: 6px; font-size: 13px; }
 .clear > label:first-child { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
@@ -130,3 +135,8 @@ kbd { font: 12px ui-monospace, Menlo, monospace; padding: 2px 8px; border: 1px s
 details { padding: 6px 0; border-bottom: 1px solid var(--border); }
 details summary { cursor: pointer; }
 details pre { white-space: pre-wrap; font-size: 11px; color: var(--dim); max-height: 300px; overflow: auto; }
+#tasks { width: 100%; border-collapse: collapse; font-size: 13px; }
+#tasks th { text-align: left; color: var(--dim); font-weight: 500; padding: 6px 8px; border-bottom: 1px solid var(--border); }
+#tasks td { padding: 6px 8px; border-bottom: 1px solid var(--border); }
+#tasks td:first-child { max-width: 520px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#tasks td:nth-child(2), #tasks td:nth-child(3), #tasks td:nth-child(4) { font-variant-numeric: tabular-nums; white-space: nowrap; }
