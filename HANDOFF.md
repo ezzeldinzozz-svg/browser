@@ -3,7 +3,7 @@
 Everything needed to pick this project up on any device. **Keep this file current:** update it
 in the same commit as any change to features, architecture, setup, or plans.
 
-_Last updated: 2026-10-09 · Current release: v0.6.0_
+_Last updated: 2026-10-09 · Current release: v0.11.0 (all platforms)_
 
 ## What this is
 
