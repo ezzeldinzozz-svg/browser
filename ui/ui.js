@@ -5,12 +5,26 @@ const $ = (id) => document.getElementById(id);
 const tablist = $('tablist');
 const address = $('address');
 
+// The tab strip doubles as the title bar: room for the macOS traffic lights / Windows buttons.
+document.body.classList.add(navigator.platform.startsWith('Mac') ? 'mac' : navigator.platform.startsWith('Win') ? 'win' : 'linux');
+api.onWindowFullscreen((on) => document.body.classList.toggle('fullscreen', !!on));
+
 const SPEAKER =
   '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M3 9v6h4l5 4V5L7 9H3z"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M16 8.5a5 5 0 0 1 0 7"/></svg>';
 const SPEAKER_MUTED =
   '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M3 9v6h4l5 4V5L7 9H3z"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M16 9l5 6M21 9l-5 6"/></svg>';
 
 let dragId = null;
+
+// Stroke icons for the address bar suggestions (same family as the toolbar's).
+const icon = (d) => `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
+const ICONS = {
+  go: icon('<path d="M7 17L17 7M9 7h8v8"/>'),
+  search: icon('<circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/>'),
+  tab: icon('<rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="M3.5 9.5h17"/>'),
+  star: icon('<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"/>'),
+  history: icon('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>'),
+};
 
 function renderTab(t, isActive) {
   const el = document.createElement('div');
@@ -66,7 +80,7 @@ function renderTab(t, isActive) {
   if (!t.pinned) {
     const close = document.createElement('button');
     close.className = 'close';
-    close.textContent = '×';
+    close.innerHTML = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>';
     close.title = 'Close tab';
     close.addEventListener('mousedown', (e) => {
       e.stopPropagation();
@@ -149,14 +163,13 @@ function render(state) {
 
   $('back').disabled = !active || !active.canGoBack;
   $('forward').disabled = !active || !active.canGoForward;
-  $('reload').textContent = active && active.loading ? '✕' : '↻';
+  $('reload').classList.toggle('loading', !!(active && active.loading));
   $('reload').title = active && active.loading ? 'Stop' : 'Reload';
   $('reader').hidden = !state.reader;
   $('reader').classList.toggle('on', state.reader === 'on');
   $('reader').title = state.reader === 'on' ? 'Leave reader mode' : 'Reader mode';
   $('star').disabled = !state.canBookmark;
   $('star').classList.toggle('on', state.bookmarked);
-  $('star').textContent = state.bookmarked ? '★' : '☆';
 
   renderBookmarkBar(state.bookmarkBar);
   const cap = state.capture;
@@ -327,20 +340,20 @@ function renderSuggest(engine) {
     url.className = 'uu';
     if (r.kind === 'typed') {
       const go = looksLikeAddress(r.text);
-      icon.textContent = go ? '↗' : '⌕';
+      icon.innerHTML = go ? ICONS.go : ICONS.search;
       title.textContent = go ? r.text : `${r.text}`;
       url.textContent = go ? '' : `— Search ${engine}`;
       url.style.color = 'var(--fg-dim)';
     } else if (r.kind === 'search') {
-      icon.textContent = '⌕';
+      icon.innerHTML = ICONS.search;
       title.textContent = r.text;
     } else if (r.kind === 'tab') {
-      icon.textContent = '\u29C9';
+      icon.innerHTML = ICONS.tab;
       title.textContent = r.title;
       url.textContent = `\u2014 Switch to tab`;
       url.style.color = 'var(--fg-dim)';
     } else {
-      icon.textContent = r.bookmarked ? '★' : '◷';
+      icon.innerHTML = r.bookmarked ? ICONS.star : ICONS.history;
       title.textContent = r.title;
       url.textContent = r.display;
     }

@@ -102,6 +102,7 @@ if (location.protocol === 'browser:' && window === window.top) {
     onFocusAddress: on('focus-address'),
     onFocusFind: on('focus-find'),
     onFocusAuth: on('focus-auth'),
+    onWindowFullscreen: on('window:fullscreen'),
     onScreenPicker: on('screen-picker'),
     onStatus: on('status'),
     listExtensions: call('ext:list'),

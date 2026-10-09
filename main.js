@@ -14,6 +14,7 @@ const {
   ipcMain,
   Menu,
   ShareMenu,
+  nativeTheme,
   protocol,
   screen,
   session,
@@ -45,7 +46,18 @@ const bookmarks = require('./bookmarks');
 const { ElectronChromeExtensions } = require('electron-chrome-extensions');
 const { installChromeWebStore, uninstallExtension } = require('electron-chrome-web-store');
 
-const CHROME_H = 80; // tab strip (36) + toolbar (44)
+const CHROME_H = 80; // tab strip (38, also the title bar) + toolbar (42)
+// Pages sit in a rounded card inset from the window edge (matches the brand's card look).
+const PAGE_INSET = 8;
+const PAGE_RADIUS = 12;
+// Window background behind the toolbar and around the page card; keep in sync with --canvas in ui/style.css.
+const CANVAS = { light: '#ecebf1', dark: '#0c0a11', private: '#120a22' };
+const canvasColor = (isPrivate) => (isPrivate ? CANVAS.private : nativeTheme.shouldUseDarkColors ? CANVAS.dark : CANVAS.light);
+const windowsTitleBar = (isPrivate) => ({
+  color: canvasColor(isPrivate),
+  symbolColor: isPrivate || nativeTheme.shouldUseDarkColors ? '#f3f1f7' : '#17141f',
+  height: 38,
+});
 const BOOKMARKS_BAR_H = 30;
 const BAR_H = 44; // optional bars under the toolbar: permission prompt, sign-in, find
 const UI_DIR = path.join(__dirname, 'ui');
@@ -605,7 +617,7 @@ function showStatus(w, url) {
 function layoutStatus(w) {
   const [width, height] = w.win.getContentSize();
   const textWidth = Math.min(Math.round(width * 0.6), 7 * w.statusText.length + 28);
-  w.statusView.setBounds({ x: 0, y: height - STATUS_H, width: Math.max(80, textWidth), height: STATUS_H });
+  w.statusView.setBounds({ x: PAGE_INSET, y: height - STATUS_H - PAGE_INSET, width: Math.max(80, textWidth), height: STATUS_H });
   w.statusView.setVisible(!!w.statusText);
 }
 
@@ -641,8 +653,10 @@ function layout(w) {
   w.chromeView.setVisible(top > 0);
   // While a dropdown or popup is open the (transparent) toolbar view covers the whole window.
   w.chromeView.setBounds({ x: 0, y: 0, width, height: w.overlay && top ? height : top || CHROME_H });
+  const inset = top > 0 ? PAGE_INSET : 0; // a page in fullscreen fills the window
   for (const t of w.tabs) {
-    t.view.setBounds({ x: 0, y: top, width, height: Math.max(0, height - top) });
+    t.view.setBounds({ x: inset, y: top, width: Math.max(0, width - 2 * inset), height: Math.max(0, height - top - inset) });
+    t.view.setBorderRadius(inset ? PAGE_RADIUS : 0);
   }
   if (w.statusView) layoutStatus(w);
 }
@@ -651,14 +665,31 @@ function layout(w) {
 // options.session: { tabs: [history...], active } to restore
 // options.ses: reuse this private session (a private tab moved to its own window)
 // options.empty: start without a tab (one is about to be moved in)
+// Light/dark switch: repaint the window frame around the toolbar and page card.
+let themeWatch = false;
+function watchTheme() {
+  if (themeWatch) return;
+  themeWatch = true;
+  nativeTheme.on('updated', () => {
+    for (const w of windows.filter(liveWindow)) {
+      w.win.setBackgroundColor(canvasColor(w.private));
+      if (process.platform === 'win32') w.win.setTitleBarOverlay(windowsTitleBar(w.private));
+    }
+  });
+}
+
 function createWindow({ private: isPrivate = false, session: saved = null, ses: reuse = null, empty = false } = {}) {
   const ses = isPrivate ? reuse || createPrivateSession() : session.defaultSession;
+  watchTheme();
   const win = new BaseWindow({
     ...restoredBounds(saved),
     minWidth: 480,
     minHeight: 320,
     title: isPrivate ? 'Operecs — Private' : 'Operecs',
-    backgroundColor: isPrivate ? '#25153f' : undefined,
+    backgroundColor: canvasColor(isPrivate),
+    // The tab strip is the title bar: traffic lights inset on macOS, overlay buttons on Windows.
+    ...(isMac ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 15, y: 13 } } : {}),
+    ...(process.platform === 'win32' ? { titleBarStyle: 'hidden', titleBarOverlay: windowsTitleBar(isPrivate) } : {}),
   });
   const chromeView = new WebContentsView({
     webPreferences: { preload: PRELOAD, sandbox: true, contextIsolation: true, nodeIntegration: false },
@@ -707,7 +738,11 @@ function createWindow({ private: isPrivate = false, session: saved = null, ses: 
   win.on('move', saveSessionSoon);
   if (saved && saved.maximized) win.maximize();
   // Leaving window fullscreen (green button, F11) also ends a page's video fullscreen.
-  win.on('leave-full-screen', () => exitFullscreen(activeTab(w)));
+  win.on('leave-full-screen', () => {
+    exitFullscreen(activeTab(w));
+    w.chromeView.webContents.send('window:fullscreen', false);
+  });
+  win.on('enter-full-screen', () => w.chromeView.webContents.send('window:fullscreen', true));
   win.on('close', (e) => {
     if (!quitting && !quitConfirmed && !w.closeConfirmed && store.data.settings.confirmClose && w.tabs.length > 1) {
       e.preventDefault();
@@ -3251,7 +3286,7 @@ function setupIpc() {
     });
     buildMenu();
   });
-  handle('data:top-sites', fromInternal, () => topSites());
+  handle('data:top-sites', fromInternal, (tab) => (tab.w.private ? [] : topSites())); // private windows don't show history
   handle('data:hide-tile', fromInternal, (_tab, site) => {
     if (!store.data.settings.hiddenTiles.includes(site)) store.data.settings.hiddenTiles.push(String(site));
     store.save();

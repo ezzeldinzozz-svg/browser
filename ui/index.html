@@ -2,19 +2,19 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src data: crx:">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src data: crx:">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
   <div id="tabstrip">
     <div id="tablist" role="tablist" aria-label="Tabs"></div>
-    <button id="newtab" title="New tab" aria-label="New tab">+</button>
+    <button id="newtab" title="New tab" aria-label="New tab"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
   </div>
   <div id="toolbar">
-    <button id="back" title="Back" aria-label="Back" disabled>&#8249;</button>
-    <button id="forward" title="Forward" aria-label="Forward" disabled>&#8250;</button>
-    <button id="reload" title="Reload" aria-label="Reload">&#8635;</button>
-    <button id="home" title="Home" aria-label="Home" hidden>&#8962;</button>
+    <button id="back" title="Back" aria-label="Back" disabled><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg></button>
+    <button id="forward" title="Forward" aria-label="Forward" disabled><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18l6-6-6-6"/></svg></button>
+    <button id="reload" title="Reload" aria-label="Reload"><svg class="ico go" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg><svg class="ico stop" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+    <button id="home" title="Home" aria-label="Home" hidden><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/></svg></button>
     <span id="private-badge" hidden>Private</span>
     <div id="omnibox">
       <button id="site" hidden></button>
@@ -25,15 +25,15 @@
       <div id="suggest" hidden></div>
     </div>
     <button id="shield" hidden>
-      <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path d="M12 2 4 5v6c0 5 3.4 9.4 8 11 4.6-1.6 8-6 8-11V5z" fill="currentColor"/></svg>
+      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M12 2.5 4.5 5.4v5.8c0 4.7 3.2 8.8 7.5 10.3 4.3-1.5 7.5-5.6 7.5-10.3V5.4z" fill="currentColor"/></svg>
       <span id="shield-count"></span>
     </button>
     <browser-action-list id="extensions" alignment="bottom left"></browser-action-list>
     <button id="reader" hidden title="Reader mode (⌥⌘R)" aria-label="Reader mode">
-      <svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true"><path d="M4 6h16M4 10h16M4 14h10M4 18h13" stroke="currentColor" stroke-width="2" stroke-linecap="round" fill="none"/></svg>
+      <svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M5 10h14M5 14h9M5 18h12"/></svg>
     </button>
-    <button id="star" title="Bookmark this page" aria-label="Bookmark this page" disabled>&#9734;</button>
-    <button id="downloads" title="Downloads" aria-label="Downloads">&#8615;</button>
+    <button id="star" title="Bookmark this page" aria-label="Bookmark this page" disabled><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"/></svg></button>
+    <button id="downloads" title="Downloads" aria-label="Downloads"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg></button>
     <button id="update" hidden>Restart to update</button>
   </div>
   <div id="bmbar" role="toolbar" aria-label="Bookmarks bar" hidden></div>

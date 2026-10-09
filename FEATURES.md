@@ -70,7 +70,7 @@ Ordered by priority, then by what unblocks what.
 - [x] Private window (Cmd/Ctrl+Shift+N): purple frame, in-memory session per window, no history/session/permission/download records kept, wiped on close; "Open Link in Private Window"
 - [x] Remember window size/position/maximized per window (only restored if still on a connected display)
 - [x] Window menu (macOS): list windows, Minimize, Zoom, Bring All to Front
-- [ ] **P1** Native-feeling title bar: tabs in the title bar with traffic lights (macOS `titleBarStyle: hiddenInset`), Windows overlay controls
+- [x] **P1** Native-feeling title bar: tabs in the title bar with traffic lights (macOS `titleBarStyle: hiddenInset`), Windows overlay controls (Linux keeps the system frame)
 - [x] "Close N tabs?" when closing a window and "Quit with N tabs open?" on Cmd/Ctrl+Q ("Don't ask again", Settings toggle); never on shutdown, logout or updates
 - [ ] **P2** Picture-in-picture-like floating "mini window" for a tab (Arc Little Arc)
 

@@ -1,12 +1,13 @@
-:root { --bg: #ffffff; --fg: #3c4043; --border: #dadce0; }
+@font-face { font-family: 'Outfit'; font-weight: 100 900; src: url('fonts/outfit.woff2') format('woff2-variations'); }
+:root { --bg: rgba(255, 255, 255, 0.96); --fg: #3d3a45; --border: rgba(30, 16, 60, 0.14); }
 @media (prefers-color-scheme: dark) {
-  :root { --bg: #35363a; --fg: #e8eaed; --border: #4a4b4f; }
+  :root { --bg: rgba(22, 19, 29, 0.96); --fg: #d9d5e2; --border: rgba(168, 126, 255, 0.28); }
 }
 html, body { margin: 0; height: 100%; overflow: hidden; background: transparent; }
 #status {
   position: absolute; left: 0; bottom: 0; max-width: calc(100% - 2px);
-  padding: 4px 10px; border: 1px solid var(--border); border-left: 0; border-bottom: 0;
-  border-top-right-radius: 6px; background: var(--bg); color: var(--fg);
-  font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu, sans-serif;
+  padding: 4px 12px; border: 1px solid var(--border); border-radius: 0 10px 0 12px;
+  background: var(--bg); color: var(--fg);
+  font: 12px 'Outfit', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Ubuntu, sans-serif;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; box-sizing: border-box;
 }
