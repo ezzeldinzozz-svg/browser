@@ -580,3 +580,55 @@ for (const k of ['history', 'downloads', 'cookies', 'cache']) {
     browserAPI.setSetting('clearOnQuit', value);
   });
 }
+
+// ---- addresses (autofill)
+const ADDRESS_KEYS = ['name', 'organization', 'street', 'street2', 'city', 'region', 'postal', 'country', 'email', 'phone'];
+let editingAddress = null;
+function renderAddresses(list) {
+  const box = document.getElementById('addresses');
+  box.textContent = '';
+  if (!list.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.textContent = 'No saved addresses.';
+    box.append(empty);
+  }
+  for (const a of list) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    const main = document.createElement('div');
+    main.className = 'main';
+    const t = document.createElement('div');
+    t.className = 't';
+    t.textContent = a.name;
+    const u = document.createElement('div');
+    u.className = 'u';
+    u.textContent = [a.street, a.city, a.country, a.email, a.phone].filter(Boolean).join(' · ');
+    main.append(t, u);
+    const edit = document.createElement('button');
+    edit.textContent = 'Edit';
+    edit.addEventListener('click', () => openAddressForm(a));
+    const remove = document.createElement('button');
+    remove.textContent = 'Remove';
+    remove.addEventListener('click', async () => renderAddresses(await browserAPI.removeAddress(a.id)));
+    row.append(main, edit, remove);
+    box.append(row);
+  }
+}
+function openAddressForm(a) {
+  editingAddress = a ? a.id : null;
+  for (const k of ADDRESS_KEYS) document.getElementById(`addr-${k}`).value = (a && a[k]) || '';
+  document.getElementById('address-form').hidden = false;
+  document.getElementById('addr-name').focus();
+}
+document.getElementById('address-add').addEventListener('click', () => openAddressForm(null));
+document.getElementById('address-cancel').addEventListener('click', () => (document.getElementById('address-form').hidden = true));
+document.getElementById('address-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const a = { id: editingAddress };
+  for (const k of ADDRESS_KEYS) a[k] = document.getElementById(`addr-${k}`).value;
+  if (!a.name.trim()) return document.getElementById('addr-name').focus();
+  renderAddresses(await browserAPI.saveAddress(a));
+  e.target.hidden = true;
+});
+browserAPI.getAddresses().then(renderAddresses);

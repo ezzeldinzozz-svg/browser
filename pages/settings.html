@@ -204,6 +204,28 @@
       <select id="perm-add-value" aria-label="Allow or block"><option value="allow">Allow</option><option value="block">Block</option></select>
       <button type="submit">Add exception</button>
     </form>
+    <h2>Addresses</h2>
+    <p class="hint">Fill in address and contact forms with one click: focus a field like "Name" or "Street" and pick an address. Operecs offers to save one when you send a form. Passwords and cards come from your password-manager extension.</p>
+    <div id="addresses"></div>
+    <form id="address-form" class="address-form" hidden>
+      <input id="addr-name" aria-label="Full name" placeholder="Full name" autocomplete="off">
+      <input id="addr-organization" aria-label="Company" placeholder="Company (optional)" autocomplete="off">
+      <input id="addr-street" aria-label="Street address" placeholder="Street address" autocomplete="off">
+      <input id="addr-street2" aria-label="Apartment, suite" placeholder="Apartment, suite… (optional)" autocomplete="off">
+      <div class="addr-row">
+        <input id="addr-city" aria-label="City" placeholder="City" autocomplete="off">
+        <input id="addr-region" aria-label="State or region" placeholder="State / region" autocomplete="off">
+        <input id="addr-postal" aria-label="Postal code" placeholder="Postal code" autocomplete="off">
+      </div>
+      <input id="addr-country" aria-label="Country" placeholder="Country" autocomplete="off">
+      <div class="addr-row">
+        <input id="addr-email" aria-label="Email" placeholder="Email" autocomplete="off">
+        <input id="addr-phone" aria-label="Phone" placeholder="Phone" autocomplete="off">
+      </div>
+      <div class="buttons"><button type="button" id="address-cancel">Cancel</button><button type="submit" class="primary">Save address</button></div>
+    </form>
+    <div class="buttons"><button id="address-add">Add address</button></div>
+
     <h2>Your data</h2>
     <p class="hint">Save your bookmarks (HTML, works in any browser) and your history, settings and site permissions (JSON) to a folder. Import history from another browser on the History page.</p>
     <div class="buttons"><button id="export-all">Export my data…</button> <span id="export-result" class="hint"></span></div>

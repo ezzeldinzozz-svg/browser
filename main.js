@@ -174,6 +174,7 @@ class Store {
       session: null,
       settings: {},
       adblockAllowlist: [],
+      addresses: [], // [{ id, name, organization, street, street2, city, region, postal, country, email, phone }]
       zoom: {}, // site -> zoom level (0 = 100%)
     };
     this.timer = null;
@@ -600,7 +601,11 @@ function sendTabs(w) {
     prompt: prompt
       ? {
           id: prompt.id,
-          text: prompt.scheme
+          allowLabel: prompt.kind === 'save-address' ? 'Save' : 'Allow',
+          blockLabel: prompt.kind === 'save-address' ? 'Not now' : 'Block',
+          text: prompt.kind === 'save-address'
+            ? `Save this address for filling in forms? ${[prompt.address.name, prompt.address.street || prompt.address.email].filter(Boolean).join(', ')}`
+            : prompt.scheme
             ? `${new URL(prompt.origin).host} wants to open \u201c${prompt.scheme}:\u201d links in another app`
             : `${new URL(prompt.origin).host} wants to ${promptText(prompt.keys)}`,
         }
@@ -841,6 +846,7 @@ function createWindow({ private: isPrivate = false, session: saved = null, ses: 
     updateHandoff(w);
   });
   win.on('resize', () => {
+    hideAutofill(w);
     layout(w);
     saveSessionSoon();
   });
@@ -1464,6 +1470,7 @@ function selectTab(w, id, keepSelection = false) {
     w.multi.clear();
     w.multiAnchor = null;
   }
+  hideAutofill(w);
   if (w.activeId !== id) {
     const previous = activeTab(w);
     if (previous) previous.lastShown = Date.now();
@@ -2293,6 +2300,12 @@ function resolvePrompt(w, promptId, decision) {
     const idx = tab.prompts.findIndex((p) => p.id === promptId);
     if (idx === -1) continue;
     const [p] = tab.prompts.splice(idx, 1);
+    if (p.kind === 'save-address') {
+      if (decision === 'allow') saveAddress(p.address);
+      layout(w);
+      sendTabs(w);
+      return;
+    }
     if (decision === 'allow' || decision === 'block') {
       const perms = permissionStore(w);
       const site = (perms[p.origin] ||= {});
@@ -2308,8 +2321,13 @@ function resolvePrompt(w, promptId, decision) {
 
 function dismissPrompts(tab) {
   if (tab.w.screenPick && tab.w.screenPick.tab === tab) resolveScreenPick(tab.w, tab.w.screenPick.id, null);
+  hideAutofill(tab.w);
   if (tab.prompts.length === 0) return;
-  for (const p of tab.prompts.splice(0)) for (const cb of p.callbacks) cb(false);
+  // "Save this address?" is offered as the form submits, so it must outlive that one navigation
+  const keep = tab.prompts.filter((p) => p.keepOnce);
+  for (const p of tab.prompts.filter((x) => !x.keepOnce)) for (const cb of p.callbacks) cb(false);
+  for (const p of keep) p.keepOnce = false;
+  tab.prompts = keep;
   if (tab.id === tab.w.activeId) layout(tab.w);
 }
 
@@ -2506,6 +2524,83 @@ function localHost(host) {
 // Reloading a page that was the result of a form (POST): Chromium asks the embedder to confirm
 // and Electron silently cancels, so Reload did nothing. We remember the form data of each tab's
 // last main-frame POST and, after "Resubmit?", send it again.
+// ---------------------------------------------------------------- address autofill
+
+// Saved addresses fill forms through capture-preload.js. The list under a focused field is a
+// small browser view (ui/autofill.html) above the page, so the page can't read the addresses.
+const ADDRESS_FIELDS = ['name', 'organization', 'street', 'street2', 'city', 'region', 'postal', 'country', 'email', 'phone'];
+let nextAddressId = 1;
+
+function cleanAddress(a) {
+  const out = {};
+  for (const k of ADDRESS_FIELDS) out[k] = typeof a?.[k] === 'string' ? a[k].trim().slice(0, 200) : '';
+  return out;
+}
+const sameAddress = (a, b) => ['name', 'street', 'email', 'phone'].every((k) => (a[k] || '').toLowerCase() === (b[k] || '').toLowerCase());
+
+function saveAddress(a) {
+  const clean = cleanAddress(a);
+  if (!clean.name) return;
+  const list = (store.data.addresses ||= []);
+  if (list.some((x) => sameAddress(x, clean))) return;
+  nextAddressId = Math.max(nextAddressId, ...list.map((x) => x.id + 1));
+  list.push({ id: nextAddressId++, ...clean });
+  store.save();
+  announceAutofill();
+}
+
+// Tell open pages whether there's anything to fill (they only report focus when there is).
+function announceAutofill() {
+  const available = !!(store.data.addresses && store.data.addresses.length);
+  for (const t of allTabs()) if (!t.wc.isDestroyed()) t.wc.send('autofill:available', available);
+}
+
+function autofillView(w) {
+  if (w.autofillView) return w.autofillView;
+  const view = new WebContentsView({ webPreferences: { preload: PRELOAD, sandbox: true, contextIsolation: true, nodeIntegration: false } });
+  view.setBackgroundColor('#00000000');
+  view.setVisible(false);
+  view.webContents.loadURL(`${SCHEME}://ui/autofill.html`);
+  view.webContents.on('will-navigate', (e) => e.preventDefault());
+  w.autofillView = view;
+  w.win.contentView.addChildView(view);
+  return view;
+}
+
+function showAutofill(tab, { type, rect }) {
+  const w = tab.w;
+  const list = store.data.addresses || [];
+  if (!list.length || tab.id !== w.activeId || !liveWindow(w)) return;
+  clearTimeout(w.autofillHideTimer);
+  const view = autofillView(w);
+  const detail = (a) => ({ email: a.email, tel: a.phone, postal: a.postal, city: a.city, organization: a.organization }[type] || [a.street, a.city].filter(Boolean).join(', ') || a.email);
+  const items = list.slice(0, 6).map((a) => ({ id: a.id, label: a.name, detail: detail(a) || '' }));
+  const [width, height] = w.win.getContentSize();
+  const top = chromeHeight(w);
+  const h = items.length * 46 + 46;
+  let x = Math.round(PAGE_INSET + rect.x);
+  let y = Math.round(top + rect.y + rect.height + 4);
+  if (y + h > height) y = Math.max(top, Math.round(top + rect.y - h - 4)); // no room below: above the field
+  x = Math.max(0, Math.min(x, width - 320));
+  view.setBounds({ x, y, width: 320, height: h });
+  const payload = { tabId: tab.id, items };
+  if (view.webContents.isLoading()) view.webContents.once('did-finish-load', () => view.webContents.send('autofill:list', payload));
+  else view.webContents.send('autofill:list', payload);
+  w.win.contentView.addChildView(view); // above the page
+  view.setVisible(true);
+  w.autofillTab = tab;
+}
+
+function hideAutofill(w, delay = 0) {
+  if (!w || !w.autofillView) return;
+  clearTimeout(w.autofillHideTimer);
+  const hide = () => {
+    if (w.autofillView && !w.autofillView.webContents.isDestroyed()) w.autofillView.setVisible(false);
+  };
+  if (delay) w.autofillHideTimer = setTimeout(hide, delay);
+  else hide();
+}
+
 // ---------------------------------------------------------------- mixed content / insecure forms
 
 // A secure (https) page loading something over plain http. Chromium upgrades or blocks most of
@@ -3584,6 +3679,71 @@ function setupIpc() {
     const tab = tabOfWc(e.sender);
     const origin = e.senderFrame ? originOf(e.senderFrame.url) : null;
     e.returnValue = !!(tab && origin && !decisionFor(tab.w, origin, 'notifications') && permissionDefault('notifications') !== 'block');
+  });
+
+  // Address autofill (capture-preload.js in the page's top frame; ui/autofill.html is the list).
+  const autofillTab = (e) => {
+    const tab = tabOfWc(e.sender);
+    return tab && e.senderFrame === e.sender.mainFrame ? tab : null;
+  };
+  ipcMain.on('autofill:available', (e) => {
+    e.returnValue = !!(autofillTab(e) && store.data.addresses && store.data.addresses.length);
+  });
+  ipcMain.on('autofill:show', (e, info) => {
+    const tab = autofillTab(e);
+    if (tab && info && info.rect && typeof info.type === 'string') showAutofill(tab, info);
+  });
+  ipcMain.on('autofill:hide', (e) => {
+    const tab = autofillTab(e);
+    if (tab) hideAutofill(tab.w, 180); // a click on the list blurs the field first
+  });
+  ipcMain.on('autofill:offer', (e, address) => {
+    const tab = autofillTab(e);
+    if (!tab || tab.w.private) return;
+    const clean = cleanAddress(address);
+    if (!clean.name || (store.data.addresses || []).some((x) => sameAddress(x, clean))) return;
+    const origin = originOf(tab.wc.getURL());
+    if (!origin) return;
+    tab.prompts = tab.prompts.filter((p) => p.kind !== 'save-address');
+    tab.prompts.push({ id: nextPromptId++, origin, keys: [], kind: 'save-address', address: clean, keepOnce: true, callbacks: [] });
+    if (tab.id === tab.w.activeId) {
+      layout(tab.w);
+      sendTabs(tab.w);
+    }
+  });
+  const fromAutofill = (e) => windows.find((w) => w.autofillView && w.autofillView.webContents === e.sender) || null;
+  handle('autofill:choose', fromAutofill, (w, id) => {
+    const tab = w.autofillTab;
+    const address = (store.data.addresses || []).find((a) => a.id === id);
+    hideAutofill(w);
+    if (!tab || tab.wc.isDestroyed() || !address) return;
+    tab.wc.focus();
+    tab.wc.mainFrame.send('autofill:fill', address);
+  });
+  handle('autofill:manage', fromAutofill, (w) => {
+    hideAutofill(w);
+    openInternalPage(w, 'settings');
+  });
+  handle('addresses:list', fromInternal, () => store.data.addresses || []);
+  handle('addresses:save', fromInternal, (_tab, a) => {
+    const clean = cleanAddress(a);
+    if (!clean.name) return store.data.addresses || [];
+    const list = (store.data.addresses ||= []);
+    const existing = list.find((x) => x.id === a.id);
+    if (existing) Object.assign(existing, clean);
+    else {
+      nextAddressId = Math.max(nextAddressId, ...list.map((x) => x.id + 1));
+      list.push({ id: nextAddressId++, ...clean });
+    }
+    store.save();
+    announceAutofill();
+    return list;
+  });
+  handle('addresses:remove', fromInternal, (_tab, id) => {
+    store.data.addresses = (store.data.addresses || []).filter((x) => x.id !== id);
+    store.save();
+    announceAutofill();
+    return store.data.addresses;
   });
 
   // Sent by capture-preload.js when the user clicks one of the page's notifications.

@@ -224,6 +224,8 @@ function render(state) {
   currentPrompt = state.prompt;
   $('prompt').hidden = !currentPrompt;
   $('prompt-text').textContent = currentPrompt ? currentPrompt.text : '';
+  $('prompt-allow').textContent = (currentPrompt && currentPrompt.allowLabel) || 'Allow';
+  $('prompt-block').textContent = (currentPrompt && currentPrompt.blockLabel) || 'Block';
 
   const find = state.find || { open: false, text: '', active: 0, matches: 0 };
   $('findbar').hidden = !find.open;

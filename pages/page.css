@@ -323,3 +323,10 @@ body.bg-color.bg-light { --fg: #17141f; --dim: #4a4656; --card: rgba(255, 255, 2
 .color-pick { display: flex; align-items: center; gap: 8px; color: var(--dim); }
 .color-pick input { width: 34px; height: 26px; padding: 0; border: 0; border-radius: 6px; background: none; }
 .customize-panel .check { margin: 6px 0; }
+
+/* settings: address form */
+.address-form { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 12px; padding: 16px; border: 1px solid var(--border); border-radius: 20px; background: var(--card); }
+.address-form[hidden] { display: none; }
+.address-form input { height: 36px; font-size: 13.5px; }
+.addr-row { display: flex; gap: 8px; }
+.address-form .buttons { justify-content: flex-end; margin-top: 4px; }

@@ -195,3 +195,136 @@ if (/^https?:$/.test(location.protocol)) {
     // page world not available
   }
 }
+
+// ---- Address & contact autofill. Runs in this isolated world: the page never sees saved
+// addresses until the user picks one. Focusing an address field asks the browser to show its
+// list under the field (drawn by the browser, outside the page); picking one fills the visible
+// address fields of that form. Submitting a form with an address offers to save it.
+
+if (/^https?:$/.test(location.protocol) && window === window.top) {
+  const AUTOCOMPLETE = {
+    name: 'name', 'given-name': 'given-name', 'family-name': 'family-name', organization: 'organization',
+    'street-address': 'address-line1', 'address-line1': 'address-line1', 'address-line2': 'address-line2',
+    'address-level2': 'city', 'address-level1': 'region', 'postal-code': 'postal', country: 'country',
+    'country-name': 'country', email: 'email', tel: 'tel', 'tel-national': 'tel',
+  };
+  const PATTERNS = [
+    ['email', /e-?mail/i],
+    ['tel', /phone|\btel\b|mobile|cell/i],
+    ['given-name', /first.?name|given.?name|\bfname\b|forename/i],
+    ['family-name', /last.?name|family.?name|surname|\blname\b/i],
+    ['organization', /company|organi[sz]ation|business.?name/i],
+    ['address-line2', /address.?(line)?.?2|\bapt\b|apartment|suite|\bunit\b|\bflat\b/i],
+    ['address-line1', /address|street|\baddr\b|line.?1/i],
+    ['city', /\bcity\b|\btown\b|locality/i],
+    ['region', /\bstate\b|province|region|county/i],
+    ['postal', /\bzip\b|postal|postcode|post.?code/i],
+    ['country', /country/i],
+    ['name', /full.?name|your.?name|^\s*name\s*$/i],
+  ];
+  const SKIP = /password|card|\bcvv\b|\bcvc\b|security.?code|captcha|coupon|promo|search|username|login|otp|verification/i;
+
+  function fieldType(el) {
+    const isInput = el instanceof HTMLInputElement;
+    if (!isInput && !(el instanceof HTMLSelectElement) && !(el instanceof HTMLTextAreaElement)) return null;
+    if (isInput && !['text', 'email', 'tel', ''].includes(el.type)) return null;
+    if (el.disabled || el.readOnly) return null;
+    const tokens = (el.getAttribute('autocomplete') || '').toLowerCase().split(/\s+/);
+    if (tokens.some((t) => t.startsWith('cc-') || t.endsWith('password') || t === 'one-time-code' || t === 'username')) return null;
+    for (const t of tokens) if (AUTOCOMPLETE[t]) return AUTOCOMPLETE[t];
+    const labels = el.labels ? [...el.labels].map((l) => l.textContent).join(' ') : '';
+    const text = [el.name, el.id, el.placeholder, el.getAttribute('aria-label'), labels].filter(Boolean).join(' ');
+    if (!text || SKIP.test(text)) return null;
+    for (const [type, re] of PATTERNS) if (re.test(text)) return type;
+    if (el.type === 'email') return 'email';
+    if (el.type === 'tel') return 'tel';
+    return null;
+  }
+
+  const visible = (el) => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
+  const fieldsIn = (scope) => [...scope.querySelectorAll('input, select, textarea')].map((el) => [el, fieldType(el)]).filter(([el, t]) => t && visible(el));
+
+  function valueFor(type, a) {
+    const parts = (a.name || '').trim().split(/\s+/);
+    switch (type) {
+      case 'name': return a.name;
+      case 'given-name': return parts.length > 1 ? parts.slice(0, -1).join(' ') : parts[0];
+      case 'family-name': return parts.length > 1 ? parts[parts.length - 1] : '';
+      case 'organization': return a.organization;
+      case 'address-line1': return a.street;
+      case 'address-line2': return a.street2;
+      case 'city': return a.city;
+      case 'region': return a.region;
+      case 'postal': return a.postal;
+      case 'country': return a.country;
+      case 'email': return a.email;
+      case 'tel': return a.phone;
+      default: return '';
+    }
+  }
+
+  function setValue(el, value) {
+    if (el instanceof HTMLSelectElement) {
+      const want = value.toLowerCase();
+      const option = [...el.options].find((o) => o.value.toLowerCase() === want || o.text.trim().toLowerCase() === want) ||
+        [...el.options].find((o) => o.text.trim().toLowerCase().startsWith(want));
+      if (!option) return;
+      el.value = option.value;
+    } else {
+      // the prototype's setter, so frameworks (React, Vue…) notice the change
+      const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value').set;
+      setter.call(el, value);
+    }
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+    el.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  let current = null;
+  let available = false;
+  try {
+    available = ipcRenderer.sendSync('autofill:available') === true;
+  } catch {
+    available = false;
+  }
+  ipcRenderer.on('autofill:available', (_e, value) => (available = value === true));
+
+  const show = (el, type) => {
+    const r = el.getBoundingClientRect();
+    ipcRenderer.send('autofill:show', { type, rect: { x: r.left, y: r.top, width: r.width, height: r.height } });
+  };
+  document.addEventListener('focusin', (e) => {
+    const type = available && fieldType(e.target);
+    if (!type) return;
+    current = e.target;
+    if (!e.target.value) show(e.target, type);
+  }, true);
+  document.addEventListener('focusout', () => ipcRenderer.send('autofill:hide'), true);
+  document.addEventListener('input', (e) => {
+    if (e.target === current && e.isTrusted) ipcRenderer.send('autofill:hide'); // typing: get out of the way
+  }, true);
+  window.addEventListener('scroll', () => current && ipcRenderer.send('autofill:hide'), { passive: true, capture: true });
+
+  ipcRenderer.on('autofill:fill', (_e, address) => {
+    if (!current || !address) return;
+    const scope = current.closest('form') || document;
+    for (const [el, type] of fieldsIn(scope)) {
+      const value = valueFor(type, address);
+      if (value) setValue(el, value);
+    }
+  });
+
+  // Offer to save what was typed into an address form.
+  document.addEventListener('submit', (e) => {
+    if (!(e.target instanceof HTMLFormElement)) return;
+    const a = {};
+    for (const [el, type] of fieldsIn(e.target)) {
+      const v = (el instanceof HTMLSelectElement ? el.selectedOptions[0]?.text : el.value || '').trim();
+      if (!v) continue;
+      const key = { 'address-line1': 'street', 'address-line2': 'street2', tel: 'phone' }[type] || type;
+      if (key === 'given-name') a.name = `${v} ${a.name || ''}`.trim();
+      else if (key === 'family-name') a.name = `${a.name || ''} ${v}`.trim();
+      else a[key] = v;
+    }
+    if (a.name && (a.street || a.email || a.phone)) ipcRenderer.send('autofill:offer', a);
+  }, true);
+}

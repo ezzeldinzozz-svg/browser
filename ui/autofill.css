@@ -1,0 +1,13 @@
+@font-face { font-family: 'Outfit'; font-weight: 100 900; src: url('fonts/outfit.woff2') format('woff2-variations'); }
+:root { --bg: #ffffff; --fg: #17141f; --dim: #5f5b69; --line: rgba(110, 60, 224, 0.26); --hover: rgba(110, 60, 224, 0.10); }
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #14111c; --fg: #f3f1f7; --dim: #a6a3ac; --line: rgba(168, 126, 255, 0.30); --hover: rgba(155, 108, 255, 0.16); }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: transparent; font: 13px 'Outfit', -apple-system, sans-serif; color: var(--fg); overflow: hidden; }
+#box { height: calc(100% - 2px); display: flex; flex-direction: column; padding: 4px; border: 1px solid var(--line); border-radius: 14px; background: var(--bg); box-shadow: 0 12px 30px -12px rgba(0, 0, 0, 0.6); }
+button { display: flex; flex-direction: column; align-items: flex-start; justify-content: center; gap: 1px; height: 42px; padding: 0 12px; border: 0; border-radius: 10px; background: transparent; color: var(--fg); font: inherit; text-align: left; cursor: default; flex: none; }
+button:hover, button:focus-visible { background: var(--hover); outline: none; }
+.name { font-weight: 500; }
+.detail { color: var(--dim); font-size: 12px; max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.manage { height: 34px; color: var(--dim); font-size: 12px; border-top: 1px solid var(--line); border-radius: 0 0 10px 10px; margin-top: auto; }
