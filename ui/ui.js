@@ -76,6 +76,25 @@ function render(state) {
   btn.dataset.badge = dl.progress >= 0 ? `${Math.floor(dl.progress * 100)}%` : String(dl.active);
   btn.title = dl.active ? `Downloads (${dl.active} in progress)` : 'Downloads';
 
+  const auth = state.auth;
+  if ((auth && auth.id) !== (currentAuth && currentAuth.id)) {
+    $('auth-user').value = '';
+    $('auth-pass').value = '';
+  }
+  currentAuth = auth;
+  $('authbar').hidden = !auth;
+  const authText = $('auth-text');
+  authText.textContent = '';
+  if (auth) {
+    authText.append(`Sign in to ${auth.host}${auth.realm ? ` (“${auth.realm}”)` : ''}`);
+    if (auth.insecure) {
+      const warn = document.createElement('span');
+      warn.className = 'warn';
+      warn.textContent = ' · not secure: your password will be sent unencrypted';
+      authText.append(warn);
+    }
+  }
+
   const update = state.update || {};
   $('update').hidden = update.status !== 'ready';
   $('update').title = update.version ? `Install Browser ${update.version}` : '';
@@ -96,6 +115,17 @@ $('find-prev').addEventListener('click', () => api.find(findInput.value, { forwa
 $('find-close').addEventListener('click', () => api.closeFind());
 $('downloads').addEventListener('click', () => api.openDownloads());
 $('update').addEventListener('click', () => api.installUpdate());
+
+let currentAuth = null;
+api.onFocusAuth(() => $('auth-user').focus());
+$('authbar').addEventListener('submit', (e) => {
+  e.preventDefault();
+  if (currentAuth) api.respondAuth(currentAuth.id, $('auth-user').value, $('auth-pass').value);
+});
+$('auth-cancel').addEventListener('click', () => currentAuth && api.respondAuth(currentAuth.id, null));
+$('authbar').addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && currentAuth) api.respondAuth(currentAuth.id, null);
+});
 
 let currentPrompt = null;
 const respond = (decision) => currentPrompt && api.respondPermission(currentPrompt.id, decision);

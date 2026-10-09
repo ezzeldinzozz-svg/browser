@@ -138,6 +138,40 @@ button {
 #prompt button.primary:hover { filter: brightness(1.1); }
 #prompt button.close { width: 28px; padding: 0; border: 0; font-size: 18px; color: var(--fg-dim); }
 
+#authbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 44px;
+  padding: 0 12px;
+  background: var(--bg-active);
+  border-bottom: 1px solid var(--border);
+}
+#authbar[hidden] { display: none; }
+#auth-text { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; }
+#auth-text .warn { color: #d93025; }
+#authbar input {
+  width: 160px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--input-bg);
+  color: var(--fg);
+  font: inherit;
+  user-select: text;
+  -webkit-user-select: text;
+}
+#authbar input:focus { outline: none; border-color: var(--accent); }
+#authbar button {
+  height: 28px;
+  padding: 0 14px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+#authbar button:hover { background: var(--bg-hover); }
+#authbar button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg-active); }
+
 #downloads { position: relative; }
 #downloads.active { color: var(--accent); }
 #downloads.active::after {

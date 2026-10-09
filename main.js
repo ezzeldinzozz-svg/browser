@@ -2,7 +2,7 @@
 
 const path = require('path');
 const fs = require('fs');
-const { app, BaseWindow, WebContentsView, dialog, ipcMain, Menu, protocol, session, shell } = require('electron');
+const { app, BaseWindow, WebContentsView, clipboard, dialog, ipcMain, Menu, protocol, session, shell } = require('electron');
 const updater = require('./updater');
 
 const CHROME_H = 80; // tab strip (36) + toolbar (44)
@@ -23,6 +23,7 @@ const MIME = {
   '.png': 'image/png',
 };
 const FAVICON_MAX_BYTES = 256 * 1024;
+const SESSION_ENTRY_LIMIT = 50; // back/forward entries kept per tab
 const SEARCH_URL = 'https://duckduckgo.com/?q=';
 const HISTORY_LIMIT = 5000;
 const DOWNLOADS_LIMIT = 200;
@@ -49,13 +50,14 @@ const isMac = process.platform === 'darwin';
 class Store {
   constructor(file) {
     this.file = file;
-    this.data = { bookmarks: [], history: [], permissions: {}, downloads: [] };
+    this.data = { bookmarks: [], history: [], permissions: {}, downloads: [], session: null, settings: {} };
     this.timer = null;
     try {
       Object.assign(this.data, JSON.parse(fs.readFileSync(file, 'utf8')));
     } catch {
       // first run or unreadable file: start empty
     }
+    this.data.settings = { restoreSession: true, ...this.data.settings };
   }
   save() {
     clearTimeout(this.timer);
@@ -148,6 +150,9 @@ function sendTabs() {
     find: current ? current.find : null,
     downloads: downloadSummary(),
     update: updater.getState(),
+    auth: current && current.auth[0]
+      ? (({ id, host, realm, insecure }) => ({ id, host, realm, insecure }))(current.auth[0])
+      : null,
     tabs: tabs.map((t) => {
       const url = t.wc.getURL();
       return {
@@ -167,7 +172,8 @@ function chromeHeight() {
   const tab = activeTab();
   if (!tab) return CHROME_H;
   if (tab.fullscreen) return 0;
-  return CHROME_H + (tab.prompts.length ? BAR_H : 0) + (tab.find.open ? BAR_H : 0);
+  const bars = [tab.prompts.length, tab.auth.length, tab.find.open].filter(Boolean).length;
+  return CHROME_H + bars * BAR_H;
 }
 
 function layout() {
@@ -274,6 +280,209 @@ function dismissPrompts(tab) {
   if (tab.prompts.length === 0) return;
   for (const p of tab.prompts.splice(0)) for (const cb of p.callbacks) cb(false);
   if (tab.id === activeId) layout();
+}
+
+// ---------------------------------------------------------------- session
+
+// A tab's back/forward history, trimmed for storage. Error pages restore as their original URL.
+function tabHistory(tab) {
+  if (tab.wc.isDestroyed()) return null;
+  const nav = tab.wc.navigationHistory;
+  let entries = nav.getAllEntries().map((e) => {
+    const name = internalName(e.url);
+    if (name === 'error') return { url: new URL(e.url).searchParams.get('url') || '', title: e.title };
+    return { url: e.url, title: e.title };
+  });
+  let index = nav.getActiveIndex();
+  const start = Math.max(0, entries.length - SESSION_ENTRY_LIMIT);
+  entries = entries.slice(start);
+  index -= start;
+  const keep = entries.map((e) => /^(https?:|browser:)/i.test(e.url));
+  if (!keep[index]) return null;
+  index -= keep.slice(0, index).filter((k) => !k).length;
+  entries = entries.filter((_e, i) => keep[i]);
+  return entries.length ? { entries, index } : null;
+}
+
+function saveSession() {
+  if (!store || !win || win.isDestroyed()) return;
+  const saved = [];
+  let active = 0;
+  for (const t of tabs) {
+    const h = tabHistory(t);
+    if (!h) continue;
+    if (t.id === activeId) active = saved.length;
+    saved.push(h);
+  }
+  store.data.session = { tabs: saved, active };
+  store.save();
+}
+
+function restoreSession() {
+  const session = store.data.session;
+  if (!store.data.settings.restoreSession || !session || !session.tabs.length) return false;
+  for (const h of session.tabs) {
+    createTab(h.entries[h.index].url, { background: true, history: h });
+  }
+  selectTab(tabs[Math.min(session.active, tabs.length - 1)].id);
+  return true;
+}
+
+const closedTabs = []; // most recent last
+
+function rememberClosedTab(tab, index) {
+  const history = tabHistory(tab);
+  if (!history) return;
+  closedTabs.push({ history, index });
+  if (closedTabs.length > 25) closedTabs.shift();
+}
+
+function reopenClosedTab() {
+  const closed = closedTabs.pop();
+  if (!closed) return;
+  const tab = createTab(closed.history.entries[closed.history.index].url, { history: closed.history });
+  // put it back where it was
+  tabs.splice(tabs.indexOf(tab), 1);
+  tabs.splice(Math.min(closed.index, tabs.length), 0, tab);
+  sendTabs();
+  saveSession();
+}
+
+// ---------------------------------------------------------------- HTTP sign-in
+
+let nextAuthId = 1;
+
+function onLogin(event, wc, details, authInfo, callback) {
+  const tab = wc && tabs.find((t) => t.wc === wc);
+  event.preventDefault();
+  if (!tab || authInfo.isProxy) return callback(); // cancels; proxy sign-in isn't supported yet
+  tab.auth.push({
+    id: nextAuthId++,
+    host: authInfo.port && ![80, 443].includes(authInfo.port) ? `${authInfo.host}:${authInfo.port}` : authInfo.host,
+    realm: authInfo.realm || '',
+    insecure: !/^https:/i.test(details.url),
+    callback,
+  });
+  if (tab.id === activeId) {
+    layout();
+    sendTabs();
+    chromeView.webContents.focus();
+    chromeView.webContents.send('focus-auth');
+  }
+}
+
+// username === null cancels the request
+function resolveAuth(authId, username, password) {
+  for (const tab of tabs) {
+    const idx = tab.auth.findIndex((a) => a.id === authId);
+    if (idx === -1) continue;
+    const [req] = tab.auth.splice(idx, 1);
+    if (username === null) req.callback();
+    else req.callback(String(username), String(password || ''));
+    layout();
+    sendTabs();
+    if (tab.id === activeId) tab.wc.focus();
+    return;
+  }
+}
+
+function cancelAuth(tab) {
+  if (tab.auth.length === 0) return;
+  for (const req of tab.auth.splice(0)) req.callback();
+  if (tab.id === activeId) layout();
+}
+
+// ---------------------------------------------------------------- context menu
+
+function trimLabel(text, max = 30) {
+  const t = text.replace(/\s+/g, ' ').trim();
+  return t.length > max ? t.slice(0, max - 1) + '…' : t;
+}
+
+function showPageMenu(tab, params) {
+  const wc = tab.wc;
+  const groups = [];
+  const isWeb = (u) => /^https?:\/\//i.test(u);
+
+  if (params.linkURL && isWeb(params.linkURL)) {
+    groups.push([
+      { label: 'Open Link in New Tab', click: () => createTab(params.linkURL, { after: tab, background: true }) },
+      { label: 'Copy Link Address', click: () => clipboard.writeText(params.linkURL) },
+    ]);
+  }
+  if (params.mediaType === 'image' && params.srcURL) {
+    const image = [
+      { label: 'Copy Image', click: () => wc.copyImageAt(params.x, params.y) },
+      { label: 'Save Image As…', click: () => wc.downloadURL(params.srcURL) },
+    ];
+    if (isWeb(params.srcURL)) {
+      image.unshift({ label: 'Open Image in New Tab', click: () => createTab(params.srcURL, { after: tab, background: true }) });
+      image.push({ label: 'Copy Image Address', click: () => clipboard.writeText(params.srcURL) });
+    }
+    groups.push(image);
+  }
+  if (params.isEditable) {
+    if (params.misspelledWord) {
+      const fixes = params.dictionarySuggestions.slice(0, 5).map((s) => ({ label: s, click: () => wc.replaceMisspelling(s) }));
+      groups.push([
+        ...(fixes.length ? fixes : [{ label: 'No Guesses Found', enabled: false }]),
+        { label: 'Add to Dictionary', click: () => wc.session.addWordToSpellCheckerDictionary(params.misspelledWord) },
+      ]);
+    }
+    const f = params.editFlags;
+    groups.push([
+      { label: 'Undo', enabled: f.canUndo, click: () => wc.undo() },
+      { label: 'Redo', enabled: f.canRedo, click: () => wc.redo() },
+    ]);
+    groups.push([
+      { label: 'Cut', enabled: f.canCut, click: () => wc.cut() },
+      { label: 'Copy', enabled: f.canCopy, click: () => wc.copy() },
+      { label: 'Paste', enabled: f.canPaste, click: () => wc.paste() },
+      { label: 'Select All', enabled: f.canSelectAll, click: () => wc.selectAll() },
+    ]);
+  } else if (params.selectionText.trim()) {
+    groups.push([
+      { label: 'Copy', click: () => wc.copy() },
+      {
+        label: `Search for “${trimLabel(params.selectionText)}”`,
+        click: () => createTab(SEARCH_URL + encodeURIComponent(params.selectionText.trim()), { after: tab }),
+      },
+    ]);
+  }
+  if (groups.length === 0) {
+    groups.push([
+      { label: 'Back', enabled: canGo(wc, 'back'), click: () => wc.navigationHistory.goBack() },
+      { label: 'Forward', enabled: canGo(wc, 'forward'), click: () => wc.navigationHistory.goForward() },
+      { label: 'Reload', click: () => wc.reload() },
+    ]);
+    groups.push([
+      { label: 'Print…', click: () => printTab(tab) },
+      ...(isWeb(wc.getURL())
+        ? [{ label: 'View Page Source', click: () => createTab(`view-source:${wc.getURL()}`, { after: tab }) }]
+        : []),
+    ]);
+  }
+  groups.push([{ label: 'Inspect Element', click: () => wc.inspectElement(params.x, params.y) }]);
+
+  const template = groups.flatMap((g, i) => (i ? [{ type: 'separator' }, ...g] : g));
+  Menu.buildFromTemplate(template).popup({ window: win });
+}
+
+// The toolbar's own text fields (address bar, find, sign-in) get a plain edit menu.
+function showChromeMenu(params) {
+  if (!params.isEditable) return;
+  const wc = chromeView.webContents;
+  const f = params.editFlags;
+  Menu.buildFromTemplate([
+    { label: 'Cut', enabled: f.canCut, click: () => wc.cut() },
+    { label: 'Copy', enabled: f.canCopy, click: () => wc.copy() },
+    { label: 'Paste', enabled: f.canPaste, click: () => wc.paste() },
+    { label: 'Select All', enabled: f.canSelectAll, click: () => wc.selectAll() },
+  ]).popup({ window: win });
+}
+
+function printTab(tab) {
+  if (tab && !tab.wc.isDestroyed()) tab.wc.print({}, () => {});
 }
 
 // ---------------------------------------------------------------- find in page
@@ -443,9 +652,18 @@ function updateHistoryTitle(tab) {
   }
 }
 
-function createTab(url) {
+// options.background: open without switching to it
+// options.after: place right after this tab (links opened from a page)
+// options.history: { entries, index } to restore back/forward history instead of loading url
+function createTab(url, { background = false, after = null, history = null } = {}) {
   const view = new WebContentsView({
-    webPreferences: { preload: PRELOAD, sandbox: true, contextIsolation: true, nodeIntegration: false },
+    webPreferences: {
+      preload: PRELOAD,
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false,
+      spellcheck: true,
+    },
   });
   const wc = view.webContents;
   const tab = {
@@ -457,18 +675,23 @@ function createTab(url) {
     prompts: [],
     fullscreen: false,
     find: { open: false, text: '', active: 0, matches: 0 },
+    auth: [], // pending HTTP sign-in requests
   };
-  tabs.push(tab);
+  const afterIdx = after ? tabs.indexOf(after) : -1;
+  if (afterIdx === -1) tabs.push(tab);
+  else tabs.splice(afterIdx + 1 + openerRunLength(after, afterIdx), 0, tab);
+  tab.openerId = after ? after.id : null;
   view.setVisible(false);
   win.contentView.addChildView(view);
 
-  wc.setWindowOpenHandler(({ url: target }) => {
+  wc.setWindowOpenHandler(({ url: target, disposition }) => {
     if (!isBlockedNavigation(wc.getURL(), target)) {
       const resolved = resolveInput(target);
-      if (resolved) createTab(resolved);
+      if (resolved) createTab(resolved, { after: tab, background: disposition === 'background-tab' });
     }
     return { action: 'deny' };
   });
+  wc.on('context-menu', (_e, params) => showPageMenu(tab, params));
   // Websites (in any frame, or via redirect) may never load the browser's own pages.
   const guard = (e) => {
     if (isBlockedNavigation(wc.getURL(), e.url)) e.preventDefault();
@@ -486,8 +709,10 @@ function createTab(url) {
   wc.on('did-navigate', (_e, u) => {
     tab.favicon = tab.faviconSrc = '';
     dismissPrompts(tab); // a prompt must never carry over to a different page
+    cancelAuth(tab);
     tab.find.active = tab.find.matches = 0;
     recordHistory(tab, u);
+    saveSession();
     sendTabs();
   });
   wc.on('found-in-page', (_e, result) => {
@@ -508,6 +733,7 @@ function createTab(url) {
   wc.on('did-navigate-in-page', (_e, u, isMainFrame) => {
     if (!isMainFrame) return;
     recordHistory(tab, u);
+    saveSession();
     sendTabs();
   });
   wc.on('did-fail-load', (_e, code, desc, failedUrl, isMainFrame) => {
@@ -516,9 +742,22 @@ function createTab(url) {
   });
 
   layout();
-  wc.loadURL(url).catch(() => {});
-  selectTab(tab.id);
+  if (history && history.entries.length) {
+    wc.navigationHistory.restore(history).catch(() => wc.loadURL(url).catch(() => {}));
+  } else {
+    wc.loadURL(url).catch(() => {});
+  }
+  if (background) sendTabs();
+  else selectTab(tab.id);
+  saveSession();
   return tab;
+}
+
+// Links opened from the same tab line up after each other, like other browsers.
+function openerRunLength(opener, openerIdx) {
+  let n = 0;
+  while (tabs[openerIdx + 1 + n] && tabs[openerIdx + 1 + n].openerId === opener.id) n++;
+  return n;
 }
 
 function isBlockedNavigation(fromUrl, toUrl) {
@@ -555,13 +794,16 @@ function selectTab(id) {
   layout();
   tab.wc.focus();
   sendTabs();
+  saveSession();
 }
 
 function closeTab(id) {
   const idx = tabs.findIndex((t) => t.id === id);
   if (idx === -1) return;
   const [tab] = tabs.splice(idx, 1);
+  rememberClosedTab(tab, idx);
   dismissPrompts(tab);
+  cancelAuth(tab);
   exitFullscreen(tab);
   win.contentView.removeChildView(tab.view);
   tab.wc.close();
@@ -571,6 +813,7 @@ function closeTab(id) {
   }
   if (id === activeId) selectTab(tabs[Math.min(idx, tabs.length - 1)].id);
   else sendTabs();
+  saveSession();
 }
 
 function cycleTab(step) {
@@ -657,6 +900,8 @@ function setupIpc() {
   handle('find:close', fromChrome, () => closeFind(activeTab()));
   handle('downloads:open', fromChrome, () => openDownloadsPage());
   handle('update:install', fromChrome, () => restartToUpdate());
+  handle('auth:respond', fromChrome, (_e, authId, username, password) =>
+    resolveAuth(authId, username === null ? null : String(username), password));
 
   handle('data:downloads', fromInternal, () => store.data.downloads);
   handle('download:open', fromInternal, (_e, id) => {
@@ -678,6 +923,14 @@ function setupIpc() {
     store.data.downloads = store.data.downloads.filter((d) => d.state === 'progressing');
     store.save();
     notifyDownloads(true);
+  });
+
+  handle('data:settings', fromInternal, () => store.data.settings);
+  handle('data:settings-set', fromInternal, (_e, key, value) => {
+    if (key === 'restoreSession' && typeof value === 'boolean') {
+      store.data.settings.restoreSession = value;
+      store.save();
+    }
   });
 
   handle('data:permissions', fromInternal, () => store.data.permissions);
@@ -732,7 +985,10 @@ function buildMenu() {
       submenu: [
         { label: 'New Tab', accelerator: 'CmdOrCtrl+T', click: newTab },
         { label: 'Close Tab', accelerator: 'CmdOrCtrl+W', click: () => closeTab(activeId) },
+        { label: 'Reopen Closed Tab', accelerator: 'CmdOrCtrl+Shift+T', click: reopenClosedTab },
         { label: 'Open Location', accelerator: 'CmdOrCtrl+L', click: focusAddress },
+        { type: 'separator' },
+        { label: 'Print…', accelerator: 'CmdOrCtrl+P', click: () => printTab(activeTab()) },
         { type: 'separator' },
         { label: 'Settings', accelerator: 'CmdOrCtrl+,', click: () => open('settings') },
         ...(isMac ? [] : [{ type: 'separator' }, { role: 'quit' }]),
@@ -817,16 +1073,22 @@ function createWindow() {
   const cwc = chromeView.webContents;
   cwc.setWindowOpenHandler(() => ({ action: 'deny' }));
   cwc.on('will-navigate', (e) => e.preventDefault());
+  cwc.on('context-menu', (_e, params) => showChromeMenu(params));
   cwc.loadURL(UI_URL);
   cwc.once('did-finish-load', sendTabs);
 
   win.on('resize', layout);
   // Leaving window fullscreen (green button, F11) also ends a page's video fullscreen.
   win.on('leave-full-screen', () => exitFullscreen(activeTab()));
+  // Tabs still exist here (they're torn down afterwards), so this is the final session snapshot.
+  win.on('close', () => {
+    saveSession();
+    store.flush();
+  });
   win.on('closed', () => app.quit());
 
   layout();
-  createTab(internalURL('newtab'));
+  if (!restoreSession()) createTab(internalURL('newtab'));
 }
 
 // Serves browser://ui/* from ui/ and browser://<page>/* from pages/ (index = <page>.html).
@@ -852,6 +1114,10 @@ async function serveInternal(request) {
     return new Response('Not found', { status: 404 });
   }
 }
+
+// Development runs (npm start) keep their own profile so testing never touches the
+// installed app's bookmarks, history or settings. Must run before anything reads userData.
+if (!app.isPackaged) app.setPath('userData', path.join(app.getPath('appData'), 'Browser Dev'));
 
 // Every renderer is sandboxed, including any created by Electron internals.
 app.enableSandbox();
@@ -886,6 +1152,7 @@ app.whenReady().then(() => {
   ses.setPermissionRequestHandler(onPermissionRequest);
   ses.setPermissionCheckHandler(onPermissionCheck);
   ses.on('will-download', onWillDownload);
+  app.on('login', onLogin);
 
   setupIpc();
   buildMenu();

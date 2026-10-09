@@ -25,6 +25,13 @@
     <button id="prompt-block">Block</button>
     <button id="prompt-close" class="close" title="Not now">&times;</button>
   </div>
+  <form id="authbar" hidden>
+    <span id="auth-text"></span>
+    <input id="auth-user" type="text" autocomplete="off" spellcheck="false" placeholder="Username">
+    <input id="auth-pass" type="password" autocomplete="off" placeholder="Password">
+    <button id="auth-ok" type="submit" class="primary">Sign in</button>
+    <button id="auth-cancel" type="button">Cancel</button>
+  </form>
   <div id="findbar" hidden>
     <input id="find-input" type="text" spellcheck="false" autocomplete="off" placeholder="Find in page">
     <span id="find-count"></span>

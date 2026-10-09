@@ -28,6 +28,9 @@ if (location.protocol === 'browser:' && window === window.top) {
     closeFind: call('find:close'),
     openDownloads: call('downloads:open'),
     installUpdate: call('update:install'),
+    respondAuth: call('auth:respond'),
+    getSettings: call('data:settings'),
+    setSetting: call('data:settings-set'),
     getDownloads: call('data:downloads'),
     openDownload: call('download:open'),
     showDownload: call('download:show'),
@@ -37,5 +40,6 @@ if (location.protocol === 'browser:' && window === window.top) {
     onTabs: on('tabs:update'),
     onFocusAddress: on('focus-address'),
     onFocusFind: on('focus-find'),
+    onFocusAuth: on('focus-auth'),
   });
 }

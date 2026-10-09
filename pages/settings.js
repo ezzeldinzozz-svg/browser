@@ -12,6 +12,12 @@ const NAMES = {
 };
 
 const list = document.getElementById('list');
+const restore = document.getElementById('restore');
+
+browserAPI.getSettings().then((s) => {
+  restore.checked = s.restoreSession;
+});
+restore.addEventListener('change', () => browserAPI.setSetting('restoreSession', restore.checked));
 
 async function load() {
   const sites = await browserAPI.getPermissions();
