@@ -208,7 +208,7 @@ Ordered by priority, then by what unblocks what.
 - [x] Zoom in / out / reset (Cmd/Ctrl +/−/0); applies per origin, not saved across restarts
 - [x] Print (Cmd/Ctrl+P and context menu, system print dialog)
 - [x] View page source; Inspect Element
-- [ ] **P0** PDF viewer: verify Electron's built-in PDF viewer opens PDFs in tabs (and downloads vs. view behavior)
+- [x] PDF viewer: PDFs open in a tab with Electron's built-in viewer (verified)
 - [x] Zoom level indicator in the address bar (click to reset); per-site zoom persists across restarts (not in private windows)
 - [ ] **P1** Save page as (Cmd/Ctrl+S: complete HTML, single file/MHTML, text) via `webContents.savePage`
 - [ ] **P1** Export/Save as PDF (`printToPDF`), also from the print preview
@@ -234,7 +234,7 @@ Ordered by priority, then by what unblocks what.
 
 - [x] Web content inherits Chromium accessibility (screen readers read pages)
 - [x] Visible focus rings in the toolbar
-- [ ] **P0** Toolbar keyboard access: arrow keys through the tab strip, F6 to cycle regions
+- [x] Keyboard: arrow keys / Home / End through the tab strip, Enter selects, Delete closes; F6 switches between toolbar and page
 - [x] ARIA basics: `tablist`/`tab` roles with `aria-selected`, labels on icon buttons, permission bar as an alert
 - [ ] **P1** Full screen-reader pass (VoiceOver/NVDA) and labels for every bar
 - [ ] **P1** VoiceOver / NVDA / Orca pass on toolbar and internal pages
@@ -247,8 +247,9 @@ Ordered by priority, then by what unblocks what.
 - [x] Settings page (Cmd/Ctrl+,) with "reopen tabs from last time" and site permissions
 - [x] Make this my default browser button + status in Settings (macOS confirms; Windows opens Default apps settings)
 - [x] Search engine setting
-- [ ] **P0** Privacy & security section (clear data, cookies, tracker blocking level, HTTPS-only, DoH, safe browsing)
-- [ ] **P0** On startup: new tab / continue where you left off / specific pages
+- [x] Privacy & security in Settings: clear data, ad/tracker blocking, third-party cookies, permission defaults and exceptions
+- [ ] **P1** HTTPS-only mode, DNS over HTTPS, safe browsing (needs a provider)
+- [x] On startup: continue where you left off / New Tab page / specific pages (with "Use current pages")
 - [ ] **P1** Appearance: light/dark/system theme (toolbar and internal pages follow `nativeTheme`), accent color, show bookmarks bar, show home button
 - [ ] **P1** Home page / new-tab page choice
 - [ ] **P1** Downloads location + ask where to save
@@ -291,7 +292,7 @@ Ordered by priority, then by what unblocks what.
 - [x] Atomic store writes (`.tmp` + rename), debounced saves, flush on quit
 - [x] Failed loads show a "can't be reached" page with retry
 - [x] Tab crash page ("This page crashed" with Reload) on `render-process-gone`; unresponsive page dialog (Wait / Exit Page)
-- [ ] **P0** Crash recovery: restore after an app crash, with "Restore pages?" prompt when the last exit was not clean
+- [x] Crash recovery: after an unclean exit the browser offers "Restore pages" (or restores automatically when continuing where you left off)
 - [ ] **P0** Storage: JSON → SQLite (history/bookmarks/passwords scale, fewer full rewrites)
 - [ ] **P1** Lazy-load restored tabs (only load the active tab at startup)
 - [ ] **P1** Tab sleeping / memory saver: discard background tabs after N minutes, exclusions list
@@ -349,7 +350,7 @@ Ordered by priority, then by what unblocks what.
 ## 22. Onboarding, help & about
 
 - [x] About panel (macOS `role: about`)
-- [ ] **P0** First-run welcome: set as default browser, import from another browser, choose search engine, privacy choices
+- [x] First-run welcome: default browser, bookmark import, search engine, ad/cookie blocking, link to privacy page
 - [x] About section in Settings: version, update status, last check, Check for updates
 - [ ] **P2** Electron/Chromium version and open-source licenses in About
 - [ ] **P1** Help menu: keyboard shortcuts, report a problem, website/support link
@@ -359,7 +360,7 @@ Ordered by priority, then by what unblocks what.
 ## 23. Legal & policy
 
 - [x] MIT license file for the project
-- [ ] **P0** Privacy policy (what goes over the network: update check, search provider, blocklist downloads) linked from Settings/About
+- [x] Privacy policy (`PRIVACY.md`, `browser://privacy`) listing everything that goes over the network; linked from Settings and the welcome page
 - [ ] **P1** Bundle and show third-party licenses (Electron's `LICENSES.chromium.html`, npm dependencies, filter lists like EasyList)
 - [ ] **P1** Product name + icon (replace placeholder "Browser" and the default Electron icon); trademark check
 - [ ] **P2** Terms of use / EULA; avoid "Chrome"/"Google" marks
@@ -379,11 +380,11 @@ Ordered by priority, then by what unblocks what.
 
 ## 25. Other expected basics
 
-- [ ] **P0** Home button (optional) and keyboard shortcut to go home
+- [x] Home button (optional, Settings → Appearance), configurable home page, Cmd+Shift+H / Alt+Home
 - [x] Status bubble showing the link URL on hover (bottom-left)
 - [x] "Leave site? Changes you made may not be saved" (`will-prevent-unload`) dialog on navigation/reload
 - [ ] **P1** Same prompt when closing a tab or window with unsaved changes
-- [ ] **P0** JavaScript dialogs (`alert`/`confirm`/`prompt`) styled and tab-modal, with "prevent this page from creating more dialogs"
+- [ ] **P1** JavaScript dialogs styled and tab-modal *(Electron limit: `alert`/`confirm` use native app-modal dialogs and `prompt()` isn't supported; Electron has no hook to replace them)*
 - [ ] **P1** Form re-submission warning on reload after POST
 - [ ] **P1** Proxy settings (system proxy honored by default; manual/PAC option)
 - [ ] **P1** Captive portal detection (hotel/airport Wi-Fi sign-in)

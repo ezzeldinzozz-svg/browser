@@ -298,7 +298,7 @@ body.private #site.insecure { color: #ff8a80; }
 }
 #address:focus { outline: none; border-color: var(--accent); background: var(--bg-active); }
 
-#prompt, #dlwarn {
+#prompt, #dlwarn, #restorebar {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -307,17 +307,17 @@ body.private #site.insecure { color: #ff8a80; }
   background: var(--bg-active);
   border-bottom: 1px solid var(--border);
 }
-#prompt[hidden], #dlwarn[hidden] { display: none; }
-#prompt-text, #dlwarn-text { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; }
-#prompt button, #dlwarn button {
+#prompt[hidden], #dlwarn[hidden], #restorebar[hidden] { display: none; }
+#prompt-text, #dlwarn-text, #restore-text { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; }
+#prompt button, #dlwarn button, #restorebar button {
   height: 28px;
   padding: 0 14px;
   border: 1px solid var(--border);
   border-radius: 14px;
 }
-#prompt button:hover, #dlwarn button:hover { background: var(--bg-hover); }
-#prompt button.primary, #dlwarn button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg-active); }
-#prompt button.primary:hover, #dlwarn button.primary:hover { filter: brightness(1.1); }
+#prompt button:hover, #dlwarn button:hover, #restorebar button:hover { background: var(--bg-hover); }
+#prompt button.primary, #dlwarn button.primary, #restorebar button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg-active); }
+#prompt button.primary:hover, #dlwarn button.primary:hover, #restorebar button.primary:hover { filter: brightness(1.1); }
 #prompt button.close { width: 28px; padding: 0; border: 0; font-size: 18px; color: var(--fg-dim); }
 
 #authbar {
@@ -446,3 +446,5 @@ body.private #site.insecure { color: #ff8a80; }
 #findbar button { width: 28px; height: 28px; border-radius: 50%; font-size: 16px; }
 #findbar button:hover { background: var(--bg-hover); }
 #findbar button.close { font-size: 18px; color: var(--fg-dim); }
+
+#toolbar #home[hidden] { display: none; }

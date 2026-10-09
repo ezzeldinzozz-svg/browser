@@ -12,14 +12,17 @@ const NAMES = {
 };
 
 const list = document.getElementById('list');
-const restore = document.getElementById('restore');
 const adblock = document.getElementById('adblock');
 const allowlist = document.getElementById('allowlist');
 const engine = document.getElementById('engine');
 
 async function loadSettings() {
   const s = await browserAPI.getSettings();
-  restore.checked = s.restoreSession;
+  for (const r of document.querySelectorAll('input[name="startup"]')) r.checked = r.value === s.startupMode;
+  document.getElementById('startup-pages-box').hidden = s.startupMode !== 'pages';
+  document.getElementById('startup-pages').value = (s.startupPages || []).join('\n');
+  document.getElementById('show-home').checked = s.showHomeButton;
+  document.getElementById('home-page').value = s.homePage || '';
   if (!engine.options.length) {
     for (const e of s.searchEngines) engine.append(new Option(e.name, e.id));
   }
@@ -53,7 +56,6 @@ async function loadSettings() {
   }
 }
 
-restore.addEventListener('change', () => browserAPI.setSetting('restoreSession', restore.checked));
 adblock.addEventListener('change', () => browserAPI.setSetting('adblock', adblock.checked));
 engine.addEventListener('change', () => browserAPI.setSetting('searchEngine', engine.value));
 loadSettings();
@@ -247,3 +249,35 @@ document.getElementById('tpc').addEventListener('change', async (e) => {
   loadSettings();
 });
 document.getElementById('tpc-restart-now').addEventListener('click', () => browserAPI.relaunch());
+
+// ---- On startup / home
+
+for (const r of document.querySelectorAll('input[name="startup"]')) {
+  r.addEventListener('change', async () => {
+    await browserAPI.setSetting('startup', r.value);
+    loadSettings();
+  });
+}
+
+async function saveStartupPages() {
+  const urls = document
+    .getElementById('startup-pages')
+    .value.split('\n')
+    .map((u) => u.trim())
+    .filter(Boolean)
+    .map((u) => (/^[a-z]+:\/\//i.test(u) ? u : `https://${u}`));
+  await browserAPI.setSetting('startupPages', urls);
+  document.getElementById('startup-pages-saved').textContent = 'Saved.';
+}
+document.getElementById('startup-pages').addEventListener('change', saveStartupPages);
+document.getElementById('startup-use-current').addEventListener('click', async () => {
+  document.getElementById('startup-pages').value = (await browserAPI.currentPagesForStartup()).join('\n');
+  saveStartupPages();
+});
+document.getElementById('show-home').addEventListener('change', (e) => browserAPI.setSetting('showHomeButton', e.target.checked));
+document.getElementById('home-page').addEventListener('change', (e) => {
+  let v = e.target.value.trim();
+  if (v && !/^[a-z]+:\/\//i.test(v)) v = `https://${v}`;
+  e.target.value = v;
+  browserAPI.setSetting('homePage', v);
+});

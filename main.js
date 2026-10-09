@@ -32,7 +32,7 @@ const PRELOAD = path.join(__dirname, 'preload.js');
 // The browser's own pages live at browser://<name>/ and are served from pages/<name>.html.
 // The toolbar is browser://ui/. Only these origins may call the privileged IPC API.
 const SCHEME = 'browser';
-const INTERNAL = new Set(['newtab', 'history', 'bookmarks', 'downloads', 'settings', 'error']);
+const INTERNAL = new Set(['newtab', 'history', 'bookmarks', 'downloads', 'settings', 'error', 'welcome', 'privacy']);
 const UI_URL = `${SCHEME}://ui/`;
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -83,6 +83,7 @@ const isMac = process.platform === 'darwin';
 class Store {
   constructor(file) {
     this.file = file;
+    this.isNew = !fs.existsSync(file); // first launch of this profile
     this.data = {
       history: [],
       permissions: {},
@@ -101,6 +102,10 @@ class Store {
     this.data.settings = {
       restoreSession: true,
       blockThirdPartyCookies: true,
+      startup: null, // 'continue' | 'newtab' | 'pages' (null: derived from restoreSession)
+      startupPages: [],
+      showHomeButton: false,
+      homePage: '', // '' = the New Tab page
       permissionDefaults: {}, // type -> 'block' (absent = ask)
       adblock: true,
       searchEngine: 'duckduckgo',
@@ -254,6 +259,8 @@ function sendTabs(w) {
           : 'none',
     downloads: downloadSummary(w),
     update: updater.getState(),
+    restoreOffer: !!w.restoreOffer,
+    showHome: !!store.data.settings.showHomeButton,
     downloadWarning: (() => {
       const rec = store.data.downloads.find((d) => d.id === w.downloadWarnings[0]);
       return rec ? { id: rec.id, filename: rec.filename } : null;
@@ -289,7 +296,7 @@ function chromeHeight(w) {
   const tab = activeTab(w);
   if (!tab) return CHROME_H + (store.data.settings.showBookmarksBar ? BOOKMARKS_BAR_H : 0);
   if (tab.fullscreen) return 0;
-  const bars = [w.downloadWarnings.length, tab.prompts.length, tab.auth.length, tab.find.open].filter(Boolean).length;
+  const bars = [w.restoreOffer, w.downloadWarnings.length, tab.prompts.length, tab.auth.length, tab.find.open].filter(Boolean).length;
   return CHROME_H + (store.data.settings.showBookmarksBar ? BOOKMARKS_BAR_H : 0) + bars * BAR_H;
 }
 
@@ -376,6 +383,7 @@ function createWindow({ private: isPrivate = false, session: saved = null, ses: 
     closedTabs: [], // most recent last
     overlay: false, // toolbar dropdown/popup open
     downloadWarnings: [], // ids of finished risky downloads awaiting Keep/Discard
+    restoreOffer: null, // saved windows from a run that crashed
     screenPick: null, // pending screen-sharing request
     statusView: null, // link-hover URL bubble
     statusText: '',
@@ -1010,6 +1018,23 @@ async function exportBookmarks(w) {
   return filePath;
 }
 
+function homeUrl() {
+  const home = store.data.settings.homePage;
+  return home && /^(https?|file):/i.test(home) ? home : internalURL('newtab');
+}
+
+function goHome(w) {
+  const tab = activeTab(w);
+  if (tab) tab.wc.loadURL(homeUrl()).catch(() => {});
+  else createTab(w, homeUrl());
+}
+
+// F6: address bar -> page -> address bar…
+function cycleFocus(w) {
+  if (w.chromeView.webContents.isFocused()) activeTab(w)?.wc.focus();
+  else focusAddress(w);
+}
+
 function focusAddress(w) {
   w.chromeView.webContents.focus();
   w.chromeView.webContents.send('focus-address');
@@ -1116,6 +1141,23 @@ let saveSessionTimer = null;
 function saveSessionSoon() {
   clearTimeout(saveSessionTimer);
   saveSessionTimer = setTimeout(() => saveSession(), 400);
+}
+
+function startupMode() {
+  const { startup, restoreSession } = store.data.settings;
+  if (['continue', 'newtab', 'pages'].includes(startup)) return startup;
+  return restoreSession ? 'continue' : 'newtab';
+}
+
+function restorePrevious(w) {
+  const previous = w.restoreOffer;
+  w.restoreOffer = null;
+  layout(w);
+  sendTabs(w);
+  if (!previous) return;
+  for (const s of previous) createWindow({ session: s });
+  // the window that offered the restore is dropped if it's just an untouched new tab
+  if (w.tabs.length === 1 && internalName(w.tabs[0].wc.getURL()) === 'newtab') w.win.close();
 }
 
 function savedWindows() {
@@ -1960,6 +2002,14 @@ function setupIpc() {
     ]).popup({ window: w.win });
   });
   handle('zoom:reset', fromChrome, (w) => zoom(w, 0));
+  handle('nav:home', fromChrome, (w) => goHome(w));
+  handle('restore:accept', fromChrome, (w) => restorePrevious(w));
+  handle('restore:dismiss', fromChrome, (w) => {
+    w.restoreOffer = null;
+    layout(w);
+    sendTabs(w);
+  });
+  handle('focus:page', fromChrome, (w) => activeTab(w)?.wc.focus());
   handle('nav:reload', fromChrome, (w) => {
     const t = activeTab(w);
     if (!t) return;
@@ -2027,6 +2077,7 @@ function setupIpc() {
     searchEngines: Object.entries(SEARCH_ENGINES).map(([id, e]) => ({ id, name: e.name })),
     searchEngineName: searchEngine().name,
     thirdPartyCookiesBlockedNow: thirdPartyCookiesBlocked,
+    startupMode: startupMode(),
     downloadDirShown: downloadDir(),
   }));
   handle('downloads:choose-folder', fromInternal, async (tab) => {
@@ -2045,7 +2096,11 @@ function setupIpc() {
   });
   handle('data:settings-set', fromInternal, (_tab, key, value) => {
     const valid =
-      (['restoreSession', 'adblock', 'askDownloadLocation', 'blockThirdPartyCookies'].includes(key) && typeof value === 'boolean') ||
+      (['restoreSession', 'adblock', 'askDownloadLocation', 'blockThirdPartyCookies', 'showHomeButton'].includes(key) &&
+        typeof value === 'boolean') ||
+      (key === 'startup' && ['continue', 'newtab', 'pages'].includes(value)) ||
+      (key === 'homePage' && typeof value === 'string' && (value === '' || /^(https?|file):\/\//i.test(value))) ||
+      (key === 'startupPages' && Array.isArray(value) && value.every((u) => typeof u === 'string' && /^(https?|file):\/\//i.test(u))) ||
       (key === 'searchEngine' && Object.hasOwn(SEARCH_ENGINES, value));
     if (!valid) return;
     store.data.settings[key] = value;
@@ -2080,6 +2135,9 @@ function setupIpc() {
     else store.data.settings.permissionDefaults[key] = value;
     store.save();
   });
+  handle('startup:current-pages', fromInternal, (tab) =>
+    tab.w.tabs.map((t) => t.wc.getURL()).filter((u) => isWeb(u)),
+  );
   handle('app:relaunch', fromInternal, () => {
     app.relaunch();
     app.quit();
@@ -2176,6 +2234,7 @@ function buildMenu() {
         { label: 'Close Window', accelerator: 'CmdOrCtrl+Shift+W', click: inWindow((w) => w.win.close()) },
         { label: 'Reopen Closed Tab', accelerator: 'CmdOrCtrl+Shift+T', click: inWindow(reopenClosedTab) },
         { label: 'Open Location', accelerator: 'CmdOrCtrl+L', click: inWindow(focusAddress) },
+        { label: 'Switch Between Toolbar and Page', accelerator: 'F6', click: inWindow(cycleFocus) },
         { type: 'separator' },
         { label: 'Print…', accelerator: 'CmdOrCtrl+P', click: inWindow((w) => printTab(activeTab(w))) },
         { type: 'separator' },
@@ -2234,6 +2293,8 @@ function buildMenu() {
           accelerator: isMac ? 'Cmd+]' : 'Alt+Right',
           click: inWindow((w) => activeTab(w)?.wc.navigationHistory.goForward()),
         },
+        { type: 'separator' },
+        { label: 'Home', accelerator: isMac ? 'Cmd+Shift+H' : 'Alt+Home', click: inWindow(goHome) },
         { type: 'separator' },
         { label: 'Show History', accelerator: isMac ? 'Cmd+Y' : 'Ctrl+H', click: open('history') },
         { label: 'Show Downloads', accelerator: isMac ? 'Alt+Cmd+L' : 'Ctrl+J', click: open('downloads') },
@@ -2386,9 +2447,32 @@ app.whenReady().then(() => {
       ]),
     );
   }
-  const restore = store.data.settings.restoreSession ? savedWindows() : [];
-  if (restore.length) for (const s of restore) createWindow({ session: s });
-  else createWindow();
+  // The previous run didn't reach before-quit: it crashed or was killed.
+  const crashed = store.data.cleanExit === false;
+  store.data.cleanExit = false;
+  const firstRun = store.isNew && !store.data.welcomed;
+  store.data.welcomed = true;
+  store.flush();
+  const previous = savedWindows(); // snapshot before new windows overwrite the saved session
+
+  const mode = startupMode();
+  const pages = store.data.settings.startupPages.filter((u) => /^(https?|file):/i.test(u));
+  if (mode === 'continue' && previous.length) {
+    for (const s of previous) createWindow({ session: s });
+  } else if (mode === 'pages' && pages.length) {
+    const w = createWindow({ empty: true });
+    pages.forEach((url, i) => createTab(w, url, { background: i > 0 }));
+  } else if (firstRun) {
+    createWindow({ empty: true });
+    createTab(windows[0], internalURL('welcome'));
+  } else {
+    const w = createWindow();
+    if (crashed && previous.length) {
+      w.restoreOffer = previous;
+      layout(w);
+      sendTabs(w);
+    }
+  }
   launched = true;
   for (const url of [...process.argv.slice(1).map(urlFromArg).filter(Boolean), ...pendingOpens.splice(0)]) {
     openFromOutside(url);
@@ -2461,6 +2545,7 @@ app.on('before-quit', () => {
   if (store) {
     saveSession(); // all windows are still open here, so this captures every one of them
     quitting = true;
+    store.data.cleanExit = true;
     store.flush();
   }
   updater.install(false); // a downloaded update is applied whenever the app quits

@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Privacy</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'self'">
+  <link rel="stylesheet" href="page.css">
+</head>
+<body>
+  <main class="doc">
+    <h1>Privacy</h1>
+    <p>Browser has no accounts, no telemetry, no analytics and no crash reporting. Your bookmarks, history,
+      settings and site permissions stay on your computer, in the browser's profile folder.</p>
+
+    <h2>What goes over the network</h2>
+    <p>Besides the websites you visit, Browser itself contacts:</p>
+    <ul>
+      <li><strong>Update check</strong>: GitHub Releases for <code>ezzeldinzozz-svg/browser</code>, at launch and every 6 hours
+        (or when you click Check for updates). When there's an update, the update file is downloaded from there.</li>
+      <li><strong>Ad and tracker block lists</strong>: Ghostery's CDN, on first launch and then about once a week.</li>
+      <li><strong>Your search engine</strong> (DuckDuckGo by default): what you type, when you search from the address bar.</li>
+      <li><strong>Site icons</strong>: fetched from the site you're visiting, without cookies.</li>
+    </ul>
+    <p>These requests include your IP address and a standard browser user agent, like any web request.</p>
+
+    <h2>Private windows</h2>
+    <p>Private windows keep cookies, site data, history, permissions and the download list in memory only, and erase
+      them when the window closes. Files you download stay on disk.</p>
+
+    <h2>Third-party cookies and trackers</h2>
+    <p>By default Browser blocks third-party cookies and known ads and trackers. You can change both in Settings.
+      Sites can ask to use their cookies while embedded; you'll be asked first.</p>
+  </main>
+</body>
+</html>

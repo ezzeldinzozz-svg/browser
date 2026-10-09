@@ -56,6 +56,14 @@ h2 { font-size: 16px; font-weight: 500; }
 .perm-add { display: flex; gap: 8px; margin: 12px 0 28px; }
 .perm-add input { flex: 1; height: 28px; border-radius: 6px; padding: 0 10px; font-size: 13px; }
 .clear { margin-bottom: 28px; }
+.startup { margin-bottom: 20px; }
+.startup .check { margin-bottom: 8px; }
+.startup .check input[type=radio] { width: 16px; height: 16px; margin: 0; }
+#startup-pages-box { margin: 6px 0 0 24px; }
+#startup-pages-box textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--card); color: var(--fg); font: inherit; resize: vertical; }
+#startup-pages-box button { margin-top: 6px; }
+.homepage { margin: -8px 0 28px 24px; }
+.homepage input { height: 30px; border-radius: 6px; font-size: 13px; }
 .clear > label:first-child { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 .clear > label:first-child select { margin: 0; }
 .clear .check { margin-bottom: 10px; }
@@ -78,6 +86,16 @@ main.newtab h1 { font-size: 40px; font-weight: 300; margin-bottom: 28px; }
 #sites a { display: block; padding: 12px; background: var(--card); border-radius: 10px; color: var(--fg); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 
 main.error { padding-top: 14vh; }
+main.welcome { max-width: 640px; }
+.card { padding: 16px 18px; margin-bottom: 14px; border: 1px solid var(--border); border-radius: 12px; }
+.card h2 { margin: 0 0 6px; }
+.card .check { margin: 8px 0; }
+.card select { margin: 4px 0 0; }
+.buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+button.big { height: 40px; padding: 0 22px; font-size: 15px; border-radius: 20px; margin-top: 8px; }
+main.doc { line-height: 1.55; }
+main.doc li { margin-bottom: 8px; }
+code { background: var(--card); padding: 1px 5px; border-radius: 4px; }
 main.wide { max-width: 1000px; }
 .manager { display: flex; gap: 20px; align-items: flex-start; }
 #folders { width: 230px; flex: none; display: flex; flex-direction: column; gap: 2px; position: sticky; top: 16px; }

@@ -14,6 +14,7 @@
     <button id="back" title="Back" aria-label="Back" disabled>&#8249;</button>
     <button id="forward" title="Forward" aria-label="Forward" disabled>&#8250;</button>
     <button id="reload" title="Reload" aria-label="Reload">&#8635;</button>
+    <button id="home" title="Home" aria-label="Home" hidden>&#8962;</button>
     <span id="private-badge" hidden>Private</span>
     <div id="omnibox">
       <button id="site" hidden></button>
@@ -32,6 +33,11 @@
     <button id="update" hidden>Restart to update</button>
   </div>
   <div id="bmbar" role="toolbar" aria-label="Bookmarks bar" hidden></div>
+  <div id="restorebar" class="bar" hidden role="alert">
+    <span id="restore-text">Browser didn't shut down correctly.</span>
+    <button id="restore-yes" class="primary">Restore pages</button>
+    <button id="restore-no">Dismiss</button>
+  </div>
   <div id="dlwarn" class="bar" hidden>
     <span id="dlwarn-text"></span>
     <button id="dlwarn-discard" class="primary">Discard</button>

@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Welcome</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'">
+  <link rel="stylesheet" href="page.css">
+</head>
+<body>
+  <main class="welcome">
+    <h1>Welcome to Browser</h1>
+    <p class="hint">A few choices to get you set up. You can change all of them later in Settings.</p>
+
+    <section class="card">
+      <h2>Make Browser your default</h2>
+      <p id="default-status" class="hint"></p>
+      <button id="default-set" hidden>Make default</button>
+    </section>
+
+    <section class="card">
+      <h2>Bring your bookmarks</h2>
+      <p class="hint">They go into a folder on your bookmarks bar.</p>
+      <div id="import-buttons" class="buttons"></div>
+      <p id="import-result" class="hint"></p>
+    </section>
+
+    <section class="card">
+      <h2>Search engine</h2>
+      <select id="engine"></select>
+    </section>
+
+    <section class="card">
+      <h2>Privacy</h2>
+      <label class="check"><input id="adblock" type="checkbox"> Block ads and trackers</label>
+      <label class="check"><input id="tpc" type="checkbox"> Block third-party cookies</label>
+      <p class="hint"><a href="browser://privacy/">What Browser sends over the network</a></p>
+    </section>
+
+    <button id="start" class="primary big">Start browsing</button>
+  </main>
+  <script src="welcome.js"></script>
+</body>
+</html>

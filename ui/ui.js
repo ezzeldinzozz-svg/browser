@@ -18,6 +18,7 @@ function renderTab(t, isActive) {
   el.title = t.url && t.url !== t.title ? `${t.title}\n${t.url}` : t.title;
   el.setAttribute('role', 'tab');
   el.setAttribute('aria-selected', String(isActive));
+  el.tabIndex = isActive ? 0 : -1;
   el.setAttribute('aria-label', t.title + (t.audible ? ', playing audio' : '') + (t.muted ? ', muted' : ''));
   el.draggable = true;
 
@@ -132,8 +133,10 @@ function render(state) {
     ? `Blocked ${shield.blocked} ads and trackers on ${shield.site}. Click to turn off for this site.`
     : `Ad blocking is off for ${shield.site}. Click to turn it on.`;
 
+  const focusedTab = tablist.contains(document.activeElement) ? document.activeElement.dataset.id : null;
   tablist.textContent = '';
   for (const t of state.tabs) tablist.append(renderTab(t, t.id === state.activeId));
+  if (focusedTab) tablist.querySelector(`.tab[data-id="${focusedTab}"]`)?.focus(); // keep keyboard focus across re-renders
   const activeEl = tablist.querySelector('.tab.active');
   if (activeEl) activeEl.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 
@@ -161,6 +164,9 @@ function render(state) {
   renderAddressView();
   if (!$('dlpanel').hidden) renderDownloadPanel();
   renderSiteButton(state.security);
+
+  $('restorebar').hidden = !state.restoreOffer;
+  $('home').hidden = !state.showHome;
 
   currentWarning = state.downloadWarning;
   $('dlwarn').hidden = !currentWarning;
@@ -836,3 +842,35 @@ $('backdrop').addEventListener('mousedown', () => {
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !$('bmpopup').hidden) closeBookmarkPopup(false);
 });
+
+// ---- keyboard: arrows move between tabs, Enter/Space selects, Delete closes
+
+tablist.addEventListener('keydown', (e) => {
+  const tabs = [...tablist.querySelectorAll('.tab')];
+  const i = tabs.indexOf(document.activeElement);
+  if (i === -1) return;
+  const id = Number(tabs[i].dataset.id);
+  const move = { ArrowLeft: i - 1, ArrowRight: i + 1, Home: 0, End: tabs.length - 1 }[e.key];
+  if (move !== undefined) {
+    e.preventDefault();
+    tabs[(move + tabs.length) % tabs.length].focus();
+  } else if (e.key === 'Enter' || e.key === ' ') {
+    e.preventDefault();
+    api.selectTab(id);
+  } else if (e.key === 'Delete' || e.key === 'Backspace') {
+    e.preventDefault();
+    api.closeTab(id);
+  }
+});
+
+// F6 from the address bar goes to the page (the menu shortcut handles page -> address bar)
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'F6') {
+    e.preventDefault();
+    api.focusPage();
+  }
+});
+
+$('home').addEventListener('click', () => api.goHome());
+$('restore-yes').addEventListener('click', () => api.restorePages());
+$('restore-no').addEventListener('click', () => api.dismissRestore());

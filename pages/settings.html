@@ -17,6 +17,7 @@
       </div>
       <button id="about-action"></button>
     </div>
+    <p class="hint"><a href="browser://privacy/">Privacy: what Browser sends over the network</a></p>
     <h2>Default browser</h2>
     <div class="about">
       <div id="default-status" class="u"></div>
@@ -28,7 +29,22 @@
     <select id="engine"></select>
 
     <h2>On startup</h2>
-    <label class="check"><input id="restore" type="checkbox"> Reopen the tabs that were open last time</label>
+    <div class="startup">
+      <label class="check"><input type="radio" name="startup" value="continue"> Continue where you left off</label>
+      <label class="check"><input type="radio" name="startup" value="newtab"> Open the New Tab page</label>
+      <label class="check"><input type="radio" name="startup" value="pages"> Open specific pages</label>
+      <div id="startup-pages-box" hidden>
+        <textarea id="startup-pages" rows="3" placeholder="One address per line, e.g. https://example.com" spellcheck="false"></textarea>
+        <button id="startup-use-current">Use current pages</button>
+        <span id="startup-pages-saved" class="hint"></span>
+      </div>
+    </div>
+
+    <h2>Appearance</h2>
+    <label class="check"><input id="show-home" type="checkbox"> Show Home button</label>
+    <div class="homepage">
+      <input id="home-page" type="text" placeholder="Home page (empty = New Tab page)" spellcheck="false">
+    </div>
 
     <h2>Downloads</h2>
     <div class="about">
