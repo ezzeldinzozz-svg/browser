@@ -77,3 +77,29 @@ if (/^https?:$/.test(location.protocol)) {
     }
   }
 }
+
+// ---- Notifications: name the site (like Chrome's attribution line) and bring its tab forward
+// when the user clicks one. Electron shows them as native notifications but knows nothing of tabs.
+// Notifications sent from service workers (registration.showNotification) aren't covered.
+
+if (/^https?:$/.test(location.protocol) && typeof window.Notification === 'function') {
+  try {
+    contextBridge.executeInMainWorld({
+      func: (report, host) => {
+        const Native = window.Notification;
+        class Notification extends Native {
+          constructor(title, options) {
+            const opts = { ...(options || {}) };
+            opts.body = opts.body ? `${opts.body}\n${host}` : host;
+            super(title, opts);
+            this.addEventListener('click', () => report());
+          }
+        }
+        window.Notification = Notification;
+      },
+      args: [() => ipcRenderer.send('notification:click'), location.hostname.replace(/^www\./, '')],
+    });
+  } catch {
+    // page world not available
+  }
+}

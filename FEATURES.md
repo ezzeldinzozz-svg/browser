@@ -319,7 +319,7 @@ Ordered by priority, then by what unblocks what.
 
 - [x] Notification permission prompt per site
 - [ ] **P0** Fix: notification permission reads "denied" instead of "default" before asking (known issue)
-- [ ] **P1** Web notifications shown as native OS notifications with the site name; click focuses the tab
+- [x] **P1** Web notifications shown as native OS notifications with the site name; click focuses the tab (page notifications; service-worker notifications not yet)
 - [ ] **P1** Quieter notification prompts (Chrome/Firefox: block prompts from sites with abusive patterns, no prompt without user gesture)
 - [ ] **P2** Notifications settings list and "Notifications from this browser" OS settings link
 

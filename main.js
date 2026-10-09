@@ -2906,6 +2906,16 @@ function setupIpc() {
     e.returnValue = !!(store && store.data.settings.gpc);
   });
 
+  // Sent by capture-preload.js when the user clicks one of the page's notifications.
+  ipcMain.on('notification:click', (e) => {
+    const tab = tabOfWc(e.sender);
+    if (!tab || !liveWindow(tab.w)) return;
+    if (tab.w.win.isMinimized()) tab.w.win.restore();
+    selectTab(tab.w, tab.id);
+    tab.w.win.focus();
+    if (isMac) app.focus({ steal: true });
+  });
+
   // Sent by capture-preload.js in web pages: only ever changes that page's own tab indicator.
   ipcMain.on('capture:state', (e, state) => {
     const tab = tabOfWc(e.sender);
