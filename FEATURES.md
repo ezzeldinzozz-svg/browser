@@ -43,8 +43,8 @@ Edit freely: move lines between sections, delete what you don't want, add your o
 - [ ] Tab hover preview cards
 - [x] "Mute site" (all tabs of a site, remembered; tab right-click menu)
 - [ ] Two-finger swipe back/forward with an arrow
-- [ ] Command bar actions in the address bar ("clear history", "settings")
-- [ ] Calculator / unit conversion in suggestions
+- [x] Command bar actions in the address bar ("clear history", "settings")
+- [x] Calculator / unit conversion in suggestions
 - [x] Tracker stripping from links (utm_, fbclid, gclid…; Settings → Privacy)
 - [ ] Cookie banner auto-reject
 - [ ] Fingerprinting protection

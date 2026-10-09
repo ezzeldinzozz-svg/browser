@@ -34,6 +34,7 @@ if (location.protocol === 'browser:' && window === window.top) {
     removeHistoryEntry: call('data:history-remove'),
     suggest: call('suggest'),
     suggestSearch: call('suggest:search'),
+    runCommand: call('suggest:command'),
     siteInfo: call('site:info'),
     setSitePermission: call('site:set-permission'),
     clearSiteData: call('site:clear-data'),

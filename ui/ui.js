@@ -25,6 +25,8 @@ const ICONS = {
   tab: icon('<rect x="3.5" y="5" width="17" height="14" rx="3"/><path d="M3.5 9.5h17"/>'),
   star: icon('<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"/>'),
   history: icon('<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>'),
+  answer: icon('<path d="M5 9h14M5 15h14"/>'),
+  command: icon('<polyline points="7 8 11 12 7 16"/><path d="M13 16h4"/>'),
 };
 
 function renderTab(t, isActive) {
@@ -381,6 +383,16 @@ function renderSuggest(engine) {
     } else if (r.kind === 'search') {
       icon.innerHTML = ICONS.search;
       title.textContent = r.text;
+    } else if (r.kind === 'answer') {
+      icon.innerHTML = ICONS.answer;
+      title.textContent = r.title;
+      url.textContent = `\u2014 Copy`;
+      url.style.color = 'var(--fg-dim)';
+    } else if (r.kind === 'command') {
+      icon.innerHTML = ICONS.command;
+      title.textContent = r.label;
+      url.textContent = `\u2014 Operecs`;
+      url.style.color = 'var(--fg-dim)';
     } else if (r.kind === 'tab') {
       icon.innerHTML = ICONS.tab;
       title.textContent = r.title;
@@ -426,6 +438,8 @@ async function updateSuggestions(allowInline) {
   }
   rows = [
     { kind: 'typed', text: address.value },
+    ...(res.answer ? [res.answer] : []),
+    ...(res.command ? [{ kind: 'command', id: res.command.id, label: res.command.label, text }] : []),
     ...(res.tabs || []).map((t) => ({ kind: 'tab', ...t })),
     ...res.items.map((p) => ({ kind: 'page', ...p })),
   ];
@@ -450,7 +464,14 @@ const sameAddress = (url, text) => bare(url) === bare(text);
 
 function navigate(row) {
   if (row.kind === 'tab') api.switchToTab(row.tabId);
-  else if (row.kind === 'search') api.search(row.text);
+  else if (row.kind === 'command') api.runCommand(row.id);
+  else if (row.kind === 'answer') {
+    navigator.clipboard?.writeText(row.text).catch(() => {});
+    address.value = row.text;
+    typed = row.text;
+    closeSuggest();
+    return;
+  } else if (row.kind === 'search') api.search(row.text);
   else api.go(row.kind === 'page' ? row.url : row.text);
   closeSuggest();
   address.blur();

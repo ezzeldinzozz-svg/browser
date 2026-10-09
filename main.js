@@ -46,6 +46,7 @@ const adblock = require('./adblock');
 const i18n = require('./i18n');
 const historyDb = require('./history-db');
 const bookmarks = require('./bookmarks');
+const quickAnswers = require('./quick-answers');
 const { ElectronChromeExtensions } = require('electron-chrome-extensions');
 const { installChromeWebStore, uninstallExtension } = require('electron-chrome-web-store');
 
@@ -3527,6 +3528,8 @@ function suggestions(text) {
   return {
     items: top.map((p) => ({ url: p.url, title: p.title || p.short, display: p.short, bookmarked: !!p.bookmarked })),
     inline,
+    answer: quickAnswers.answer(text),
+    command: quickAnswers.command(text),
     engine: searchEngine().name,
   };
 }
@@ -3593,6 +3596,24 @@ function switchToTab(w, tabId) {
   if (!tab) return;
   selectTab(tab.w, tab.id);
   tab.w.win.focus();
+}
+
+function runAddressCommand(w, id) {
+  if (id === 'private') return createWindow({ private: true });
+  if (id === 'clear') {
+    const url = internalURL('settings') + '#clear';
+    const existing = w.tabs.find((t) => t.wc.getURL().startsWith(internalURL('settings')));
+    if (existing) {
+      selectTab(w, existing.id);
+      existing.wc.loadURL(url).catch(() => {});
+    } else {
+      createTab(w, url);
+    }
+    return;
+  }
+  if (['settings', 'history', 'downloads', 'bookmarks', 'extensions', 'tasks', 'whatsnew', 'shortcuts'].includes(id)) {
+    openInternalPage(w, id);
+  }
 }
 
 // Cmd/Ctrl+Shift+A: every open tab, grouped by window.
@@ -3868,6 +3889,7 @@ function setupIpc() {
     return result;
   });
   handle('suggest:search', fromChrome, (w, text) => searchSuggestions(w, String(text || '')));
+  handle('suggest:command', fromChrome, (w, id) => runAddressCommand(w, String(id || '')));
   handle('suggest:remove', fromChrome, (_w, url) => {
     historyDb.removeUrl(String(url));
     rebuildMenuSoon();
