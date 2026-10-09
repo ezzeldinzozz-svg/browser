@@ -102,7 +102,9 @@ jobs:
       - name: Updater log
         if: failure()
         shell: pwsh
-        run: Get-ChildItem $env:TEMP -Filter install-update.log -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "== $($_.FullName)"; Get-Content $_.FullName }
+        run: |
+          Get-ChildItem $env:TEMP -Directory -Filter 'browser-update-*' -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "== $($_.FullName)"; Get-ChildItem $_.FullName | Format-Table Name, Length }
+          Get-ChildItem $env:TEMP -Filter install-update.log -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "== $($_.FullName)"; Get-Content $_.FullName }
 
   linux-update:
     timeout-minutes: 25

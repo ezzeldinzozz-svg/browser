@@ -286,10 +286,22 @@ function install(relaunch) {
         '} catch { Log "installer failed: $_" }',
       ].join('\r\n'),
     );
-    detached('powershell.exe', [
-      '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden',
-      '-File', ps1, '-ProcessId', String(process.pid), '-Installer', next, '-Relaunch', relaunch ? '1' : '0',
-    ]);
+    const log = path.join(path.dirname(next), 'install-update.log');
+    const note = (m) => fs.appendFileSync(log, `${new Date().toISOString()} ${m}\r\n`);
+    note(`starting updater for ${next} (app pid ${process.pid})`);
+    try {
+      const helper = spawn(
+        'powershell.exe',
+        ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden',
+          '-File', ps1, '-ProcessId', String(process.pid), '-Installer', next, '-Relaunch', relaunch ? '1' : '0'],
+        { detached: true, stdio: 'ignore', windowsHide: true },
+      );
+      helper.on('error', (err) => note(`could not start the updater: ${err.message}`));
+      helper.unref();
+      note(`updater started as pid ${helper.pid}`);
+    } catch (err) {
+      note(`could not start the updater: ${err.message}`);
+    }
   }
   return true;
 }
