@@ -409,7 +409,7 @@ Ordered by priority, then by what unblocks what.
 - [x] **P1** Same prompt when closing a tab with unsaved changes
 - [ ] **P2** Same prompt when closing a whole window or quitting
 - [ ] **P1** JavaScript dialogs styled and tab-modal *(Electron limit: `alert`/`confirm` use native app-modal dialogs and `prompt()` isn't supported; Electron has no hook to replace them)*
-- [ ] **P1** Form re-submission warning on reload after POST
+- [x] **P1** Form re-submission warning on reload after POST (Electron used to cancel such reloads silently; we confirm and resend the form data)
 - [ ] **P1** Proxy settings (system proxy honored by default; manual/PAC option)
 - [ ] **P1** Captive portal detection (hotel/airport Wi-Fi sign-in)
 - [ ] **P1** Offline page (with a little game is optional)

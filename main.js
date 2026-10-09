@@ -982,6 +982,7 @@ function configureSession(ses) {
   // Global Privacy Control: asks sites not to sell or share the user's data.
   ses.webRequest.onBeforeSendHeaders({ urls: ['<all_urls>'] }, (details, callback) => {
     if (store.data.settings.gpc) details.requestHeaders['Sec-GPC'] = '1';
+    if (details.resourceType === 'mainFrame' && details.method === 'POST') rememberPostType(details);
     callback({ requestHeaders: details.requestHeaders });
   });
   // macOS 15+ shows its own screen/window picker; elsewhere our picker in the toolbar view.
@@ -1497,7 +1498,7 @@ function showSelectedTabsMenu(w, tabs) {
   const allPinned = tabs.every((t) => t.pinned);
   const allMuted = tabs.every((t) => t.wc.isAudioMuted());
   Menu.buildFromTemplate([
-    { label: `Reload ${n} Tabs`, click: () => tabs.forEach((t) => (t.pending ? null : t.wc.reload())) },
+    { label: `Reload ${n} Tabs`, click: () => tabs.forEach((t) => reloadTab(t)) },
     { label: `Duplicate ${n} Tabs`, click: () => tabs.forEach((t) => duplicateTab(t)) },
     { label: allPinned ? `Unpin ${n} Tabs` : `Pin ${n} Tabs`, click: () => tabs.forEach((t) => setPinned(t, !allPinned)) },
     {
@@ -1527,7 +1528,7 @@ function showTabMenu(w, id) {
       },
     },
     { type: 'separator' },
-    { label: 'Reload', click: () => tab.wc.reload() },
+    { label: 'Reload', click: () => reloadTab(tab) },
     { label: 'Duplicate', click: () => duplicateTab(tab) },
     { label: tab.pinned ? 'Unpin' : 'Pin', click: () => setPinned(tab, !tab.pinned) },
     { label: muted ? 'Unmute Tab' : 'Mute Tab', click: () => toggleMute(tab) },
@@ -2212,6 +2213,56 @@ function localHost(host) {
 
 // Main-frame http:// requests become https://; if that fails, did-fail-load shows a warning
 // page with "Continue to site".
+// ---------------------------------------------------------------- form resubmission
+
+// Reloading a page that was the result of a form (POST): Chromium asks the embedder to confirm
+// and Electron silently cancels, so Reload did nothing. We remember the form data of each tab's
+// last main-frame POST and, after "Resubmit?", send it again.
+function rememberMainFrameRequest(details) {
+  if (details.resourceType !== 'mainFrame' || !details.webContentsId) return;
+  const tab = allTabs().find((t) => !t.wc.isDestroyed() && t.wc.id === details.webContentsId);
+  if (!tab) return;
+  if (details.method !== 'POST') {
+    tab.lastPost = null;
+    return;
+  }
+  const data = (details.uploadData || [])
+    .map((part) => (part.bytes ? { type: 'rawData', bytes: part.bytes } : part.file ? { type: 'file', filePath: part.file } : null))
+    .filter(Boolean);
+  tab.lastPost = { url: details.url, data, contentType: tab.lastPost && tab.lastPost.url === details.url ? tab.lastPost.contentType : null };
+}
+
+function rememberPostType(details) {
+  const tab = allTabs().find((t) => !t.wc.isDestroyed() && t.wc.id === details.webContentsId);
+  if (!tab || !tab.lastPost || tab.lastPost.url !== details.url) return;
+  const type = Object.entries(details.requestHeaders).find(([k]) => k.toLowerCase() === 'content-type');
+  tab.lastPost.contentType = type ? type[1] : null;
+}
+
+// Every Reload (toolbar, menu, keyboard, context menu) goes through here.
+async function reloadTab(tab, { ignoreCache = false } = {}) {
+  if (!tab || tab.pending || tab.wc.isDestroyed()) return;
+  const post = tab.lastPost;
+  if (!post || tab.wc.getURL() !== post.url) {
+    return ignoreCache ? tab.wc.reloadIgnoringCache() : tab.wc.reload();
+  }
+  const { response } = await dialog.showMessageBox(tab.w.win, {
+    type: 'warning',
+    message: 'Resubmit the form?',
+    detail: 'This page was the result of a form you sent. Reloading sends it again, which could repeat an action such as a purchase or a post.',
+    buttons: ['Resubmit', 'Cancel'],
+    defaultId: 1,
+    cancelId: 1,
+  });
+  if (response !== 0 || tab.wc.isDestroyed()) return;
+  tab.wc
+    .loadURL(post.url, {
+      postData: post.data,
+      extraHeaders: post.contentType ? `Content-Type: ${post.contentType}` : undefined,
+    })
+    .catch(() => {});
+}
+
 function upgradeToHttps(details) {
   if (!store.data.settings.httpsOnly || details.resourceType !== 'mainFrame' || !/^http:\/\//i.test(details.url)) return null;
   let url;
@@ -2383,7 +2434,7 @@ function showPageMenu(tab, params) {
     groups.push([
       { label: 'Back', enabled: canGo(wc, 'back'), click: () => wc.navigationHistory.goBack() },
       { label: 'Forward', enabled: canGo(wc, 'forward'), click: () => wc.navigationHistory.goForward() },
-      { label: 'Reload', click: () => wc.reload() },
+      { label: 'Reload', click: () => reloadTab(tab) },
     ]);
     groups.push([
       { label: 'Print…', click: () => printTab(tab) },
@@ -3223,7 +3274,7 @@ function setupIpc() {
     const t = activeTab(w);
     if (!t) return;
     if (t.wc.isLoading()) t.wc.stop();
-    else t.wc.reload();
+    else reloadTab(t);
   });
   handle('bookmark:toggle', fromChrome, (w) => starPage(w));
   handle('permission:respond', fromChrome, (w, promptId, decision) => {
@@ -3625,11 +3676,11 @@ function buildMenu() {
     {
       label: 'View',
       submenu: [
-        { label: 'Reload', accelerator: 'CmdOrCtrl+R', click: inWindow((w) => activeTab(w)?.wc.reload()) },
+        { label: 'Reload', accelerator: 'CmdOrCtrl+R', click: inWindow((w) => reloadTab(activeTab(w))) },
         {
           label: 'Hard Reload',
           accelerator: 'CmdOrCtrl+Shift+R',
-          click: inWindow((w) => activeTab(w)?.wc.reloadIgnoringCache()),
+          click: inWindow((w) => reloadTab(activeTab(w), { ignoreCache: true })),
         },
         { type: 'separator' },
         { label: 'Reader Mode', accelerator: 'Alt+CmdOrCtrl+R', click: inWindow(toggleReader) },
@@ -3834,7 +3885,10 @@ app.whenReady().then(() => {
     cacheFile: path.join(app.getPath('userData'), 'adblock-engine.bin'),
     shouldBlock,
     onBlocked,
-    beforeRequest: upgradeToHttps,
+    beforeRequest: (details) => {
+      rememberMainFrameRequest(details);
+      return upgradeToHttps(details);
+    },
   });
   applyDns();
   configureSession(session.defaultSession);
