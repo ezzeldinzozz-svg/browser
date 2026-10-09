@@ -848,13 +848,17 @@ function createWindow({ private: isPrivate = false, session: saved = null, ses: 
   });
   win.on('enter-full-screen', () => w.chromeView.webContents.send('window:fullscreen', true));
   win.on('close', (e) => {
-    if (!quitting && !quitConfirmed && !w.closeConfirmed && store.data.settings.confirmClose && w.tabs.length > 1) {
+    if (!quitting && !quitConfirmed && !w.closeConfirmed) {
       e.preventDefault();
-      confirmClosing(w.win, `Close ${w.tabs.length} tabs?`, 'Close Window').then((ok) => {
-        if (!ok) return;
+      (async () => {
+        const dirty = await unsavedTabs(w.tabs);
+        let ok = true;
+        if (dirty.length) ok = await confirmUnsaved(w.win, dirty, 'Close Window');
+        else if (store.data.settings.confirmClose && w.tabs.length > 1) ok = await confirmClosing(w.win, `Close ${w.tabs.length} tabs?`, 'Close Window');
+        if (!ok || !liveWindow(w)) return;
         w.closeConfirmed = true;
         w.win.close();
-      });
+      })();
       return;
     }
     onWindowClose(w);
@@ -1645,6 +1649,47 @@ function adoptTab(w, id, index) {
   selectTab(w, tab.id);
   w.win.focus();
   saveSession();
+}
+
+// Tabs whose page would warn about unsaved changes (capture-preload.js answers for each frame).
+const UNLOAD_CHECK = `(() => { const f = window[Symbol.for('operecs.wouldWarnOnUnload')]; return typeof f === 'function' ? f() === true : false; })()`;
+async function unsavedTabs(tabs) {
+  const results = await Promise.all(
+    tabs
+      .filter((t) => !t.pending && !t.wc.isDestroyed() && isWeb(t.wc.getURL()))
+      .map(async (t) => {
+        for (const frame of t.wc.mainFrame.framesInSubtree) {
+          try {
+            const warn = await Promise.race([frame.executeJavaScript(UNLOAD_CHECK), new Promise((r) => setTimeout(() => r(false), 800))]);
+            if (warn === true) return t;
+          } catch {
+            // frame went away
+          }
+        }
+        return null;
+      }),
+  );
+  return results.filter(Boolean);
+}
+
+// "Leave site?" for a window close or quit; Cancel shows the first tab with changes.
+async function confirmUnsaved(parent, dirty, action) {
+  const names = dirty.slice(0, 5).map((t) => `\u2022 ${trimLabel(t.wc.getTitle() || displayUrl(t.wc.getURL()), 60)}`);
+  const { response } = await dialog.showMessageBox(parent, {
+    type: 'warning',
+    message: 'Leave site?',
+    detail: `Changes you made may not be saved in:\n${names.join('\n')}${dirty.length > 5 ? '\n\u2026' : ''}`,
+    buttons: [action, 'Cancel'],
+    defaultId: 1,
+    cancelId: 1,
+  });
+  if (response === 0) return true;
+  const first = dirty[0];
+  if (liveWindow(first.w)) {
+    selectTab(first.w, first.id);
+    first.w.win.focus();
+  }
+  return false;
 }
 
 function closeTabs(w, keep) {
@@ -4458,14 +4503,19 @@ async function checkForUpdatesManually() {
 
 app.on('before-quit', (e) => {
   const openTabs = windows.reduce((n, w) => n + w.tabs.length, 0);
-  if (store && userQuitRequested && !quitting && !quitConfirmed && store.data.settings.confirmClose && openTabs > 1) {
+  // Only when the user quits from our menu / Cmd+Q: shutdown and signals must never be held up.
+  if (store && userQuitRequested && !quitting && !quitConfirmed) {
     e.preventDefault();
     userQuitRequested = false;
-    confirmClosing(focusedWindow()?.win, `Quit with ${openTabs} tabs open?`, 'Quit').then((ok) => {
+    (async () => {
+      const dirty = await unsavedTabs(windows.flatMap((w) => w.tabs));
+      let ok = true;
+      if (dirty.length) ok = await confirmUnsaved(focusedWindow()?.win, dirty, 'Quit');
+      else if (store.data.settings.confirmClose && openTabs > 1) ok = await confirmClosing(focusedWindow()?.win, `Quit with ${openTabs} tabs open?`, 'Quit');
       if (!ok) return;
       quitConfirmed = true;
       app.quit();
-    });
+    })();
     return;
   }
   if (store) {

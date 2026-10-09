@@ -130,3 +130,68 @@ if (/^https?:$/.test(location.protocol) && typeof window.Notification === 'funct
     // page world not available
   }
 }
+
+// ---- Unsaved changes: Electron can only run a page's beforeunload by actually closing it, so
+// on quit / window close the browser asks this instead: would the page's beforeunload handlers
+// warn? (Same idea as Chrome's check; only after the user has interacted with the page.)
+
+if (/^https?:$/.test(location.protocol)) {
+  try {
+    contextBridge.executeInMainWorld({
+      func: () => {
+        const handlers = new Set();
+        const add = EventTarget.prototype.addEventListener;
+        const remove = EventTarget.prototype.removeEventListener;
+        EventTarget.prototype.addEventListener = function (type, fn, options) {
+          if (this === window && type === 'beforeunload' && fn) handlers.add(fn);
+          return add.call(this, type, fn, options);
+        };
+        EventTarget.prototype.removeEventListener = function (type, fn, options) {
+          if (this === window && type === 'beforeunload') handlers.delete(fn);
+          return remove.call(this, type, fn, options);
+        };
+        Object.defineProperty(window, Symbol.for('operecs.wouldWarnOnUnload'), {
+          value: () => {
+            if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return false;
+            let warn = false;
+            const event = {
+              type: 'beforeunload',
+              target: window,
+              currentTarget: window,
+              preventDefault() {
+                warn = true;
+              },
+              stopPropagation() {},
+              stopImmediatePropagation() {},
+              get returnValue() {
+                return '';
+              },
+              set returnValue(value) {
+                if (value !== undefined && value !== null && value !== false) warn = true;
+              },
+            };
+            for (const fn of handlers) {
+              try {
+                const result = typeof fn === 'function' ? fn.call(window, event) : fn.handleEvent(event);
+                if (typeof result === 'string') warn = true;
+              } catch {
+                // a broken handler doesn't block quitting
+              }
+            }
+            if (typeof window.onbeforeunload === 'function') {
+              try {
+                const result = window.onbeforeunload(event);
+                if (result !== undefined && result !== null && result !== false) warn = true;
+              } catch {
+                // as above
+              }
+            }
+            return warn;
+          },
+        });
+      },
+    });
+  } catch {
+    // page world not available
+  }
+}
