@@ -101,21 +101,13 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 - macOS asks once for keychain access ("Browser Safe Storage", the cookie-encryption key) when moving to v0.4.0, the first build signed with our self-signed certificate. Choose "Always Allow"; later versions keep the same identity and shouldn't ask again
 - Ad blocking: prebuilt lists skip generic cosmetic rules (site-specific hiding works); no details popup yet
 
-## Roadmap (next, in order)
+## Roadmap
 
-The full prioritized checklist is in `FEATURES.md` (P0/P1/P2). Goal: release **1.0** ready for
-daily use. Done since v0.19.0 is listed at the top of this file. Still open, roughly in order:
-
-1. Verify by hand before 1.0: Windows install + Default apps registration, Intel Mac build, Serial/Bluetooth device chooser in the packaged app (macOS asks for Bluetooth permission), Arabic interface coverage (add missing strings to `locales/ar.json`), password-manager extensions (Bitwarden, Proton Pass) sign-in + autofill
-2. Profiles: separate persistent partitions per profile (data, cookies, permissions, extensions), profile switcher, per-profile window color
-3. Storage: JSON → SQLite (`node:sqlite`) for history (and bookmarks), then full-text history search
-4. Weekly Electron patch bump routine (currently 44.7.0) + an "update required" switch for critical security fixes
-5. Mixed-content indicator; block insecure (http) form submissions from https pages
-6. Print preview with page range / layout (Windows and Linux have no preview in the system dialog)
-7. Address & contact form autofill (not passwords)
-8. New tab customization: background image/color, show/hide shortcuts
-9. Linux packaging: document the Ubuntu 24.04 AppImage sandbox requirement (or ship an AppArmor profile); Flatpak/rpm; winget and Homebrew listings
-10. Smaller: share a single tab / system audio, `navigator.registerProtocolHandler`, verify drag-a-file-onto-the-window, verify macOS media keys / Now Playing
+**Focus (decided 2026-10-09): Apple silicon Mac, English only, until we decide to go public.**
+Windows, Linux, Intel Mac and translations are parked: their code stays and CI still builds
+Windows/Linux, but don't extend or test them. The working list is `FEATURES.md` (the user edits
+it: must have / should have / nice to have / blocked / parked); the old all-platform checklist is
+`research/features-archive.md`. Work top to bottom through "must have for 1.0".
 
 Blocked or decided against (don't pick up without the user):
 - Passkeys, Developer ID signing/notarization, iCloud Passwords: need the paid Apple Developer Program (the user's enrollment was under review on 2026-10-09). iCloud Passwords also needs Apple to grant `com.apple.developer.web-browser.public-key-credential`
