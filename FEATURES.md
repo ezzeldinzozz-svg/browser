@@ -87,7 +87,8 @@ Ordered by priority, then by what unblocks what.
 - [x] Show URL without noise when unfocused (hide `https://`, `www.`), full URL on focus; site highlighted (anti-spoofing)
 - [x] **P1** Search suggestions from the chosen engine (opt-in for privacy)
 - [x] "Switch to tab" suggestions for already-open tabs
-- [ ] **P1** Keyword search / site search shortcuts (`w wikipedia`, Tab-to-search), custom search engines (OpenSearch discovery)
+- [x] **P1** Keyword search / site search shortcuts (`w wikipedia`), custom search engines
+- [ ] **P2** Tab-to-search and OpenSearch discovery (sites offering themselves as engines)
 - [x] Paste and Go / Paste and Search in the address bar menu
 - [x] Delete a single history suggestion (Shift+Delete), including an inline completion
 - [x] **P1** IDN homograph protection (show punycode for mixed-script domains)

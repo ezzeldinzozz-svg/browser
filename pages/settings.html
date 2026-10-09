@@ -28,6 +28,15 @@
     <h2>Search engine</h2>
     <p class="hint">Used when you type something that isn't an address.</p>
     <select id="engine"></select>
+    <p class="hint">Search any engine from the address bar by typing its keyword first, e.g. <code>w cats</code>.</p>
+    <div id="engines"></div>
+    <form id="engine-add" class="perm-add">
+      <input id="engine-name" type="text" placeholder="Name, e.g. Wikipedia" autocomplete="off" spellcheck="false">
+      <input id="engine-keyword" type="text" placeholder="Keyword, e.g. w" autocomplete="off" spellcheck="false" style="flex: 0 0 110px">
+      <input id="engine-url" type="text" placeholder="URL with %s, e.g. https://en.wikipedia.org/w/index.php?search=%s" autocomplete="off" spellcheck="false" style="flex: 2">
+      <button type="submit">Add</button>
+    </form>
+    <p id="engine-error" class="hint" hidden></p>
     <label class="check"><input id="search-suggestions" type="checkbox"> Show search suggestions (sends what you type in the address bar to the search engine; never in private windows)</label>
 
     <h2>On startup</h2>

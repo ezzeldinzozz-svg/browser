@@ -42,10 +42,10 @@ async function loadSettings() {
   document.getElementById('dns-custom').value = s.dnsCustom || '';
   document.getElementById('dns-custom').hidden = s.dns !== 'custom';
   document.getElementById('home-page').value = s.homePage || '';
-  if (!engine.options.length) {
-    for (const e of s.searchEngines) engine.append(new Option(e.name, e.id));
-  }
+  engine.textContent = '';
+  for (const e of s.searchEngines) engine.append(new Option(e.name, e.id));
   engine.value = s.searchEngine;
+  renderEngines(s.searchEngines);
   document.getElementById('tpc').checked = s.blockThirdPartyCookies;
   document.getElementById('tpc-restart').hidden = s.blockThirdPartyCookies === s.thirdPartyCookiesBlockedNow;
   document.getElementById('download-dir').textContent = s.downloadDirShown;
@@ -437,4 +437,52 @@ document.getElementById('sitedata-all').addEventListener('click', async () => {
   if (!confirm('Remove cookies and site data for every site? This signs you out of all sites.')) return;
   await browserAPI.removeAllSiteData();
   loadSiteData();
+});
+
+// ---- search engines and keywords
+function renderEngines(engines) {
+  const box = document.getElementById('engines');
+  box.textContent = '';
+  for (const e of engines) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    const main = document.createElement('div');
+    main.className = 'main t';
+    main.textContent = e.name;
+    const kw = document.createElement('code');
+    kw.textContent = e.keyword;
+    kw.style.marginLeft = '8px';
+    main.append(kw);
+    main.title = e.url;
+    row.append(main);
+    if (e.custom) {
+      const remove = document.createElement('button');
+      remove.textContent = 'Remove';
+      remove.addEventListener('click', async () => {
+        await browserAPI.removeSearchEngine(e.keyword);
+        loadSettings();
+      });
+      row.append(remove);
+    }
+    box.append(row);
+  }
+}
+
+document.getElementById('engine-add').addEventListener('submit', async (ev) => {
+  ev.preventDefault();
+  const name = document.getElementById('engine-name').value.trim();
+  const keyword = document.getElementById('engine-keyword').value.trim();
+  const url = document.getElementById('engine-url').value.trim();
+  const result = await browserAPI.addSearchEngine(name, keyword, url);
+  const error = document.getElementById('engine-error');
+  error.hidden = result === 'ok';
+  error.textContent = {
+    invalid: 'Fill in a name, a keyword without spaces, and an http(s) address containing %s where the search words go.',
+    'keyword-taken': `Another search engine already uses the keyword "${keyword}".`,
+    'too-many': 'You can add up to 30 search engines.',
+  }[result] || '';
+  if (result === 'ok') {
+    for (const id of ['engine-name', 'engine-keyword', 'engine-url']) document.getElementById(id).value = '';
+    loadSettings();
+  }
 });

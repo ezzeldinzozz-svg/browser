@@ -48,6 +48,8 @@ if (location.protocol === 'browser:' && window === window.top) {
     respondPermission: call('permission:respond'),
     getPermissions: call('data:permissions'),
     getSiteData: call('data:site-data'),
+    addSearchEngine: call('data:engine-add'),
+    removeSearchEngine: call('data:engine-remove'),
     removeSiteData: call('data:site-data-remove'),
     removeAllSiteData: call('data:site-data-remove-all'),
     resetPermissions: call('data:permission-reset'),

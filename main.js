@@ -131,6 +131,7 @@ function defaultSettings() {
     askDownloadLocation: false,
     downloadDir: null, // null = the OS Downloads folder
     searchSuggestions: false, // send what's typed in the address bar to the search engine (opt-in)
+    customEngines: [], // [{ name, keyword, url with %s }]
   };
 }
 
@@ -333,6 +334,8 @@ function resolveInput(raw) {
   const internal = text.match(/^browser:\/\/(\w+)\/?$/i);
   if (internal) return INTERNAL.has(internal[1].toLowerCase()) ? internalURL(internal[1].toLowerCase()) : null;
   if (/^(https?|file):\/\//i.test(text)) return text;
+  const keyword = keywordSearch(text);
+  if (keyword) return keyword.engine.url.replace('%s', encodeURIComponent(keyword.query));
   if (!/\s/.test(text)) {
     if (/^(localhost|(\d{1,3}\.){3}\d{1,3})(:\d+)?([/?#].*)?$/i.test(text)) return 'http://' + text;
     if (/^([\w-]+\.)+[a-z]{2,}(:\d+)?([/?#].*)?$/i.test(text)) return 'https://' + text;
@@ -340,8 +343,44 @@ function resolveInput(raw) {
   return searchUrl(text);
 }
 
+// Typing "<keyword> <words>" in the address bar searches that engine. Built-in engines use their
+// domain as the keyword (like Chrome); the user's own engines have short keywords ("w", "yt").
+const BUILTIN_KEYWORDS = {
+  duckduckgo: 'duckduckgo.com',
+  google: 'google.com',
+  bing: 'bing.com',
+  brave: 'search.brave.com',
+  ecosia: 'ecosia.org',
+  kagi: 'kagi.com',
+  startpage: 'startpage.com',
+};
+
+function allEngines() {
+  return [
+    ...Object.entries(SEARCH_ENGINES).map(([id, e]) => ({ id, ...e, keyword: BUILTIN_KEYWORDS[id] })),
+    ...(store.data.settings.customEngines || []).map((c) => ({ id: `custom:${c.keyword}`, name: c.name, url: c.url, keyword: c.keyword, custom: true })),
+  ];
+}
+
 function searchEngine() {
-  return SEARCH_ENGINES[store.data.settings.searchEngine] || SEARCH_ENGINES.duckduckgo;
+  return allEngines().find((e) => e.id === store.data.settings.searchEngine) || SEARCH_ENGINES.duckduckgo;
+}
+
+function keywordSearch(text) {
+  const m = String(text).trim().match(/^(\S+)\s+(\S.*)$/);
+  if (!m) return null;
+  const keyword = m[1].toLowerCase();
+  const engine = allEngines().find((e) => e.keyword && e.keyword.toLowerCase() === keyword);
+  return engine ? { engine, query: m[2] } : null;
+}
+
+const ENGINE_KEYWORD = /^[^\s:/]{1,30}$/;
+function validCustomEngine(name, keyword, url) {
+  return (
+    typeof name === 'string' && name.trim().length > 0 && name.length <= 60 &&
+    typeof keyword === 'string' && ENGINE_KEYWORD.test(keyword) &&
+    typeof url === 'string' && url.length <= 2000 && /^https?:\/\/[^\s]+$/i.test(url) && url.includes('%s')
+  );
 }
 
 function searchUrl(query) {
@@ -2526,6 +2565,7 @@ async function searchSuggestions(w, text) {
   const query = text.trim();
   const engine = searchEngine();
   if (!store.data.settings.searchSuggestions || w.private || !engine.suggest || !query || query.length > 200) return [];
+  if (keywordSearch(query)) return []; // meant for another engine; don't send it to this one
   const key = `${engine.name}\n${query.toLowerCase()}`;
   if (suggestCache.has(key)) return suggestCache.get(key);
   suggestSession ||= session.fromPartition('operecs-suggest'); // no "persist:" -> memory only
@@ -2760,6 +2800,8 @@ function setupIpc() {
   handle('suggest', fromChrome, (w, text) => {
     const result = suggestions(String(text || ''));
     result.tabs = openTabSuggestions(w, String(text || ''));
+    const keyword = keywordSearch(String(text || ''));
+    if (keyword) result.engine = keyword.engine.name;
     return result;
   });
   handle('suggest:search', fromChrome, (w, text) => searchSuggestions(w, String(text || '')));
@@ -2908,7 +2950,7 @@ function setupIpc() {
   handle('data:settings', fromInternal, () => ({
     ...store.data.settings,
     adblockAllowlist: store.data.adblockAllowlist,
-    searchEngines: Object.entries(SEARCH_ENGINES).map(([id, e]) => ({ id, name: e.name })),
+    searchEngines: allEngines().map((e) => ({ id: e.id, name: e.name, keyword: e.keyword, url: e.url, custom: !!e.custom })),
     searchEngineName: searchEngine().name,
     thirdPartyCookiesBlockedNow: thirdPartyCookiesBlocked,
     startupMode: startupMode(),
@@ -2943,7 +2985,7 @@ function setupIpc() {
       (key === 'dnsCustom' && typeof value === 'string' && (value === '' || /^https:\/\/[^\s]+$/i.test(value))) ||
       (key === 'homePage' && typeof value === 'string' && (value === '' || /^(https?|file):\/\//i.test(value))) ||
       (key === 'startupPages' && Array.isArray(value) && value.every((u) => typeof u === 'string' && /^(https?|file):\/\//i.test(u))) ||
-      (key === 'searchEngine' && Object.hasOwn(SEARCH_ENGINES, value));
+      (key === 'searchEngine' && allEngines().some((e) => e.id === value));
     if (!valid) return;
     store.data.settings[key] = value;
     store.save();
@@ -2952,6 +2994,23 @@ function setupIpc() {
       applyLanguages(session.defaultSession);
       windows.filter((w) => w.private).forEach((w) => applyLanguages(w.ses));
     }
+    sendAll();
+  });
+  handle('data:engine-add', fromInternal, (_tab, name, keyword, url) => {
+    if (!validCustomEngine(name, keyword, url)) return 'invalid';
+    if (allEngines().some((e) => e.keyword && e.keyword.toLowerCase() === keyword.toLowerCase())) return 'keyword-taken';
+    const list = (store.data.settings.customEngines ||= []);
+    if (list.length >= 30) return 'too-many';
+    list.push({ name: name.trim(), keyword, url });
+    store.save();
+    sendAll();
+    return 'ok';
+  });
+  handle('data:engine-remove', fromInternal, (_tab, keyword) => {
+    const list = store.data.settings.customEngines || [];
+    store.data.settings.customEngines = list.filter((c) => c.keyword !== keyword);
+    if (store.data.settings.searchEngine === `custom:${keyword}`) store.data.settings.searchEngine = 'duckduckgo';
+    store.save();
     sendAll();
   });
   handle('data:adblock-allow-remove', fromInternal, (_tab, site) => {
