@@ -65,6 +65,15 @@ async function plistValue(appPath, key) {
   return stdout.trim();
 }
 
+// The signing identity requirement of an app, or null for ad-hoc signatures (which only
+// name a code hash that changes every build, so there's nothing stable to compare).
+async function designatedRequirement(appPath) {
+  const { stdout, stderr } = await run('/usr/bin/codesign', ['-d', '-r-', appPath]);
+  const match = `${stdout}\n${stderr}`.match(/designated => (.+)/);
+  if (!match || /cdhash/.test(match[1])) return null;
+  return match[1].trim();
+}
+
 async function check() {
   if (['checking', 'downloading', 'ready'].includes(state.status)) return state;
   const reason = unsupportedReason();
@@ -118,6 +127,9 @@ async function check() {
     if (newId !== curId) throw new Error('Update is for a different app');
     if (newVersion !== version) throw new Error('Update version does not match');
     await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', newApp]);
+    // When this app is signed with our certificate, the update must be signed with it too.
+    const requirement = await designatedRequirement(bundlePath());
+    if (requirement) await run('/usr/bin/codesign', ['--verify', '--deep', '--strict', `-R=${requirement}`, newApp]);
     await run('/usr/bin/xattr', ['-dr', 'com.apple.quarantine', newApp]).catch(() => {});
 
     readyApp = newApp;

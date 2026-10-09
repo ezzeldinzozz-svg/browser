@@ -34,7 +34,7 @@
       "package.json"
     ],
     "asar": true,
-    "afterPack": "scripts/fuses.js",
+    "afterPack": "scripts/after-pack.js",
     "directories": {
       "output": "dist"
     },
@@ -54,7 +54,7 @@
         }
       ],
       "category": "public.app-category.productivity",
-      "identity": "-",
+      "identity": null,
       "extendInfo": {
         "NSCameraUsageDescription": "Websites you allow can use your camera.",
         "NSMicrophoneUsageDescription": "Websites you allow can use your microphone.",

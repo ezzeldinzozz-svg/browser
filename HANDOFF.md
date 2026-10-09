@@ -36,7 +36,7 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 - No DRM (Netflix/Spotify), no Chrome extensions (Electron limits, see research)
 - Not yet tested on Windows or Linux; auto-update is macOS only
 - Default Electron icon; product name "Browser" is a placeholder
-- macOS asks for keychain access ("Browser Safe Storage", the cookie-encryption key) after each update, because ad-hoc signatures change every build. Fix: sign with a stable self-signed certificate (proposed) or a Developer ID
+- macOS asks once for keychain access ("Browser Safe Storage", the cookie-encryption key) when moving to v0.4.0, the first build signed with our self-signed certificate. Choose "Always Allow"; later versions keep the same identity and shouldn't ask again
 - Ad blocking: prebuilt lists skip generic cosmetic rules (site-specific hiding works); no details popup yet
 - macOS: closing the last window quits the app (Mac apps usually stay open)
 
@@ -44,13 +44,12 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 
 The full prioritized checklist is in `FEATURES.md` (P0/P1/P2). Short version:
 
-1. Stable self-signed code signing (stops the keychain prompt after updates)
-2. Storage: JSON file → SQLite, then address-bar autocomplete and search engine choice
-3. Site info popup, clear browsing data, tab context menu, tab drag-to-reorder
-4. Dangerous-download warning, open links from other apps / default browser
-5. Windows/Linux builds + their updaters (electron-updater works unsigned there)
-6. Name + icon
-7. Later: Apple Developer ID ($99/yr) to remove the first-launch warning; Windows signing (SignPath Foundation is free for open source)
+1. Storage: JSON file → SQLite, then address-bar autocomplete and search engine choice
+2. Site info popup, clear browsing data, tab context menu, tab drag-to-reorder
+3. Dangerous-download warning, open links from other apps / default browser
+4. Windows/Linux builds + their updaters (electron-updater works unsigned there)
+5. Name + icon
+6. Later: Apple Developer ID ($99/yr) to remove the first-launch warning; Windows signing (SignPath Foundation is free for open source)
 
 See `research/browser-lessons.md` for the full research on how Brave and others are built.
 
@@ -64,13 +63,16 @@ See `research/browser-lessons.md` for the full research on how Brave and others 
 | `updater.js` | macOS self-updater (see Releases below) |
 | `ui/` | Toolbar UI, served at `browser://ui/` (tab strip, address bar, permission bar, find bar) |
 | `pages/` | Internal pages at `browser://<name>/` → `pages/<name>.html` (newtab, history, bookmarks, downloads, settings, error) |
-| `scripts/fuses.js` | electron-builder afterPack hook that locks down the packaged Electron binary |
+| `scripts/after-pack.js` | electron-builder afterPack hook: flips fuses (`scripts/fuses.js`), then signs the mac app with our self-signed certificate |
+| `scripts/fuses.js` | Locks down the packaged Electron binary (no RunAsNode, asar-only with integrity check, cookie encryption…) |
 | `scripts/keygen.js`, `scripts/release.js` | Release signing key setup, and build+sign+publish |
 
 Key decisions:
 - **Electron over Rust/system webview:** same Chromium engine on all three OSes; Linux webviews are weak. Revisit only if "lightweight/native" becomes the product's identity.
 - **Security model:** websites never get the IPC API; only `browser://` pages do, checked by sender in main. Websites can't navigate/frame/redirect to `browser://`.
-- **Updates without paying Apple:** our own Ed25519 signature on the zip + bundle id/version/codesign checks; the app swaps itself after quitting.
+- **Updates without paying Apple:** our own Ed25519 signature on the zip + bundle id/version/codesign checks; the app swaps itself after quitting. From v0.4.0 the update must also be code-signed by the same certificate as the running app.
+- **Self-signed code signing certificate** ("Browser Self-Signed Code Signing", 10 years): gives every build the same code identity, so the keychain trusts updates. It isn't trusted by Gatekeeper, so the first-install warning remains until we pay for a Developer ID.
+- **Versioning:** semantic versioning. PATCH (0.4.**1**) for fix-only releases (the `npm run release` default), MINOR (0.**5**.0) when a release adds features, MAJOR 1.0 when it's ready for everyday users.
 - **Private windows** use `session.fromPartition('private-N')` (no `persist:` prefix = memory only), one partition per window, cleared on close. Their pages must be closed explicitly when the window closes (views don't close with the window).
 - **Ad blocking** wires Ghostery's engine in ourselves instead of `enableBlockingInSession()`, which registers fixed IPC channels (one session only) and has no per-site switch.
 - User data lives in the OS app-data folder (`~/Library/Application Support/Browser/browser-data.json` on macOS), not in the app, so it survives updates.
@@ -88,10 +90,17 @@ Requirements: Node 22+, git, GitHub CLI (`gh`) logged in as `ezzeldinzozz-svg`. 
 macOS DMG needs a Mac (Apple Silicon builds are arm64).
 
 **To publish releases from the new device**, also:
-1. Copy the private signing key `~/.browser-release/update-private-key.pem` from the old device
-   (via a password manager or USB, **never** commit it or send it in chat). Keep it at the same
-   path, permissions `600`. If it's lost, installed copies can't auto-update and users must
-   reinstall a build signed with a new key (`npm run keygen` after deleting the old public key).
+1. Copy the whole `~/.browser-release/` folder from the old device (via a password manager or USB,
+   **never** commit it or send it in chat). Keep it at the same path, permissions `700`/`600`. It holds:
+   - `update-private-key.pem`: signs updates. If lost, installed copies can't auto-update and
+     users must reinstall a build signed with a new key (`npm run keygen` after deleting the old public key).
+   - `codesign.p12` + `codesign-p12-password.txt` + `codesign-cert.pem`: the code signing certificate.
+     Import it on the new Mac:
+     ```bash
+     security import ~/.browser-release/codesign.p12 -k ~/Library/Keychains/login.keychain-db -P "$(cat ~/.browser-release/codesign-p12-password.txt)" -T /usr/bin/codesign
+     ```
+     If it's lost, builds fall back to ad-hoc signing and installed copies (v0.4.0+) reject those
+     updates; users would need to reinstall once from a DMG signed with a new certificate.
 2. If more than one GitHub account is logged into `gh`, make pushes from this repo use the right one:
    ```bash
    git config --add credential.https://github.com.helper ""

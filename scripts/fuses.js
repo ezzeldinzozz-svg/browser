@@ -1,8 +1,8 @@
 'use strict';
 
-// electron-builder afterPack hook: flips Electron's compile-time "fuses" in the packaged
-// binary so it can't be repurposed (e.g. run as plain Node, or load code outside app.asar).
-// Runs before code signing, so the final signature covers the flipped binary.
+// Flips Electron's compile-time "fuses" in the packaged binary so it can't be repurposed
+// (e.g. run as plain Node, or load code outside app.asar). Called from scripts/after-pack.js
+// before code signing, so the final signature covers the flipped binary.
 
 const path = require('path');
 
