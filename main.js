@@ -3964,6 +3964,9 @@ protocol.registerSchemesAsPrivileged([{ scheme: SCHEME, privileges: { standard: 
 const isPrimaryInstance = app.requestSingleInstanceLock();
 if (!isPrimaryInstance) app.quit();
 app.on('second-instance', (_e, argv) => {
+  // Windows Jump List / Linux desktop actions
+  if (argv.includes('--private-window')) return void createWindow({ private: true });
+  if (argv.includes('--new-window')) return void createWindow();
   const urls = argv.slice(1).map(urlFromArg).filter(Boolean);
   if (urls.length && launched) return void urls.forEach(openFromOutside);
   const w = focusedWindow();
@@ -4047,6 +4050,14 @@ app.whenReady().then(() => {
   launched = true;
   for (const url of [...process.argv.slice(1).map(urlFromArg).filter(Boolean), ...pendingOpens.splice(0)]) {
     openFromOutside(url);
+  }
+  if (process.argv.includes('--private-window')) createWindow({ private: true });
+  // Windows taskbar Jump List
+  if (process.platform === 'win32') {
+    app.setUserTasks([
+      { program: process.execPath, arguments: '--new-window', iconPath: process.execPath, iconIndex: 0, title: 'New Window', description: 'Open a new window' },
+      { program: process.execPath, arguments: '--private-window', iconPath: process.execPath, iconIndex: 0, title: 'New Private Window', description: 'Open a private window' },
+    ]);
   }
   updater.start(sendAll);
 });

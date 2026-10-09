@@ -332,13 +332,13 @@ Ordered by priority, then by what unblocks what.
 - [x] Dock / taskbar download progress
 - [x] Open links from other apps: `open-url` (macOS) and URL args at launch / in `second-instance` (Windows/Linux); opens a tab in the last normal window
 - [x] macOS: registered as a browser candidate (`CFBundleURLTypes` http/https, HTML document types)
-- [ ] **P0** Windows registry `RegisteredApplications`/ProgId and Linux `.desktop` `x-scheme-handler` (verify with real builds)
+- [x] **P0** Windows registry `RegisteredApplications`/StartMenuInternet/ProgIds (build/installer.nsh) and Linux `.desktop` `x-scheme-handler` (package.json mimeTypes). Not yet checked by hand on real Windows/Linux
 - [x] Open local HTML files from Finder / the Dock icon (`open-file`)
 - [ ] **P1** Drag a file onto the window to open it (allowed by the navigation guard; not verified, automation can't simulate an OS file drop)
 - [x] Drop a link or text onto the tab strip to open it in a new tab
 - [ ] **P2** Drag links/images out of pages; verify dragging files into upload fields
 - [x] Dock menu (macOS): New Window, New Private Window
-- [ ] **P1** Jump List (Windows) with the same items
+- [x] **P1** Jump List (Windows): New Window, New Private Window (`--new-window`, `--private-window`)
 - [x] **P1** Share menu on macOS (`ShareMenu`: File → Share…, page right-click)
 - [ ] **P2** Windows share sheet
 - [x] **P1** Handoff on macOS (`app.setUserActivity` with the focused window's page; never private). May need a Developer ID-signed build to appear on other devices
