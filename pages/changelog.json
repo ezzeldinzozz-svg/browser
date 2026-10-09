@@ -1,6 +1,7 @@
 {
   "_comment": "Shown on browser://whatsnew after an update. Add user-visible changes to \"next\" as they land; `npm run release` renames \"next\" to the version it releases (and refuses to release without notes).",
-  "next": [
+  "next": [],
+  "0.21.3": [
     "Vertical tab sidebar: the New Tab (+) button now sits directly under the latest tab instead of at the bottom",
     "Collapsible vertical sidebar: collapse to icons-only and expand on hover like Brave (all configurable in Settings → Appearance & Toolbar → Vertical Tabs & Sidebar)"
   ],
