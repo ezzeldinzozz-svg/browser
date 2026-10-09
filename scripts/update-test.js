@@ -46,8 +46,12 @@ async function main() {
       BROWSER_UPDATE_URL: 'http://127.0.0.1:8780',
       BROWSER_UPDATE_KEY: path.resolve(serveDir, 'test-public-key.pem'),
     },
-    stdio: 'inherit',
+    // Pipes rather than inherited output: helper processes the old app leaves behind (crash
+    // reporter, the relaunched new version) must not hold the CI step's output open.
+    stdio: ['ignore', 'pipe', 'pipe'],
   });
+  child.stdout.on('data', (d) => process.stdout.write(d));
+  child.stderr.on('data', (d) => process.stderr.write(d));
   let exited = false;
   child.on('exit', () => (exited = true));
 
@@ -65,7 +69,7 @@ async function main() {
       for (let j = 0; j < 60 && !exited; j++) await sleep(1000);
       if (!exited) throw new Error('app did not exit after Restart to update');
       console.log('old version exited; the updater takes over');
-      return;
+      process.exit(0); // don't wait on anything the old app left running
     }
   }
   child.kill();

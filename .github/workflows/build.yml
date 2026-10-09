@@ -18,6 +18,7 @@ permissions:
 
 jobs:
   windows:
+    timeout-minutes: 25
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -38,6 +39,7 @@ jobs:
           if-no-files-found: error
 
   linux:
+    timeout-minutes: 25
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
@@ -67,6 +69,7 @@ jobs:
   # Install version 0.0.1, serve this version as a signed update (throwaway key), and check the
   # old app downloads, verifies, installs and relaunches it.
   windows-update:
+    timeout-minutes: 25
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -77,8 +80,9 @@ jobs:
       - run: npm ci
       - run: npm run build
       - name: Build an old (0.0.1) and the current installer
+        shell: bash
         run: |
-          npx electron-builder --win --x64 --publish never -c.extraMetadata.version=0.0.1 -c.directories.output=dist-old
+          npx electron-builder --win --x64 --publish never "-c.extraMetadata.version=0.0.1" "-c.directories.output=dist-old"
           npx electron-builder --win --x64 --publish never
       - name: Sign the update with a test key and serve it
         shell: pwsh
@@ -112,6 +116,7 @@ jobs:
           Write-Host "running: $($running[0].Path)"
 
   linux-update:
+    timeout-minutes: 25
     runs-on: ubuntu-24.04
     env:
       DISPLAY: ':99'
@@ -130,7 +135,7 @@ jobs:
           (Xvfb :99 -screen 0 1280x800x24 >/dev/null 2>&1 &)
       - name: Build an old (0.0.1) and the current AppImage
         run: |
-          npx electron-builder --linux AppImage --x64 --publish never -c.extraMetadata.version=0.0.1 -c.directories.output=dist-old
+          npx electron-builder --linux AppImage --x64 --publish never "-c.extraMetadata.version=0.0.1" "-c.directories.output=dist-old"
           npx electron-builder --linux AppImage --x64 --publish never
       - name: Sign the update with a test key and serve it
         run: |
