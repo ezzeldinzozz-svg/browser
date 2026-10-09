@@ -24,12 +24,13 @@
   "build": {
     "appId": "com.ezzeddinmagdy.browser",
     "productName": "Browser",
-    "copyright": "Copyright © 2026 ezzeddinmagdy",
+    "copyright": "Copyright \u00a9 2026 ezzeddinmagdy",
     "files": [
       "main.js",
       "gen/preload.js",
       "capture-preload.js",
       "updater.js",
+      "update-format.js",
       "adblock.js",
       "bookmarks.js",
       "update-public-key.pem",

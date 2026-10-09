@@ -1,12 +1,15 @@
-name: Build and smoke test
+name: Build and test
 
 # Builds Windows and Linux packages on real machines, starts each build and checks the basics
-# (scripts/smoke-test.js), and keeps the packages as downloadable artifacts. macOS builds and
-# releases are made locally with `npm run release` (the signing keys never leave the Mac).
+# (scripts/smoke-test.js), runs a real self-update from an old version to this one on both
+# systems, and keeps the packages as artifacts. A release tag (v1.2.3) runs this too; the
+# release script on the Mac then downloads the packages, signs the update manifests locally
+# and publishes everything (the signing keys never leave the Mac).
 
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -60,3 +63,89 @@ jobs:
             dist/*.AppImage
             dist/*.deb
           if-no-files-found: error
+
+  # Install version 0.0.1, serve this version as a signed update (throwaway key), and check the
+  # old app downloads, verifies, installs and relaunches it.
+  windows-update:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: Build an old (0.0.1) and the current installer
+        run: |
+          npx electron-builder --win --x64 --publish never -c.extraMetadata.version=0.0.1 -c.directories.output=dist-old
+          npx electron-builder --win --x64 --publish never
+      - name: Sign the update with a test key and serve it
+        shell: pwsh
+        run: |
+          $v = node -p "require('./package.json').version"
+          node scripts/ci-sign-test-update.js win-x64 latest-win.json "dist/Browser-Setup-$v.exe" update-server
+          Start-Process python -ArgumentList '-m', 'http.server', '8780' -WorkingDirectory update-server -WindowStyle Hidden
+      - name: Install 0.0.1
+        shell: pwsh
+        run: |
+          Start-Process dist-old/Browser-Setup-0.0.1.exe -ArgumentList '/S' -Wait
+          $exe = (Get-ChildItem "$env:LOCALAPPDATA\Programs" -Recurse -Filter Browser.exe | Select-Object -First 1).FullName
+          Write-Host "installed at $exe, version $((Get-Item $exe).VersionInfo.ProductVersion)"
+          "BROWSER_EXE=$exe" | Out-File -FilePath $env:GITHUB_ENV -Append
+      - name: Update from inside the app
+        run: node scripts/update-test.js "${{ env.BROWSER_EXE }}" update-server
+      - name: The new version is installed and running
+        shell: pwsh
+        run: |
+          $v = node -p "require('./package.json').version"
+          for ($i = 0; $i -lt 90; $i++) {
+            $pv = (Get-Item $env:BROWSER_EXE).VersionInfo.ProductVersion
+            if ($pv -like "$v*") { break }
+            Start-Sleep 2
+          }
+          Write-Host "installed version: $pv (expected $v)"
+          if (-not ($pv -like "$v*")) { exit 1 }
+          for ($i = 0; $i -lt 30; $i++) { if (Get-Process Browser -ErrorAction SilentlyContinue) { break }; Start-Sleep 2 }
+          $running = Get-Process Browser -ErrorAction SilentlyContinue
+          if (-not $running) { Write-Host 'the new version did not start'; exit 1 }
+          Write-Host "running: $($running[0].Path)"
+
+  linux-update:
+    runs-on: ubuntu-24.04
+    env:
+      DISPLAY: ':99'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - name: AppImage runtime (FUSE), sandbox and a display that outlives the test
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq libfuse2t64 xvfb
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          (Xvfb :99 -screen 0 1280x800x24 >/dev/null 2>&1 &)
+      - name: Build an old (0.0.1) and the current AppImage
+        run: |
+          npx electron-builder --linux AppImage --x64 --publish never -c.extraMetadata.version=0.0.1 -c.directories.output=dist-old
+          npx electron-builder --linux AppImage --x64 --publish never
+      - name: Sign the update with a test key and serve it
+        run: |
+          node scripts/ci-sign-test-update.js linux-x64 latest-linux.json "dist/Browser-$(node -p "require('./package.json').version").AppImage" update-server
+          (cd update-server && python3 -m http.server 8780 >/dev/null 2>&1 &)
+      - name: Install 0.0.1
+        run: mkdir -p ~/Apps && cp dist-old/Browser-0.0.1.AppImage ~/Apps/Browser.AppImage && chmod +x ~/Apps/Browser.AppImage
+      - name: Update from inside the app
+        run: node scripts/update-test.js ~/Apps/Browser.AppImage update-server
+      - name: The new version replaced the AppImage and is running
+        run: |
+          expected=$(sha256sum update-server/*.AppImage | cut -d' ' -f1)
+          for i in $(seq 1 45); do actual=$(sha256sum ~/Apps/Browser.AppImage | cut -d' ' -f1); [ "$actual" = "$expected" ] && break; sleep 2; done
+          if [ "$actual" != "$expected" ]; then echo "the AppImage was not replaced"; exit 1; fi
+          echo "AppImage replaced with the new version"
+          for i in $(seq 1 30); do pgrep -f "Apps/Browser.AppImage" >/dev/null && break; sleep 2; done
+          pgrep -fa "Apps/Browser.AppImage" || { echo "the new version did not start"; exit 1; }
+          echo "the new version is running"
