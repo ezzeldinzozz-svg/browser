@@ -26,11 +26,10 @@
     "files": [
       "main.js",
       "preload.js",
-      "web-preload.js",
+      "capture-preload.js",
       "updater.js",
       "adblock.js",
       "bookmarks.js",
-      "passwords.js",
       "update-public-key.pem",
       "ui/**",
       "pages/**",

@@ -166,15 +166,6 @@ function render(state) {
   renderSiteButton(state.security);
 
   $('restorebar').hidden = !state.restoreOffer;
-  const pw = state.passwordOffer;
-  $('pwbar').hidden = !pw;
-  if (pw) {
-    $('pwbar-text').textContent =
-      pw.kind === 'update'
-        ? `Update the saved password for ${pw.username || 'this login'} on ${pw.site}?`
-        : `Save password${pw.username ? ` for ${pw.username}` : ''} on ${pw.site}?`;
-    $('pw-save').textContent = pw.kind === 'update' ? 'Update' : 'Save';
-  }
   $('home').hidden = !state.showHome;
 
   currentWarning = state.downloadWarning;
@@ -883,7 +874,3 @@ document.addEventListener('keydown', (e) => {
 $('home').addEventListener('click', () => api.goHome());
 $('restore-yes').addEventListener('click', () => api.restorePages());
 $('restore-no').addEventListener('click', () => api.dismissRestore());
-
-$('pw-save').addEventListener('click', () => api.respondPassword('save'));
-$('pw-never').addEventListener('click', () => api.respondPassword('never'));
-$('pw-close').addEventListener('click', () => api.respondPassword('dismiss'));
