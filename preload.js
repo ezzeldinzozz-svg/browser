@@ -173,6 +173,8 @@ if (location.protocol === 'browser:' && window === window.top) {
     openInstalledApp: call('apps:open'),
     openPage: call('nav:open-page'),
     toolbarMenu: call('toolbar:menu'),
+    toggleSidebarCollapse: call('sidebar:toggle-collapse'),
+    tabstripMenu: call('tabstrip:menu'),
   });
 }
 

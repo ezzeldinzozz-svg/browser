@@ -243,6 +243,9 @@ async function loadSettings() {
   document.getElementById('theme').value = s.theme || 'system';
   document.getElementById('compact-mode').checked = !!s.compactMode;
   document.getElementById('vertical-tabs').checked = !!s.verticalTabs;
+  document.getElementById('vertical-tabs-collapsed').checked = !!s.verticalTabsCollapsed;
+  document.getElementById('vertical-tabs-hover').checked = s.verticalTabsExpandOnHover !== false;
+  document.getElementById('vertical-newtab-under').checked = s.verticalNewTabUnderTabs !== false;
   document.getElementById('reject-cookies').checked = s.rejectCookies !== false;
   document.getElementById('fingerprinting-protection').checked = s.fingerprintingProtection !== false;
   renderAccentSwatches(s.accentColor || 'violet');
@@ -1079,5 +1082,10 @@ document.getElementById('strip-tracking').addEventListener('change', (e) => brow
 document.getElementById('energy-saver').addEventListener('change', (e) => browserAPI.setSetting('energySaver', e.target.checked));
 document.getElementById('compact-mode').addEventListener('change', (e) => browserAPI.setSetting('compactMode', e.target.checked));
 document.getElementById('vertical-tabs').addEventListener('change', (e) => browserAPI.setSetting('verticalTabs', e.target.checked));
+document.getElementById('vertical-tabs-collapsed').addEventListener('change', (e) => browserAPI.setSetting('verticalTabsCollapsed', e.target.checked));
+document.getElementById('vertical-tabs-hover').addEventListener('change', (e) => browserAPI.setSetting('verticalTabsExpandOnHover', e.target.checked));
+document.getElementById('vertical-newtab-under').addEventListener('change', (e) => browserAPI.setSetting('verticalNewTabUnderTabs', e.target.checked));
 document.getElementById('reject-cookies').addEventListener('change', (e) => browserAPI.setSetting('rejectCookies', e.target.checked));
 document.getElementById('fingerprinting-protection').addEventListener('change', (e) => browserAPI.setSetting('fingerprintingProtection', e.target.checked));
+window.addEventListener('focus', loadSettings);
+

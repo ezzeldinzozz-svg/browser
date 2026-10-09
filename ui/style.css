@@ -140,7 +140,9 @@ button.primary:hover, #prompt button.primary:hover, #dlwarn button.primary:hover
 body.mac #tabstrip { padding-left: 82px; }
 body.mac.fullscreen #tabstrip { padding-left: 8px; }
 body.win #tabstrip { padding-right: 144px; }
-#tablist, #newtab, .tab { -webkit-app-region: no-drag; }
+#tablist, #newtab, .tab, #sidebar-head, #sidebar-toggle { -webkit-app-region: no-drag; }
+#sidebar-head { display: contents; }
+#sidebar-toggle, .newtab-label { display: none; }
 #tablist {
   display: flex;
   flex: 0 1 auto;
@@ -183,6 +185,7 @@ body.win #tabstrip { padding-right: 144px; }
   width: 16px; height: 16px; border-radius: 5px; flex: none;
   background: var(--violet-soft); color: var(--violet-text); font-size: 10px; font-weight: 600; line-height: 16px; text-align: center;
 }
+.tab:not(.pinned) .letter { display: none; }
 .tab .audio {
   display: flex; align-items: center; justify-content: center;
   width: 20px; height: 20px; flex: none; padding: 0; border-radius: 7px; color: var(--fg-dim);
@@ -657,15 +660,81 @@ body.compact #toolbar #zoom, body.compact #toolbar #capture { top: 3px; }
 body.vertical #tabstrip {
   position: fixed; left: 0; top: 0; bottom: 0; width: 200px; height: auto;
   flex-direction: column; align-items: stretch; padding: 8px 6px;
-  border-right: 1px solid var(--line); z-index: 4;
+  border-right: 1px solid var(--line); z-index: 20;
+  transition: width 0.14s ease, box-shadow 0.14s ease;
 }
 body.mac.vertical:not(.fullscreen) #tabstrip { padding-left: 6px; padding-top: 38px; }
-body.vertical #tablist { flex-direction: column; overflow-x: hidden; overflow-y: auto; flex: 1 1 auto; gap: 2px; }
+body.vertical #sidebar-head {
+  display: flex; align-items: center; gap: 6px; width: 100%; margin-bottom: 2px; flex: none;
+}
+body.vertical #sidebar-toggle {
+  display: flex; align-items: center; justify-content: center;
+  width: 28px; height: 28px; flex: none; border-radius: 8px; color: var(--fg-dim);
+}
+body.vertical #sidebar-toggle:hover { background: var(--surface-hover); color: var(--fg); }
+body.vertical #workspace { flex: 1; min-width: 0; justify-content: center; }
+body.vertical #tablist { flex-direction: column; overflow-x: hidden; overflow-y: auto; flex: 1 1 auto; min-height: 0; gap: 2px; width: 100%; }
+body.vertical.newtab-under #tablist { flex: 0 1 auto; }
 body.vertical .tab { flex: none; width: 100%; }
+body.vertical .tab .letter { display: block; }
 body.vertical .tab.pinned { width: 100%; justify-content: flex-start; padding: 0 5px 0 10px; }
-body.vertical #newtab { width: 100%; justify-content: center; }
+body.vertical .tab.pinned .audio { position: static; margin: 0; width: 20px; height: 20px; }
+body.vertical .tab.drop-before { box-shadow: inset 0 2px 0 var(--violet); }
+body.vertical .tab.drop-after { box-shadow: inset 0 -2px 0 var(--violet); }
+body.vertical #newtab {
+  width: 100%; height: 30px; justify-content: flex-start; gap: 7px; padding: 0 10px;
+  border-radius: 10px; font-size: 12.5px; flex: none;
+}
+body.vertical .newtab-label { display: inline; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 body.vertical #toolbar, body.vertical #bmbar { margin-left: 200px; }
 body.vertical #prompt, body.vertical #dlwarn, body.vertical #restorebar, body.vertical #authbar, body.vertical #findbar { margin-left: 208px; }
+
+/* Collapsed vertical sidebar (icons-only, expands on hover when enabled) */
+body.vertical.collapsed #toolbar, body.vertical.collapsed #bmbar { margin-left: 48px; }
+body.mac.vertical.collapsed:not(.fullscreen) #toolbar { padding-left: 34px; }
+body.vertical.collapsed #prompt, body.vertical.collapsed #dlwarn, body.vertical.collapsed #restorebar, body.vertical.collapsed #authbar, body.vertical.collapsed #findbar { margin-left: 56px; }
+body.vertical.collapsed:not(.sidebar-hover) #tabstrip {
+  width: 48px; padding-left: 6px; padding-right: 6px; align-items: center;
+}
+body.vertical.collapsed:not(.sidebar-hover) #sidebar-head {
+  flex-direction: column; align-items: center; gap: 4px;
+}
+body.vertical.collapsed:not(.sidebar-hover) #sidebar-toggle { width: 36px; height: 30px; }
+body.vertical.collapsed:not(.sidebar-hover) #workspace {
+  width: 36px; padding: 0; justify-content: center;
+}
+body.vertical.collapsed:not(.sidebar-hover) #workspace-name {
+  max-width: 1ch; overflow: hidden; text-overflow: clip; white-space: nowrap;
+}
+body.vertical.collapsed:not(.sidebar-hover) #tablist { align-items: center; padding: 2px 0; }
+body.vertical.collapsed:not(.sidebar-hover) .tab,
+body.vertical.collapsed:not(.sidebar-hover) .tab.pinned {
+  width: 36px; height: 34px; min-width: 36px; padding: 0; justify-content: center;
+}
+body.vertical.collapsed:not(.sidebar-hover) .tab .title,
+body.vertical.collapsed:not(.sidebar-hover) .tab .close,
+body.vertical.collapsed:not(.sidebar-hover) .tab .split-badge,
+body.vertical.collapsed:not(.sidebar-hover) .newtab-label,
+body.vertical.collapsed:not(.sidebar-hover) .tab-group span:not(.dot),
+body.vertical.collapsed:not(.sidebar-hover) .tab-group input {
+  display: none;
+}
+body.vertical.collapsed:not(.sidebar-hover) .tab-group {
+  width: 36px; padding: 0; justify-content: center; margin: 2px 0;
+}
+body.vertical.collapsed:not(.sidebar-hover) .tab .audio {
+  position: absolute; right: 1px; bottom: 1px; width: 14px; height: 14px;
+  background: var(--raised); border-radius: 50%; margin: 0;
+}
+body.vertical.collapsed:not(.sidebar-hover) .tab .rec {
+  position: absolute; right: 3px; top: 3px; width: 7px; height: 7px;
+}
+body.vertical.collapsed:not(.sidebar-hover) #newtab {
+  width: 36px; height: 34px; padding: 0; justify-content: center;
+}
+body.vertical.collapsed.sidebar-hover #tabstrip {
+  width: 200px; box-shadow: var(--shadow); border-right-color: var(--line-strong);
+}
 
 /* ---------------------------------------------------------------- workspaces, tab groups, split badge, tab preview */
 

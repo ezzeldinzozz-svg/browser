@@ -57,6 +57,7 @@ const COMPACT_CHROME_H = 68; // compact tab strip (32) + compact toolbar (36)
 const TOOLBAR_ONLY_H = 42;
 const COMPACT_TOOLBAR_ONLY_H = 36;
 const SIDEBAR_W = 200; // vertical tabs sidebar width
+const SIDEBAR_COLLAPSED_W = 48; // collapsed (icons-only) vertical tabs sidebar width
 // Pages sit in a rounded card inset from the window edge (matches the brand's card look).
 const PAGE_INSET = 8;
 const PAGE_RADIUS = 12;
@@ -211,6 +212,9 @@ function defaultSettings() {
     accentColor: 'violet', // 'violet' | 'blue' | 'emerald' | 'amber' | 'rose' | 'cyan'
     compactMode: false, // compact toolbar & tab strip
     verticalTabs: false, // show tabs in a left sidebar
+    verticalTabsCollapsed: false, // collapse vertical sidebar to icons only
+    verticalTabsExpandOnHover: true, // expand collapsed vertical sidebar on hover (Brave style)
+    verticalNewTabUnderTabs: true, // place the + New Tab button directly under the latest tab
     toolbarButtons: { ...TOOLBAR_BUTTON_DEFAULTS }, // customizable toolbar buttons
     protocolHandlers: {}, // scheme -> { url, host }
     installedApps: [], // [{ url, title, icon }]
@@ -735,6 +739,9 @@ function sendTabs(w) {
       accentColor: store.data.settings.accentColor || 'violet',
       compactMode: !!store.data.settings.compactMode,
       verticalTabs: !!store.data.settings.verticalTabs,
+      verticalTabsCollapsed: !!store.data.settings.verticalTabsCollapsed,
+      verticalTabsExpandOnHover: store.data.settings.verticalTabsExpandOnHover !== false,
+      verticalNewTabUnderTabs: store.data.settings.verticalNewTabUnderTabs !== false,
       toolbarButtons: toolbarButtonsState(),
     },
     tabs: shownTabs.map((t) => {
@@ -849,7 +856,8 @@ function chromeHeight(w) {
 function sidebarWidth(w) {
   const tab = activeTab(w);
   if (tab && tab.fullscreen) return 0;
-  return store && store.data.settings.verticalTabs ? SIDEBAR_W : 0;
+  if (!store || !store.data.settings.verticalTabs) return 0;
+  return store.data.settings.verticalTabsCollapsed ? SIDEBAR_COLLAPSED_W : SIDEBAR_W;
 }
 
 const STATUS_H = 24;
@@ -4909,6 +4917,63 @@ function setupIpc() {
       },
     ]).popup({ window: w.win });
   });
+  handle('sidebar:toggle-collapse', fromChrome, () => {
+    store.data.settings.verticalTabsCollapsed = !store.data.settings.verticalTabsCollapsed;
+    store.save();
+    windows.forEach((win) => {
+      layout(win);
+      sendTabs(win);
+    });
+    buildMenu();
+  });
+  handle('tabstrip:menu', fromChrome, (w) => {
+    const toggleSetting = (key, defVal = false) => {
+      const cur = store.data.settings[key] === undefined ? defVal : !!store.data.settings[key];
+      store.data.settings[key] = !cur;
+      store.save();
+      windows.forEach((win) => {
+        layout(win);
+        sendTabs(win);
+      });
+      buildMenu();
+    };
+    const vertical = !!store.data.settings.verticalTabs;
+    Menu.buildFromTemplate([
+      { label: 'New Tab', accelerator: acc('new-tab', 'CmdOrCtrl+T'), click: () => createTab(w, internalURL('newtab')) },
+      { label: 'Reopen Closed Tab', accelerator: acc('reopen-tab', 'CmdOrCtrl+Shift+T'), enabled: w.closedTabs.length > 0, click: () => reopenClosedTab(w) },
+      { type: 'separator' },
+      {
+        label: 'Vertical Tabs Sidebar',
+        type: 'checkbox',
+        checked: vertical,
+        click: () => toggleSetting('verticalTabs', false),
+      },
+      ...(vertical
+        ? [
+            {
+              label: 'Collapse Sidebar to Icons Only',
+              type: 'checkbox',
+              checked: !!store.data.settings.verticalTabsCollapsed,
+              click: () => toggleSetting('verticalTabsCollapsed', false),
+            },
+            {
+              label: 'Expand Collapsed Sidebar on Hover',
+              type: 'checkbox',
+              checked: store.data.settings.verticalTabsExpandOnHover !== false,
+              click: () => toggleSetting('verticalTabsExpandOnHover', true),
+            },
+            {
+              label: 'New Tab Button Under Latest Tab',
+              type: 'checkbox',
+              checked: store.data.settings.verticalNewTabUnderTabs !== false,
+              click: () => toggleSetting('verticalNewTabUnderTabs', true),
+            },
+          ]
+        : []),
+      { type: 'separator' },
+      { label: 'Tab & Sidebar Settings…', click: () => openInternalPage(w, 'settings') },
+    ]).popup({ window: w.win });
+  });
   handle('restore:accept', fromChrome, (w) => restorePrevious(w));
   handle('restore:dismiss', fromChrome, (w) => {
     w.restoreOffer = null;
@@ -5070,6 +5135,9 @@ function setupIpc() {
         'fingerprintingProtection',
         'compactMode',
         'verticalTabs',
+        'verticalTabsCollapsed',
+        'verticalTabsExpandOnHover',
+        'verticalNewTabUnderTabs',
       ].includes(key) &&
         typeof value === 'boolean') ||
       (key === 'accentColor' && ACCENT_COLORS.includes(value)) ||
@@ -5112,7 +5180,7 @@ function setupIpc() {
     if (key === 'dns' || key === 'dnsCustom') applyDns();
     if (key === 'theme') nativeTheme.themeSource = value;
     if (key === 'historyKeepDays') pruneOldHistory();
-    if (key === 'compactMode' || key === 'verticalTabs' || key === 'showBookmarksBar') {
+    if (['compactMode', 'verticalTabs', 'verticalTabsCollapsed', 'verticalTabsExpandOnHover', 'verticalNewTabUnderTabs', 'showBookmarksBar'].includes(key)) {
       windows.forEach((w) => {
         layout(w);
         sendTabs(w);

@@ -160,6 +160,12 @@ function renderTab(t, isActive, groupColor) {
   el.setAttribute('aria-label', t.title + (t.audible ? ', playing audio' : '') + (t.muted ? ', muted' : ''));
   el.draggable = true;
 
+  const makeLetter = () => {
+    const dot = document.createElement('span');
+    dot.className = 'letter';
+    dot.textContent = (t.title || '?').trim().charAt(0).toUpperCase();
+    return dot;
+  };
   if (t.loading) {
     const s = document.createElement('div');
     s.className = 'spinner';
@@ -167,13 +173,10 @@ function renderTab(t, isActive, groupColor) {
   } else if (t.favicon) {
     const img = document.createElement('img');
     img.src = t.favicon;
-    img.onerror = () => img.remove();
+    img.onerror = () => img.replaceWith(makeLetter());
     el.append(img);
-  } else if (t.pinned) {
-    const dot = document.createElement('span');
-    dot.className = 'letter';
-    dot.textContent = (t.title || '?').trim().charAt(0).toUpperCase();
-    el.append(dot);
+  } else {
+    el.append(makeLetter());
   }
 
   if (!t.pinned) {
@@ -256,18 +259,19 @@ function renderTab(t, isActive, groupColor) {
     for (const x of tablist.querySelectorAll('.drop-before, .drop-after')) x.classList.remove('drop-before', 'drop-after');
   });
   el.addEventListener('dragover', (e) => {
+    const isVert = document.body.classList.contains('vertical');
     if (dragId === null && [...e.dataTransfer.types].includes(TAB_DRAG_TYPE)) {
       // a tab from another window
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
-      const after = e.offsetX > el.offsetWidth / 2;
+      const after = isVert ? e.offsetY > el.offsetHeight / 2 : e.offsetX > el.offsetWidth / 2;
       el.classList.toggle('drop-after', after);
       el.classList.toggle('drop-before', !after);
       return;
     }
     if (dragId === null || dragId === t.id) return;
     e.preventDefault();
-    const after = e.offsetX > el.offsetWidth / 2;
+    const after = isVert ? e.offsetY > el.offsetHeight / 2 : e.offsetX > el.offsetWidth / 2;
     el.classList.toggle('drop-after', after);
     el.classList.toggle('drop-before', !after);
   });
@@ -299,7 +303,23 @@ function render(state) {
   if (state.uiPrefs) {
     document.documentElement.dataset.accent = state.uiPrefs.accentColor || 'violet';
     document.body.classList.toggle('compact', !!state.uiPrefs.compactMode);
-    document.body.classList.toggle('vertical', !!state.uiPrefs.verticalTabs);
+    const vert = !!state.uiPrefs.verticalTabs;
+    const collapsed = vert && !!state.uiPrefs.verticalTabsCollapsed;
+    const expandHover = state.uiPrefs.verticalTabsExpandOnHover !== false;
+    const newtabUnder = state.uiPrefs.verticalNewTabUnderTabs !== false;
+    document.body.classList.toggle('vertical', vert);
+    document.body.classList.toggle('collapsed', collapsed);
+    document.body.classList.toggle('expand-on-hover', expandHover);
+    document.body.classList.toggle('newtab-under', newtabUnder);
+    if (!collapsed || !expandHover) {
+      document.body.classList.remove('sidebar-hover');
+      setOverlay();
+    }
+    const toggleBtn = $('sidebar-toggle');
+    if (toggleBtn) {
+      toggleBtn.title = collapsed ? 'Expand vertical tabs' : 'Collapse vertical tabs to icons';
+      toggleBtn.ariaLabel = toggleBtn.title;
+    }
   }
   const ws = state.workspace;
   const wsBtn = $('workspace');
@@ -496,6 +516,39 @@ api.onFocusAddress(() => {
   address.select();
 });
 
+let ignoreSidebarHoverUntilLeave = false;
+$('sidebar-toggle').addEventListener('click', () => {
+  if (!document.body.classList.contains('collapsed')) ignoreSidebarHoverUntilLeave = true;
+  document.body.classList.remove('sidebar-hover');
+  setOverlay();
+  hideTabPreview();
+  api.toggleSidebarCollapse();
+});
+$('tabstrip').addEventListener('mouseenter', () => {
+  if (ignoreSidebarHoverUntilLeave) return;
+  if (
+    document.body.classList.contains('vertical') &&
+    document.body.classList.contains('collapsed') &&
+    document.body.classList.contains('expand-on-hover')
+  ) {
+    document.body.classList.add('sidebar-hover');
+    setOverlay();
+  }
+});
+$('tabstrip').addEventListener('mouseleave', () => {
+  ignoreSidebarHoverUntilLeave = false;
+  if (document.body.classList.contains('sidebar-hover') && !renamingGroupId) {
+    document.body.classList.remove('sidebar-hover');
+    hideTabPreview();
+    setOverlay();
+  }
+});
+$('tabstrip').addEventListener('contextmenu', (e) => {
+  if (e.target.closest('.tab, .tab-group, #workspace')) return;
+  e.preventDefault();
+  api.tabstripMenu();
+});
+
 $('newtab').addEventListener('click', () => api.newTab());
 $('back').addEventListener('click', () => api.back());
 $('forward').addEventListener('click', () => api.forward());
@@ -519,7 +572,9 @@ $('toolbar').addEventListener('contextmenu', (e) => {
 
 let overlayOpen = false;
 function setOverlay() {
-  const open = ['suggest', 'sitepopup', 'screenpicker', 'devicepicker', 'dlpanel', 'bmpopup', 'tabpreview'].some((id) => !$(id).hidden);
+  const open =
+    document.body.classList.contains('sidebar-hover') ||
+    ['suggest', 'sitepopup', 'screenpicker', 'devicepicker', 'dlpanel', 'bmpopup', 'tabpreview'].some((id) => !$(id).hidden);
   if (open !== overlayOpen) {
     overlayOpen = open;
     api.setOverlay(open);
