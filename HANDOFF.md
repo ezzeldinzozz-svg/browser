@@ -3,7 +3,7 @@
 Everything needed to pick this project up on any device. **Keep this file current:** update it
 in the same commit as any change to features, architecture, setup, or plans.
 
-_Last updated: 2026-10-09 · Current release: v0.4.0_
+_Last updated: 2026-10-09 · Current release: v0.4.1_
 
 ## What this is
 
@@ -24,7 +24,7 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 - Ad & tracker blocking (Ghostery engine, EasyList/EasyPrivacy, lists refreshed weekly and cached in the profile): toolbar shield shows the blocked count and turns blocking off per site; global switch in Settings
 - Print (Cmd/Ctrl+P), session restore with back/forward history (toggle in Settings), Reopen Closed Tab (Cmd/Ctrl+Shift+T); links opened from a page line up next to it
 - Security: sandboxed tabs, private `browser://` pages that websites can't reach, favicons fetched in the main process, certificate-error page with no bypass, single-instance lock, hardened Electron fuses in packaged builds
-- macOS packaging (ad-hoc signed DMG) and a free self-updater using our own Ed25519 key + GitHub Releases (tested end to end: 0.1.9 → 0.2.0)
+- macOS packaging (ad-hoc signed DMG) and a free self-updater using our own Ed25519 key + GitHub Releases (tested end to end: 0.1.9 → 0.2.0). Visible status: a toolbar pill shows "Updating… N%" while downloading and "Restart to update" when ready; Settings → About Browser shows the version, last check and a Check for updates button
 
 **Known issues**
 - Notification permission reads as "denied" (not "default") until a site is allowed/blocked, so some sites hide their "enable notifications" button
@@ -121,7 +121,15 @@ macOS DMG needs a Mac (Apple Silicon builds are arm64).
 | `npm run release` | Bump patch version, build, sign, tag, push, create GitHub release (installed apps update within ~6 h, or via Browser → Check for Updates…) |
 | `npm run release -- 0.3.0` | Release a specific version |
 
-Release needs a clean git tree. Electron is pinned (currently 44.7.0): bump patch versions
+Release needs a clean git tree. Uploading the DMG and zip (~130 MB each) can take 10+ minutes;
+run it somewhere that won't time out. If the upload is interrupted, GitHub leaves the release as a
+**draft** (invisible to installed apps, so nothing breaks). Finish it with:
+```bash
+export GH_TOKEN=$(gh auth token --user ezzeldinzozz-svg)
+gh release upload vX.Y.Z dist/Browser-X.Y.Z-arm64-mac.zip dist/Browser-X.Y.Z-arm64.dmg dist/latest-mac.json --repo ezzeldinzozz-svg/browser --clobber
+gh release edit vX.Y.Z --repo ezzeldinzozz-svg/browser --draft=false --latest
+```
+ Electron is pinned (currently 44.7.0): bump patch versions
 regularly for security fixes, then release.
 
 ## Testing notes

@@ -316,7 +316,7 @@ Ordered by priority, then by what unblocks what.
 - [ ] **P0** Windows and Linux auto-update (electron-updater / AppImage; deb/rpm repos or Flatpak)
 - [ ] **P1** Staged rollout and forced update for critical security releases
 - [ ] **P1** Opt-in crash reporting (`crashReporter` → Sentry/Backtrace), asked in onboarding, named in the privacy policy
-- [ ] **P1** "Update failed / move to Applications" message surfaced in UI (today only in the manual check dialog)
+- [x] Update status in the UI: toolbar pill with download progress / "Restart to update"; Settings → About shows up to date, errors and "move to Applications"
 - [ ] **P2** Opt-in, minimal, documented usage telemetry (or none, stated clearly)
 - [ ] **P2** Release notes / "What's new" page after an update
 
@@ -332,7 +332,8 @@ Ordered by priority, then by what unblocks what.
 
 - [x] About panel (macOS `role: about`)
 - [ ] **P0** First-run welcome: set as default browser, import from another browser, choose search engine, privacy choices
-- [ ] **P1** About page (`browser://about`): version, Electron/Chromium version, update status, licenses link
+- [x] About section in Settings: version, update status, last check, Check for updates
+- [ ] **P2** Electron/Chromium version and open-source licenses in About
 - [ ] **P1** Help menu: keyboard shortcuts, report a problem, website/support link
 - [ ] **P1** Keyboard shortcuts reference page
 - [ ] **P2** Feature tips / tour

@@ -28,7 +28,9 @@ let readyApp = null; // extracted, verified new .app waiting to replace the runn
 let listener = () => {};
 
 function setState(next) {
-  state = next;
+  // checkedAt: when a check last finished (shown as "Last checked" in Settings)
+  const finished = ['none', 'ready', 'error'].includes(next.status);
+  state = { ...next, checkedAt: finished ? Date.now() : state.checkedAt };
   listener(state);
 }
 
@@ -74,6 +76,29 @@ async function designatedRequirement(appPath) {
   return match[1].trim();
 }
 
+// Streams the download so the UI can show progress (0..1, or -1 when the size is unknown).
+async function download(url, version) {
+  setState({ status: 'downloading', version, progress: 0 });
+  const res = await net.fetch(url);
+  if (!res.ok) throw new Error(`Download failed (HTTP ${res.status})`);
+  const total = Number(res.headers.get('content-length')) || 0;
+  const chunks = [];
+  let received = 0;
+  let lastReport = 0;
+  const reader = res.body.getReader();
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    received += value.length;
+    if (Date.now() - lastReport > 250) {
+      lastReport = Date.now();
+      setState({ status: 'downloading', version, progress: total ? received / total : -1 });
+    }
+  }
+  return Buffer.concat(chunks);
+}
+
 async function check() {
   if (['checking', 'downloading', 'ready'].includes(state.status)) return state;
   const reason = unsupportedReason();
@@ -100,10 +125,7 @@ async function check() {
       return state;
     }
 
-    setState({ status: 'downloading', version });
-    const zipRes = await net.fetch(`https://github.com/${REPO}/releases/download/v${version}/${file}`);
-    if (!zipRes.ok) throw new Error(`Download failed (HTTP ${zipRes.status})`);
-    const zip = Buffer.from(await zipRes.arrayBuffer());
+    const zip = await download(`https://github.com/${REPO}/releases/download/v${version}/${file}`, version);
     if (!crypto.verify(null, zip, PUBLIC_KEY, Buffer.from(signature, 'base64'))) {
       throw new Error('Update signature is invalid');
     }
@@ -172,4 +194,4 @@ function start(onChange) {
   setInterval(check, CHECK_EVERY_MS).unref();
 }
 
-module.exports = { start, check, install, getState: () => state };
+module.exports = { start, check, install, download, getState: () => state };

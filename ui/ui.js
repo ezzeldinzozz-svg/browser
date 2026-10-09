@@ -105,9 +105,19 @@ function render(state) {
     }
   }
 
+  // Quiet while checking; a small pill while downloading; a button once it's ready.
   const update = state.update || {};
-  $('update').hidden = update.status !== 'ready';
-  $('update').title = update.version ? `Install Browser ${update.version}` : '';
+  const pill = $('update');
+  const downloading = update.status === 'downloading';
+  pill.hidden = !(downloading || update.status === 'ready');
+  pill.disabled = downloading;
+  pill.classList.toggle('downloading', downloading);
+  pill.textContent = downloading
+    ? `Updating… ${update.progress >= 0 ? Math.floor(update.progress * 100) + '%' : ''}`.trim()
+    : 'Restart to update';
+  pill.title = downloading
+    ? `Downloading Browser ${update.version}`
+    : update.version ? `Browser ${update.version} is ready. Restart to finish updating.` : '';
 }
 
 const findInput = $('find-input');

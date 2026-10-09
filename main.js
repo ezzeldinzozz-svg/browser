@@ -1137,6 +1137,9 @@ function setupIpc() {
   handle('find:close', fromChrome, (w) => closeFind(activeTab(w)));
   handle('downloads:open', fromChrome, (w) => openInternalPage(w, 'downloads'));
   handle('update:install', fromChrome, () => restartToUpdate());
+  handle('about:info', fromInternal, () => ({ version: app.getVersion(), update: updater.getState() }));
+  handle('about:check', fromInternal, () => updater.check());
+  handle('about:install', fromInternal, () => restartToUpdate());
   handle('adblock:toggle-site', fromChrome, (w) => toggleSiteBlocking(w));
 
   handle('data:downloads', fromInternal, (tab) => visibleDownloads(tab.w));

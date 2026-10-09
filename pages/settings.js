@@ -87,3 +87,53 @@ async function load() {
   }
 }
 load();
+
+// ---- About / updates
+
+const aboutStatus = document.getElementById('about-status');
+const aboutAction = document.getElementById('about-action');
+let aboutState = null;
+
+function when(ts) {
+  if (!ts) return '';
+  const mins = Math.round((Date.now() - ts) / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins} min ago`;
+  return new Date(ts).toLocaleString();
+}
+
+function renderAbout({ version, update }) {
+  aboutState = update;
+  document.getElementById('about-version').textContent = `Version ${version}`;
+  const checked = update.checkedAt ? ` · Last checked ${when(update.checkedAt)}` : '';
+  const percent = update.progress >= 0 ? `${Math.floor(update.progress * 100)}%` : '';
+  const text = {
+    idle: 'Checks for updates automatically',
+    checking: 'Checking for updates…',
+    downloading: `Downloading version ${update.version}… ${percent}`,
+    ready: `Version ${update.version} is ready. Restart to finish updating.`,
+    none: `You're up to date${checked}`,
+    error: `Couldn't check for updates: ${update.error || 'unknown error'}${checked}`,
+    unsupported: update.error || "Automatic updates aren't available here.",
+  }[update.status] || '';
+  aboutStatus.textContent = text;
+  aboutAction.hidden = update.status === 'unsupported';
+  aboutAction.disabled = update.status === 'checking' || update.status === 'downloading';
+  aboutAction.textContent = update.status === 'ready' ? 'Restart to update' : 'Check for updates';
+  aboutAction.classList.toggle('primary', update.status === 'ready');
+}
+
+async function refreshAbout() {
+  renderAbout(await browserAPI.getAbout());
+}
+
+aboutAction.addEventListener('click', async () => {
+  if (aboutState && aboutState.status === 'ready') return browserAPI.installUpdateFromSettings();
+  const pending = browserAPI.checkForUpdates();
+  refreshAbout();
+  await pending;
+  refreshAbout();
+});
+
+refreshAbout();
+setInterval(refreshAbout, 1000);

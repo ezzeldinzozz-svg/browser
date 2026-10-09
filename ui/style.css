@@ -236,6 +236,16 @@ button {
 }
 #toolbar #update[hidden] { display: none; }
 #toolbar #update:hover { filter: brightness(1.1); background: var(--accent); }
+#toolbar #update.downloading,
+#toolbar #update.downloading:hover {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--fg-dim);
+  cursor: default;
+  filter: none;
+  opacity: 1;
+  font-variant-numeric: tabular-nums;
+}
 
 #findbar {
   display: flex;
