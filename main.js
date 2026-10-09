@@ -3020,6 +3020,19 @@ function onWillDownload(_e, item, wc) {
       .catch(() => {});
     return;
   }
+  // A download we're resuming after a restart (createInterruptedDownload) continues its old entry.
+  const resuming = pendingResumes.get(item.getURLChain()[0] || item.getURL());
+  if (resuming && item.getState() === 'interrupted') {
+    pendingResumes.delete(item.getURLChain()[0] || item.getURL());
+    const { rec, w } = resuming;
+    rec.state = 'progressing';
+    liveDownloads.set(rec.id, item);
+    watchDownload(rec, item, { savePath: rec.savePath, finalPath: rec.path, dangerous: rec.dangerous, w });
+    item.resume();
+    store.save();
+    notifyDownloads(true);
+    return;
+  }
   if (!allowAutomaticDownload(item, wc)) return;
   let finalPath = uniqueDownloadPath(item.getFilename() || 'download');
   if (store.data.settings.askDownloadLocation) {
@@ -3048,12 +3061,27 @@ function onWillDownload(_e, item, wc) {
     total: item.getTotalBytes(),
     time: Date.now(),
     private: !!(w && w.private),
+    savePath,
+    // what Chromium needs to continue the download after a restart (createInterruptedDownload)
+    resume: { urlChain: item.getURLChain(), mimeType: item.getMimeType(), etag: item.getETag(), lastModified: item.getLastModifiedTime(), startTime: item.getStartTime() },
   };
   const list = store.data.downloads;
   list.unshift(rec);
   if (list.length > DOWNLOADS_LIMIT) list.length = DOWNLOADS_LIMIT;
   liveDownloads.set(rec.id, item);
+  watchDownload(rec, item, { savePath, finalPath, dangerous, w });
 
+  store.save();
+  notifyDownloads(true);
+  if (liveWindow(w)) w.chromeView.webContents.send('download-started');
+}
+
+// Interrupted downloads that can continue: the live item (same run) and, after a restart,
+// the entries waiting for their createInterruptedDownload to arrive in onWillDownload.
+const interruptedItems = new Map(); // download id -> DownloadItem
+const pendingResumes = new Map(); // first URL -> { rec, w }
+
+function watchDownload(rec, item, { savePath, finalPath, dangerous, w }) {
   item.on('updated', (_ev, state) => {
     rec.received = item.getReceivedBytes();
     rec.total = item.getTotalBytes();
@@ -3061,25 +3089,91 @@ function onWillDownload(_e, item, wc) {
     rec.state = state === 'interrupted' ? 'interrupted' : 'progressing';
     notifyDownloads();
   });
-  item.once('done', (_ev, state) => {
+  item.on('done', (_ev, state) => {
     rec.received = item.getReceivedBytes();
     rec.paused = false;
     liveDownloads.delete(rec.id);
+    if (state === 'interrupted' && item.canResume()) interruptedItems.set(rec.id, item);
+    else interruptedItems.delete(rec.id);
     if (state === 'completed') markAsDownloaded(savePath, rec.url); // survives the Keep rename
     if (state === 'completed' && dangerous) {
       rec.state = 'dangerous'; // waiting for Keep / Discard; finalPath stays reserved
       warnAboutDownload(w || focusedWindow(), rec);
     } else {
       rec.state = state; // 'completed' | 'cancelled' | 'interrupted'
-      reservedPaths.delete(finalPath);
+      if (state !== 'interrupted') reservedPaths.delete(finalPath);
     }
     store.save();
     notifyDownloads(true);
   });
+}
 
-  store.save();
-  notifyDownloads(true);
-  if (liveWindow(w)) w.chromeView.webContents.send('download-started');
+// Chromium deletes unfinished downloads when the app quits. Keep what was downloaded so far
+// under a hard link (instant, no copy) so Retry can continue after the restart.
+function keepPartialDownloads() {
+  for (const [id, item] of liveDownloads) {
+    const rec = store.data.downloads.find((d) => d.id === id);
+    if (!rec || !rec.savePath || item.getState() !== 'progressing') continue;
+    try {
+      item.pause();
+      const part = `${rec.savePath}.operecs-part`;
+      fs.rmSync(part, { force: true });
+      fs.linkSync(rec.savePath, part);
+      rec.partPath = part;
+      rec.received = item.getReceivedBytes();
+      rec.state = 'interrupted';
+    } catch {
+      // nothing on disk yet, or another volume: Retry starts over
+    }
+  }
+}
+
+// An unfinished download leaves the list: delete what it had downloaded so far.
+function dropPartialDownload(d) {
+  if (d.state !== 'interrupted' && d.state !== 'cancelled') return;
+  interruptedItems.delete(d.id);
+  for (const file of [d.partPath, d.state === 'interrupted' ? d.savePath : null]) {
+    if (file) fs.promises.rm(file, { force: true }).catch(() => {});
+  }
+}
+
+// Retry: continue where it stopped when possible, otherwise download again from the start.
+function retryDownload(w, d) {
+  const ses = w.private ? w.ses : session.defaultSession;
+  const live = interruptedItems.get(d.id);
+  if (live && live.canResume()) {
+    interruptedItems.delete(d.id);
+    liveDownloads.set(d.id, live);
+    d.state = 'progressing';
+    live.resume();
+    return notifyDownloads(true);
+  }
+  const r = d.resume;
+  let size = 0;
+  try {
+    if (d.partPath && fs.existsSync(d.partPath)) {
+      fs.renameSync(d.partPath, d.savePath); // the part kept at quit goes back in place
+      d.partPath = null;
+    }
+    size = d.savePath ? fs.statSync(d.savePath).size : 0;
+  } catch {
+    size = 0;
+  }
+  if (r && size > 0 && (r.etag || r.lastModified) && r.urlChain && r.urlChain.length) {
+    pendingResumes.set(r.urlChain[0], { rec: d, w });
+    ses.createInterruptedDownload({
+      path: d.savePath,
+      urlChain: r.urlChain,
+      mimeType: r.mimeType,
+      offset: size,
+      length: d.total || 0,
+      lastModified: r.lastModified,
+      eTag: r.etag,
+      startTime: r.startTime,
+    });
+    return;
+  }
+  userDownload(ses, d.url);
 }
 
 function warnAboutDownload(w, rec) {
@@ -3677,18 +3771,19 @@ function setupIpc() {
   handle('download:remove', fromInternal, (tab, id) => {
     const d = ownDownload(tab, id);
     if (!d || d.state === 'progressing' || d.state === 'dangerous') return;
+    dropPartialDownload(d);
     store.data.downloads = store.data.downloads.filter((x) => x.id !== id);
     store.save();
     notifyDownloads(true);
   });
   handle('download:retry', fromInternal, (tab, id) => {
     const d = ownDownload(tab, id);
-    if (d && ['cancelled', 'interrupted'].includes(d.state) && isWeb(d.url)) userDownload(tab.w.private ? tab.w.ses : session.defaultSession, d.url);
+    if (d && ['cancelled', 'interrupted'].includes(d.state) && isWeb(d.url)) retryDownload(tab.w, d);
   });
   handle('download:clear', fromInternal, (tab) => {
-    store.data.downloads = store.data.downloads.filter(
-      (d) => d.state === 'progressing' || d.state === 'dangerous' || (d.private && !tab.w.private),
-    );
+    const keep = (d) => d.state === 'progressing' || d.state === 'dangerous' || (d.private && !tab.w.private);
+    store.data.downloads.filter((d) => !keep(d)).forEach(dropPartialDownload);
+    store.data.downloads = store.data.downloads.filter(keep);
     store.save();
     notifyDownloads(true);
   });
@@ -4274,7 +4369,8 @@ app.whenReady().then(() => {
     sendAll();
     rebuildMenuSoon(); // the Bookmarks menu lists them
   });
-  // Downloads still running when the app last quit can't be resumed.
+  // Downloads still running when the app last quit: Retry continues them if the partial file and
+  // the server's validators (ETag / Last-Modified) are still there (retryDownload).
   for (const d of store.data.downloads) if (d.state === 'progressing') d.state = 'interrupted';
   nextDownloadId = store.data.downloads.reduce((max, d) => Math.max(max, d.id), 0) + 1;
 
@@ -4595,6 +4691,7 @@ app.on('before-quit', (e) => {
     return;
   }
   if (store) {
+    keepPartialDownloads();
     saveSession(); // all windows are still open here, so this captures every one of them
     quitting = true;
     store.data.cleanExit = true;
