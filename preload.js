@@ -57,5 +57,9 @@ if (location.protocol === 'browser:' && window === window.top) {
     onFocusAddress: on('focus-address'),
     onFocusFind: on('focus-find'),
     onFocusAuth: on('focus-auth'),
+    onScreenPicker: on('screen-picker'),
+    chooseScreen: call('screen:choose'),
+    getDefaultBrowser: call('default:status'),
+    setDefaultBrowser: call('default:set'),
   });
 }

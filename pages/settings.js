@@ -159,3 +159,24 @@ document.getElementById('clear-go').addEventListener('click', async () => {
   });
   done.textContent = 'Done.';
 });
+
+// ---- Default browser
+
+async function refreshDefault() {
+  const { supported, isDefault } = await browserAPI.getDefaultBrowser();
+  const status = document.getElementById('default-status');
+  const btn = document.getElementById('default-set');
+  status.textContent = !supported
+    ? 'Only the installed app can be the default browser.'
+    : isDefault
+      ? 'Browser is your default browser.'
+      : 'Browser is not your default browser.';
+  btn.hidden = !supported || isDefault;
+}
+
+document.getElementById('default-set').addEventListener('click', async () => {
+  await browserAPI.setDefaultBrowser();
+  setTimeout(refreshDefault, 1500); // macOS asks for confirmation first
+});
+refreshDefault();
+window.addEventListener('focus', refreshDefault);

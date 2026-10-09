@@ -2,17 +2,20 @@
 
 const path = require('path');
 const fs = require('fs');
+const { pathToFileURL } = require('url');
 const {
   app,
   BaseWindow,
   WebContentsView,
   clipboard,
+  desktopCapturer,
   dialog,
   ipcMain,
   Menu,
   protocol,
   session,
   shell,
+  webContents,
 } = require('electron');
 const updater = require('./updater');
 const adblock = require('./adblock');
@@ -299,6 +302,7 @@ function createWindow({ private: isPrivate = false, session: saved = null, ses: 
     closedTabs: [], // most recent last
     overlay: false, // toolbar dropdown/popup open
     downloadWarnings: [], // ids of finished risky downloads awaiting Keep/Discard
+    screenPick: null, // pending screen-sharing request
     permissions: {}, // private windows only
     allowlist: new Set(), // private windows only: sites with ad blocking switched off
   };
@@ -402,6 +406,8 @@ function configureSession(ses) {
   ses.setPermissionRequestHandler(onPermissionRequest);
   ses.setPermissionCheckHandler(onPermissionCheck);
   ses.on('will-download', onWillDownload);
+  // macOS 15+ shows its own screen/window picker; elsewhere our picker in the toolbar view.
+  ses.setDisplayMediaRequestHandler(onDisplayMediaRequest, { useSystemPicker: true });
   adblock.attach(ses);
 }
 
@@ -910,9 +916,56 @@ function resolvePrompt(w, promptId, decision) {
 }
 
 function dismissPrompts(tab) {
+  if (tab.w.screenPick && tab.w.screenPick.tab === tab) resolveScreenPick(tab.w, tab.w.screenPick.id, null);
   if (tab.prompts.length === 0) return;
   for (const p of tab.prompts.splice(0)) for (const cb of p.callbacks) cb(false);
   if (tab.id === tab.w.activeId) layout(tab.w);
+}
+
+// ---------------------------------------------------------------- screen sharing
+
+let nextPickId = 1;
+
+async function onDisplayMediaRequest(request, callback) {
+  const wc = request.frame ? webContents.fromFrame(request.frame) : null;
+  const tab = tabOfWc(wc);
+  if (!tab || !request.videoRequested) return callback(null);
+  let sources;
+  try {
+    sources = await desktopCapturer.getSources({ types: ['screen', 'window'], thumbnailSize: { width: 320, height: 180 } });
+  } catch {
+    return callback(null);
+  }
+  const w = tab.w;
+  if (!liveWindow(w)) return callback(null);
+  if (w.screenPick) resolveScreenPick(w, w.screenPick.id, null); // one request at a time
+  w.screenPick = { id: nextPickId++, tab, callback, sources: new Map(sources.map((s) => [s.id, s])) };
+  selectTab(w, tab.id);
+  w.chromeView.webContents.send('screen-picker', {
+    id: w.screenPick.id,
+    site: siteOf(request.securityOrigin) || request.securityOrigin,
+    sources: sources.map((s) => ({
+      id: s.id,
+      name: s.name,
+      kind: s.id.startsWith('screen:') ? 'screen' : 'window',
+      thumbnail: s.thumbnail.isEmpty() ? '' : s.thumbnail.toDataURL(),
+    })),
+  });
+  w.win.focus();
+}
+
+// sourceId null = cancel (the page's getDisplayMedia() rejects)
+function resolveScreenPick(w, pickId, sourceId) {
+  const pick = w.screenPick;
+  if (!pick || pick.id !== pickId) return;
+  w.screenPick = null;
+  const source = sourceId ? pick.sources.get(sourceId) : null;
+  try {
+    pick.callback(source ? { video: source } : null);
+  } catch {
+    // the requesting frame went away
+  }
+  if (!w.chromeView.webContents.isDestroyed()) w.chromeView.webContents.send('screen-picker', null);
 }
 
 // ---------------------------------------------------------------- HTTP sign-in
@@ -1505,6 +1558,7 @@ function setupIpc() {
     layout(w);
   });
   handle('suggest', fromChrome, (_w, text) => suggestions(String(text || '')));
+  handle('screen:choose', fromChrome, (w, pickId, sourceId) => resolveScreenPick(w, pickId, sourceId ? String(sourceId) : null));
   handle('site:info', fromChrome, (w) => siteInfo(w));
   handle('site:set-permission', fromChrome, (w, origin, key, value) => {
     if (!PERM_LABELS[key] || !['allow', 'block', 'ask'].includes(value) || origin !== originOf(origin)) return;
@@ -1608,6 +1662,16 @@ function setupIpc() {
     if (!tab.w.private) store.save();
   });
 
+  handle('default:status', fromInternal, () => ({
+    supported: app.isPackaged,
+    isDefault: app.isDefaultProtocolClient('http') && app.isDefaultProtocolClient('https'),
+  }));
+  handle('default:set', fromInternal, () => {
+    if (!app.isPackaged) return false;
+    // Windows 10+ only lets the user change the default browser in Settings.
+    if (process.platform === 'win32') return shell.openExternal('ms-settings:defaultapps').then(() => false);
+    return app.setAsDefaultProtocolClient('http') && app.setAsDefaultProtocolClient('https');
+  });
   handle('data:clear-browsing', fromInternal, (tab, opts) => clearBrowsingData(tab.w, opts || {}));
   handle('data:history', fromInternal, () => store.data.history);
   handle('data:history-clear', fromInternal, () => {
@@ -1808,7 +1872,9 @@ protocol.registerSchemesAsPrivileged([{ scheme: SCHEME, privileges: { standard: 
 // One running copy: opening the app again focuses an existing window.
 const isPrimaryInstance = app.requestSingleInstanceLock();
 if (!isPrimaryInstance) app.quit();
-app.on('second-instance', () => {
+app.on('second-instance', (_e, argv) => {
+  const urls = argv.slice(1).map(urlFromArg).filter(Boolean);
+  if (urls.length && launched) return void urls.forEach(openFromOutside);
   const w = focusedWindow();
   if (!w) return void createWindow();
   if (w.win.isMinimized()) w.win.restore();
@@ -1848,7 +1914,45 @@ app.whenReady().then(() => {
   const restore = store.data.settings.restoreSession ? savedWindows() : [];
   if (restore.length) for (const s of restore) createWindow({ session: s });
   else createWindow();
+  launched = true;
+  for (const url of [...process.argv.slice(1).map(urlFromArg).filter(Boolean), ...pendingOpens.splice(0)]) {
+    openFromOutside(url);
+  }
   updater.start(sendAll);
+});
+
+// ---------------------------------------------------------------- links from other apps
+
+const pendingOpens = []; // links that arrive before the first window exists
+let launched = false;
+
+// A command-line argument that should open as a page (Windows/Linux pass links this way).
+function urlFromArg(arg) {
+  if (/^(https?|file):\/\//i.test(arg)) return arg;
+  if (!arg.startsWith('-') && /\.(html?|xhtml|svg|pdf|txt)$/i.test(arg) && fs.existsSync(arg)) {
+    return pathToFileURL(path.resolve(arg)).href;
+  }
+  return null;
+}
+
+function openFromOutside(url) {
+  if (!/^(https?|file):/i.test(url)) return;
+  if (!launched) return void pendingOpens.push(url);
+  const normal = windows.filter((o) => !o.private && liveWindow(o));
+  const w = normal.includes(lastFocused) ? lastFocused : normal[0] || createWindow({ empty: true });
+  createTab(w, url);
+  if (w.win.isMinimized()) w.win.restore();
+  w.win.focus();
+  if (isMac) app.focus({ steal: true });
+}
+
+app.on('open-url', (e, url) => {
+  e.preventDefault();
+  openFromOutside(url);
+});
+app.on('open-file', (e, file) => {
+  e.preventDefault();
+  openFromOutside(pathToFileURL(file).href);
 });
 
 // ---------------------------------------------------------------- updates

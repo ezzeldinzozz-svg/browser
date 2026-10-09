@@ -78,7 +78,28 @@
       ],
       "category": "Network"
     },
-    "publish": null
+    "publish": null,
+    "protocols": [
+      {
+        "name": "Web page",
+        "schemes": [
+          "http",
+          "https"
+        ],
+        "role": "Viewer"
+      }
+    ],
+    "fileAssociations": [
+      {
+        "ext": [
+          "html",
+          "htm",
+          "xhtml"
+        ],
+        "name": "HTML document",
+        "role": "Viewer"
+      }
+    ]
   },
   "dependencies": {
     "@ghostery/adblocker-electron": "2.18.2"

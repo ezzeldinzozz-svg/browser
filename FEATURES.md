@@ -23,10 +23,10 @@ Ordered by priority, then by what unblocks what.
 9. ~~Tab context menu~~ done in v0.5.0
 10. ~~Tab drag-to-reorder, audio indicator~~ done in v0.5.0
 11. ~~Dangerous download warning~~ done in v0.5.0 ("always ask where to save" still open)
-12. **P0** Open links from other apps / set as default browser (`open-url`, `second-instance` argv, protocol registration)
+12. ~~Open links from other apps / default browser~~ done in v0.5.0 (Windows registry registration still open)
 13. **P0** Bookmarks bar, bookmark folders, edit bookmark dialog, import from Chrome/Safari/Firefox (bookmarks + history)
 14. **P0** Windows/Linux builds tested, with their own updaters; macOS Developer ID signing + notarization
-15. **P0** Screen-sharing picker (`setDisplayMediaRequestHandler`) and camera/mic-in-use indicators
+15. ~~Screen-sharing picker~~ done in v0.5.0; **P0** camera/mic-in-use indicators still open
 
 ---
 
@@ -186,7 +186,9 @@ Ordered by priority, then by what unblocks what.
 
 - [x] HTML5 video full screen (tab view takes over the window)
 - [x] Camera/mic permission prompts with macOS usage strings (Info.plist)
-- [ ] **P0** Screen-sharing picker (`session.setDisplayMediaRequestHandler` + `desktopCapturer`, screens/windows/tabs, system audio)
+- [x] Screen-sharing picker: macOS 15+ system picker; elsewhere our picker of screens/windows with thumbnails
+- [ ] **P1** Share a single tab, system audio (Windows loopback)
+- [ ] **P0** Camera / microphone / screen-sharing in-use indicators on tabs
 - [ ] **P0** Camera / mic / screen-share in-use indicator on the tab and in the address bar, with a stop button
 - [ ] **P1** Picture-in-picture: verify the video PiP button and `requestPictureInPicture()` work; add a context-menu/toolbar entry
 - [ ] **P1** Autoplay policy setting (block audible autoplay by default, per-site allow)
@@ -237,7 +239,7 @@ Ordered by priority, then by what unblocks what.
 ## 13. Settings
 
 - [x] Settings page (Cmd/Ctrl+,) with "reopen tabs from last time" and site permissions
-- [ ] **P0** Make this my default browser button + status (`app.setAsDefaultProtocolClient('http'/'https')`, plus macOS/Windows file and URL associations)
+- [x] Make this my default browser button + status in Settings (macOS confirms; Windows opens Default apps settings)
 - [x] Search engine setting
 - [ ] **P0** Privacy & security section (clear data, cookies, tracker blocking level, HTTPS-only, DoH, safe browsing)
 - [ ] **P0** On startup: new tab / continue where you left off / specific pages
@@ -303,9 +305,11 @@ Ordered by priority, then by what unblocks what.
 
 - [x] macOS app menu (About, Services, Hide, Quit), standard Edit menu, keyboard shortcuts per platform
 - [x] Dock / taskbar download progress
-- [ ] **P0** Open links from other apps: handle `open-url` (macOS) and URL args in `second-instance`/launch argv (Windows/Linux)
-- [ ] **P0** Register as default browser candidate: `CFBundleURLTypes` (http/https) + HTML document types in Info.plist, Windows registry `RegisteredApplications`/ProgId, Linux `.desktop` with `x-scheme-handler`
-- [ ] **P0** Open local files (drag a .html/.pdf onto the window or Dock icon, `open-file` event)
+- [x] Open links from other apps: `open-url` (macOS) and URL args at launch / in `second-instance` (Windows/Linux); opens a tab in the last normal window
+- [x] macOS: registered as a browser candidate (`CFBundleURLTypes` http/https, HTML document types)
+- [ ] **P0** Windows registry `RegisteredApplications`/ProgId and Linux `.desktop` `x-scheme-handler` (verify with real builds)
+- [x] Open local HTML files from Finder / the Dock icon (`open-file`)
+- [ ] **P1** Drag a file onto the window to open it
 - [ ] **P1** Drag & drop: URLs/text onto the tab strip or address bar to open; drag links/images out of pages; drag files into upload fields (verify)
 - [x] Dock menu (macOS): New Window, New Private Window
 - [ ] **P1** Jump List (Windows) with the same items

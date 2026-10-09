@@ -248,7 +248,7 @@ $('star').addEventListener('click', () => api.toggleBookmark());
 
 let overlayOpen = false;
 function setOverlay() {
-  const open = !$('suggest').hidden || !$('sitepopup').hidden;
+  const open = !$('suggest').hidden || !$('sitepopup').hidden || !$('screenpicker').hidden;
   if (open !== overlayOpen) {
     overlayOpen = open;
     api.setOverlay(open);
@@ -505,4 +505,54 @@ $('site').addEventListener('click', () => ($('sitepopup').hidden ? openSitePopup
 $('backdrop').addEventListener('mousedown', closeSitePopup);
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && !$('sitepopup').hidden) closeSitePopup();
+});
+
+// ---- screen-sharing picker (Windows/Linux; macOS 15+ uses the system picker)
+
+let screenPick = null;
+let screenChoice = null;
+
+function closeScreenPicker(sourceId) {
+  if (screenPick) api.chooseScreen(screenPick.id, sourceId);
+  screenPick = null;
+  $('screenpicker').hidden = true;
+  setOverlay();
+}
+
+api.onScreenPicker((pick) => {
+  screenPick = pick;
+  screenChoice = null;
+  if (!pick) {
+    $('screenpicker').hidden = true;
+    return setOverlay();
+  }
+  $('sp-title').textContent = `Choose what to share with ${pick.site}`;
+  const grid = $('sp-grid');
+  grid.textContent = '';
+  for (const s of pick.sources) {
+    const item = el('div', 'sp-item');
+    if (s.thumbnail) {
+      const img = document.createElement('img');
+      img.src = s.thumbnail;
+      item.append(img);
+    } else {
+      item.append(el('div', 'ph'));
+    }
+    item.append(el('div', 'nm', s.kind === 'screen' ? `Screen: ${s.name}` : s.name));
+    item.addEventListener('click', () => {
+      screenChoice = s.id;
+      for (const x of grid.children) x.classList.toggle('sel', x === item);
+      $('sp-share').disabled = false;
+    });
+    item.addEventListener('dblclick', () => closeScreenPicker(s.id));
+    grid.append(item);
+  }
+  $('sp-share').disabled = true;
+  $('screenpicker').hidden = false;
+  setOverlay();
+});
+$('sp-cancel').addEventListener('click', () => closeScreenPicker(null));
+$('sp-share').addEventListener('click', () => screenChoice && closeScreenPicker(screenChoice));
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && screenPick) closeScreenPicker(null);
 });
