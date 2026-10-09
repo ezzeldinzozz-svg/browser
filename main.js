@@ -129,6 +129,8 @@ const GROUP_COLORS = { violet: '#9b6cff', blue: '#4f8cff', emerald: '#2fb67c', a
 const TOOLBAR_BUTTON_DEFAULTS = {
   home: false,
   shield: true,
+  reader: false,
+  media: true,
   star: true,
   split: false,
   screenshot: false,
@@ -143,6 +145,8 @@ const TOOLBAR_BUTTON_DEFAULTS = {
 const TOOLBAR_BUTTON_LABELS = {
   home: 'Home Button',
   shield: 'Ad & Tracker Shield',
+  reader: 'Reader Mode',
+  media: 'Media Controls',
   star: 'Bookmark Star',
   split: 'Split View',
   screenshot: 'Take Screenshot',

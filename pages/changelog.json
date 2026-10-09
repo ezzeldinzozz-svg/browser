@@ -1,6 +1,8 @@
 {
   "_comment": "Shown on browser://whatsnew after an update. Add user-visible changes to \"next\" as they land; `npm run release` renames \"next\" to the version it releases (and refuses to release without notes).",
-  "next": [],
+  "next": [
+    "Reader Mode toolbar icon is now off by default, and both Reader Mode and Media Controls can be toggled on or off in Toolbar Customization"
+  ],
   "0.21.0": [
     "Calculator, unit conversions (\"10 km in miles\") and quick actions (\"settings\", \"clear history\") in the address bar",
     "Tab groups (named, colored, collapsible) and workspaces to organize your tabs",

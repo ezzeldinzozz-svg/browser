@@ -348,7 +348,7 @@ function render(state) {
   $('reload').classList.toggle('loading', !!(active && active.loading));
   $('reload').title = active && active.loading ? 'Stop' : 'Reload';
   lastMedia = state.media || [];
-  $('media').hidden = lastMedia.length === 0;
+  $('media').hidden = lastMedia.length === 0 || tb.media === false;
   $('media').classList.toggle('on', lastMedia.some((m) => m.playing));
   if (!$('sitepopup').hidden && $('sitepopup').classList.contains('media')) renderMediaPopup();
   if (state.profile) {
@@ -357,7 +357,7 @@ function render(state) {
     $('profile').title = `Profile: ${state.profile.name}`;
     $('profile').ariaLabel = `Profile ${state.profile.name}. Switch or add profiles`;
   }
-  $('reader').hidden = !state.reader;
+  $('reader').hidden = !state.reader || !tb.reader;
   $('reader').classList.toggle('on', state.reader === 'on');
   $('reader').title = state.reader === 'on' ? 'Leave reader mode' : 'Reader mode';
   $('star').hidden = tb.star === false;
