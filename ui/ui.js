@@ -141,7 +141,22 @@ api.onGroupRename((groupId) => {
   chip.replaceWith(merged);
 });
 
-$('workspace').addEventListener('click', () => api.workspaceMenu());
+function renderPageFrames(frames) {
+  const container = $('page-frames');
+  if (!container) return;
+  container.textContent = '';
+  if (!frames || !frames.length) return;
+  for (const f of frames) {
+    const el = document.createElement('div');
+    el.className = 'page-frame';
+    el.style.left = `${f.x}px`;
+    el.style.top = `${f.y}px`;
+    el.style.width = `${f.width}px`;
+    el.style.height = `${f.height}px`;
+    container.append(el);
+  }
+}
+if (api.onPageFrames) api.onPageFrames(renderPageFrames);
 
 function renderTab(t, isActive, groupColor) {
   const el = document.createElement('div');
@@ -321,14 +336,7 @@ function render(state) {
       toggleBtn.ariaLabel = toggleBtn.title;
     }
   }
-  const ws = state.workspace;
-  const wsBtn = $('workspace');
-  if (ws && (ws.list.length > 1 || ws.current !== 'Default')) {
-    wsBtn.hidden = false;
-    $('workspace-name').textContent = ws.current;
-  } else {
-    wsBtn.hidden = true;
-  }
+  if (state.pageFrames) renderPageFrames(state.pageFrames);
   // extension buttons follow the active tab; private windows have no extensions
   const ext = $('extensions');
   ext.hidden = state.private;

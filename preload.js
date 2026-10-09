@@ -175,6 +175,7 @@ if (location.protocol === 'browser:' && window === window.top) {
     toolbarMenu: call('toolbar:menu'),
     toggleSidebarCollapse: call('sidebar:toggle-collapse'),
     tabstripMenu: call('tabstrip:menu'),
+    onPageFrames: on('page:frames'),
   });
 }
 

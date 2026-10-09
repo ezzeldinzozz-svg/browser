@@ -647,6 +647,16 @@ browser-action-list::part(badge) { font-size: 9px; }
   }
 }
 
+/* ---------------------------------------------------------------- page frames (browser view borders) */
+
+#page-frames { position: fixed; inset: 0; pointer-events: none; z-index: 1; }
+.page-frame {
+  position: fixed;
+  pointer-events: none;
+  border-radius: 12px;
+  box-shadow: 0 0 0 1.5px var(--line-strong), 0 8px 24px -8px rgba(0, 0, 0, 0.32);
+}
+
 /* ---------------------------------------------------------------- compact mode & vertical tabs */
 
 body.compact #tabstrip { height: 32px; }
@@ -657,59 +667,55 @@ body.compact #address { height: 28px; font-size: 13px; }
 body.compact #site { top: 2px; }
 body.compact #toolbar #zoom, body.compact #toolbar #capture { top: 3px; }
 
+/* In vertical mode, the top toolbar spans the entire width forming one unified container with the sidebar */
+body.vertical #toolbar {
+  position: relative;
+  margin-left: 0;
+  width: 100%;
+  height: 42px;
+  padding: 0 8px 4px;
+  -webkit-app-region: drag;
+}
+body.mac.vertical:not(.fullscreen) #toolbar { padding-left: 82px; }
+body.compact.vertical #toolbar { height: 36px; padding-bottom: 2px; }
+body.vertical #toolbar > *, body.vertical #toolbar #omnibox { -webkit-app-region: no-drag; }
+body.vertical #sidebar-toggle { display: flex; }
+
 body.vertical #tabstrip {
-  position: fixed; left: 0; top: 0; bottom: 0; width: 200px; height: auto;
-  flex-direction: column; align-items: stretch; padding: 8px 6px;
-  border-right: 1px solid var(--line); z-index: 20;
+  position: fixed; left: 0; top: 42px; bottom: 0; width: 200px; height: auto;
+  flex-direction: column; align-items: stretch; padding: 4px 8px 8px;
+  border-right: none; background: var(--canvas); z-index: 4;
   transition: width 0.14s ease, box-shadow 0.14s ease;
+  -webkit-app-region: no-drag;
 }
-body.mac.vertical:not(.fullscreen) #tabstrip { padding-left: 6px; padding-top: 38px; }
-body.vertical #sidebar-head {
-  display: flex; align-items: center; gap: 6px; width: 100%; margin-bottom: 2px; flex: none;
-}
-body.vertical #sidebar-toggle {
-  display: flex; align-items: center; justify-content: center;
-  width: 28px; height: 28px; flex: none; border-radius: 8px; color: var(--fg-dim);
-}
-body.vertical #sidebar-toggle:hover { background: var(--surface-hover); color: var(--fg); }
-body.vertical #workspace { flex: 1; min-width: 0; justify-content: center; }
-body.vertical #tablist { flex-direction: column; overflow-x: hidden; overflow-y: auto; flex: 1 1 auto; min-height: 0; gap: 2px; width: 100%; }
+body.compact.vertical #tabstrip { top: 36px; }
+body.mac.vertical:not(.fullscreen) #tabstrip { padding-top: 4px; }
+body.vertical #tablist { flex-direction: column; overflow-x: hidden; overflow-y: auto; flex: 1 1 auto; min-height: 0; gap: 2px; width: 100%; padding: 0; }
 body.vertical.newtab-under #tablist { flex: 0 1 auto; }
-body.vertical .tab { flex: none; width: 100%; }
+body.vertical .tab { flex: none; width: 100%; height: 32px; padding: 0 8px; }
 body.vertical .tab .letter { display: block; }
-body.vertical .tab.pinned { width: 100%; justify-content: flex-start; padding: 0 5px 0 10px; }
+body.vertical .tab.pinned { width: 100%; justify-content: flex-start; padding: 0 8px; }
 body.vertical .tab.pinned .audio { position: static; margin: 0; width: 20px; height: 20px; }
 body.vertical .tab.drop-before { box-shadow: inset 0 2px 0 var(--violet); }
 body.vertical .tab.drop-after { box-shadow: inset 0 -2px 0 var(--violet); }
 body.vertical #newtab {
-  width: 100%; height: 30px; justify-content: flex-start; gap: 7px; padding: 0 10px;
-  border-radius: 10px; font-size: 12.5px; flex: none;
+  width: 100%; height: 32px; justify-content: flex-start; gap: 7px; padding: 0 8px;
+  border-radius: 10px; font-size: 12.5px; flex: none; margin-top: 2px;
 }
 body.vertical .newtab-label { display: inline; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-body.vertical #toolbar, body.vertical #bmbar { margin-left: 200px; }
+body.vertical #bmbar { margin-left: 200px; }
 body.vertical #prompt, body.vertical #dlwarn, body.vertical #restorebar, body.vertical #authbar, body.vertical #findbar { margin-left: 208px; }
 
 /* Collapsed vertical sidebar (icons-only, expands on hover when enabled) */
-body.vertical.collapsed #toolbar, body.vertical.collapsed #bmbar { margin-left: 48px; }
-body.mac.vertical.collapsed:not(.fullscreen) #toolbar { padding-left: 34px; }
-body.vertical.collapsed #prompt, body.vertical.collapsed #dlwarn, body.vertical.collapsed #restorebar, body.vertical.collapsed #authbar, body.vertical.collapsed #findbar { margin-left: 56px; }
+body.vertical.collapsed #bmbar { margin-left: 52px; }
+body.vertical.collapsed #prompt, body.vertical.collapsed #dlwarn, body.vertical.collapsed #restorebar, body.vertical.collapsed #authbar, body.vertical.collapsed #findbar { margin-left: 60px; }
 body.vertical.collapsed:not(.sidebar-hover) #tabstrip {
-  width: 48px; padding-left: 6px; padding-right: 6px; align-items: center;
+  width: 52px; padding: 4px 8px 8px; align-items: center; border-right: none;
 }
-body.vertical.collapsed:not(.sidebar-hover) #sidebar-head {
-  flex-direction: column; align-items: center; gap: 4px;
-}
-body.vertical.collapsed:not(.sidebar-hover) #sidebar-toggle { width: 36px; height: 30px; }
-body.vertical.collapsed:not(.sidebar-hover) #workspace {
-  width: 36px; padding: 0; justify-content: center;
-}
-body.vertical.collapsed:not(.sidebar-hover) #workspace-name {
-  max-width: 1ch; overflow: hidden; text-overflow: clip; white-space: nowrap;
-}
-body.vertical.collapsed:not(.sidebar-hover) #tablist { align-items: center; padding: 2px 0; }
+body.vertical.collapsed:not(.sidebar-hover) #tablist { align-items: center; padding: 0; }
 body.vertical.collapsed:not(.sidebar-hover) .tab,
 body.vertical.collapsed:not(.sidebar-hover) .tab.pinned {
-  width: 36px; height: 34px; min-width: 36px; padding: 0; justify-content: center;
+  width: 36px; height: 36px; min-width: 36px; padding: 0; justify-content: center;
 }
 body.vertical.collapsed:not(.sidebar-hover) .tab .title,
 body.vertical.collapsed:not(.sidebar-hover) .tab .close,
@@ -730,10 +736,12 @@ body.vertical.collapsed:not(.sidebar-hover) .tab .rec {
   position: absolute; right: 3px; top: 3px; width: 7px; height: 7px;
 }
 body.vertical.collapsed:not(.sidebar-hover) #newtab {
-  width: 36px; height: 34px; padding: 0; justify-content: center;
+  width: 36px; height: 36px; padding: 0; justify-content: center;
 }
 body.vertical.collapsed.sidebar-hover #tabstrip {
-  width: 200px; box-shadow: var(--shadow); border-right-color: var(--line-strong);
+  width: 200px; background: var(--canvas);
+  border: 1px solid var(--line-strong); border-left: none;
+  border-radius: 0 14px 14px 0; box-shadow: var(--shadow); z-index: 30;
 }
 
 /* ---------------------------------------------------------------- workspaces, tab groups, split badge, tab preview */

@@ -57,7 +57,7 @@ const COMPACT_CHROME_H = 68; // compact tab strip (32) + compact toolbar (36)
 const TOOLBAR_ONLY_H = 42;
 const COMPACT_TOOLBAR_ONLY_H = 36;
 const SIDEBAR_W = 200; // vertical tabs sidebar width
-const SIDEBAR_COLLAPSED_W = 48; // collapsed (icons-only) vertical tabs sidebar width
+const SIDEBAR_COLLAPSED_W = 52; // collapsed (icons-only) vertical tabs sidebar width
 // Pages sit in a rounded card inset from the window edge (matches the brand's card look).
 const PAGE_INSET = 8;
 const PAGE_RADIUS = 12;
@@ -744,6 +744,7 @@ function sendTabs(w) {
       verticalNewTabUnderTabs: store.data.settings.verticalNewTabUnderTabs !== false,
       toolbarButtons: toolbarButtonsState(),
     },
+    pageFrames: pageFrames(w),
     tabs: shownTabs.map((t) => {
       const pendingEntry = t.pending && t.pending.entries[t.pending.index];
       const url = pendingEntry ? pendingEntry.url : t.wc.getURL();
@@ -904,14 +905,36 @@ function stopCapture(tab) {
   }
 }
 
+function pageFrames(w) {
+  if (!liveWindow(w)) return [];
+  const [width, height] = w.win.getContentSize();
+  const top = chromeHeight(w);
+  if (top <= 0) return [];
+  const left = sidebarWidth(w);
+  const inset = PAGE_INSET;
+  const x0 = left > 0 ? left : inset;
+  const availW = Math.max(0, width - x0 - inset);
+  const availH = Math.max(0, height - top - inset);
+  const splitTab = w.splitId && w.splitId !== w.activeId && !(activeTab(w) && activeTab(w).fullscreen) ? getTab(w, w.splitId) : null;
+  const pair = splitTab ? (w.splitOrder && w.splitOrder.includes(w.activeId) && w.splitOrder.includes(w.splitId) ? w.splitOrder : [w.activeId, w.splitId]) : null;
+  const halfW = splitTab ? Math.max(0, Math.floor((availW - PAGE_INSET) / 2)) : availW;
+  if (pair) {
+    return [
+      { x: x0, y: top, width: halfW, height: availH },
+      { x: x0 + halfW + PAGE_INSET, y: top, width: Math.max(0, availW - halfW - PAGE_INSET), height: availH },
+    ];
+  }
+  return [{ x: x0, y: top, width: availW, height: availH }];
+}
+
 function layout(w) {
   if (!liveWindow(w)) return;
   const [width, height] = w.win.getContentSize();
   const top = chromeHeight(w);
   const left = sidebarWidth(w);
   w.chromeView.setVisible(top > 0);
-  // While a dropdown/popup is open, or when vertical tabs are on, the toolbar view covers the whole window.
-  w.chromeView.setBounds({ x: 0, y: 0, width, height: (w.overlay || left > 0) && top ? height : top || CHROME_H });
+  // The unified shell view covers the whole window behind the page card so the outer frame and page border render seamlessly.
+  w.chromeView.setBounds({ x: 0, y: 0, width, height: top > 0 ? height : 0 });
   const inset = top > 0 ? PAGE_INSET : 0; // a page in fullscreen fills the window
   const x0 = left > 0 ? left : inset;
   const availW = Math.max(0, width - x0 - inset);
@@ -930,6 +953,9 @@ function layout(w) {
       t.view.setBounds({ x: x0, y: top, width: availW, height: availH });
     }
     t.view.setBorderRadius(inset ? PAGE_RADIUS : 0);
+  }
+  if (!w.chromeView.webContents.isDestroyed()) {
+    w.chromeView.webContents.send('page:frames', pageFrames(w));
   }
   if (!w.overlay && top > 0) {
     for (const t of w.tabs) {
