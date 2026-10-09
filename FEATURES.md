@@ -168,7 +168,8 @@ Ordered by priority, then by what unblocks what.
 - [x] Per-site permission prompts (camera, mic, location, notifications, clipboard, MIDI, external apps), remembered per site; everything else denied
 - [x] Site permissions list with reset in Settings
 - [x] Built-in ad & tracker blocking (`@ghostery/adblocker-electron`, EasyList/EasyPrivacy, weekly list refresh), toolbar shield with blocked count and per-site off switch, global switch in Settings
-- [ ] **P1** Shield popup with details (what was blocked, cookie-banner blocking level)
+- [x] **P1** Shield popup with details (blocked count, which hosts, per-site switch)
+- [ ] **P2** Cookie-banner blocking level in the shield popup
 - [x] Site info popup (click lock): connection status, certificate issuer/expiry, per-site permissions (Ask/Allow/Block), ad blocking switch, clear cookies and site data
 - [ ] **P2** List of cookies in use per site
 - [x] Permission defaults per type (Ask/Block for all sites) and add/edit per-site exceptions in Settings

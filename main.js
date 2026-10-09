@@ -914,6 +914,7 @@ function createTab(w, url, { background = false, after = null, history = null, l
     favicon: '', // data: URL shown in the tab strip
     faviconSrc: '', // the page's icon URL being fetched
     prompts: [], // pending permission requests
+    blockedHosts: new Map(), // host -> requests blocked on this page (shield popup)
     pageDownloads: 0, // downloads started since the user last clicked or typed in the page
     auth: [], // pending HTTP sign-in requests
     find: { open: false, text: '', active: 0, matches: 0 },
@@ -970,6 +971,7 @@ function createTab(w, url, { background = false, after = null, history = null, l
   wc.on('did-start-navigation', (details) => {
     if (details.isMainFrame && !details.isSameDocument) {
       tab.blocked = 0;
+      tab.blockedHosts.clear();
       tab.readerable = false;
     }
   });
@@ -2090,10 +2092,17 @@ function shouldBlock(webContentsId) {
 
 let blockedNotifyTimer = null;
 
-function onBlocked(webContentsId) {
+function onBlocked(webContentsId, url) {
   const tab = allTabs().find((t) => !t.wc.isDestroyed() && t.wc.id === webContentsId);
   if (!tab) return;
   tab.blocked++;
+  let host = '';
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    // not a URL we can name
+  }
+  if (host) tab.blockedHosts.set(host, (tab.blockedHosts.get(host) || 0) + 1);
   if (tab.id !== tab.w.activeId || blockedNotifyTimer) return;
   blockedNotifyTimer = setTimeout(() => {
     blockedNotifyTimer = null;
@@ -3046,6 +3055,19 @@ function setupIpc() {
   handle('about:check', fromInternal, () => updater.check());
   handle('about:install', fromInternal, () => restartToUpdate());
   handle('adblock:toggle-site', fromChrome, (w) => toggleSiteBlocking(w));
+  handle('adblock:details', fromChrome, (w) => {
+    const tab = activeTab(w);
+    const site = tab && siteOf(tab.wc.getURL());
+    if (!tab || !site) return null;
+    return {
+      site,
+      available: store.data.settings.adblock,
+      on: blockingOnFor(w, site),
+      blocked: tab.blocked,
+      hosts: [...tab.blockedHosts].sort((a, b) => b[1] - a[1]).slice(0, 40),
+      more: Math.max(0, tab.blockedHosts.size - 40),
+    };
+  });
 
   handle('data:downloads', fromInternal, (tab) => visibleDownloads(tab.w));
   const ownDownload = (tab, id) => visibleDownloads(tab.w).find((d) => d.id === id);

@@ -137,8 +137,8 @@ function render(state) {
   $('shield').classList.toggle('off', !shield.on);
   $('shield-count').textContent = shield.on && shield.blocked ? String(shield.blocked) : '';
   $('shield').title = shield.on
-    ? `Blocked ${shield.blocked} ads and trackers on ${shield.site}. Click to turn off for this site.`
-    : `Ad blocking is off for ${shield.site}. Click to turn it on.`;
+    ? `Blocked ${shield.blocked} ads and trackers on ${shield.site}. Click for details.`
+    : `Ad blocking is off for ${shield.site}. Click for details.`;
 
   const focusedTab = tablist.contains(document.activeElement) ? document.activeElement.dataset.id : null;
   tablist.textContent = '';
@@ -248,7 +248,8 @@ $('find-next').addEventListener('click', () => api.find(findInput.value, { forwa
 $('find-prev').addEventListener('click', () => api.find(findInput.value, { forward: false }));
 $('find-close').addEventListener('click', () => api.closeFind());
 $('update').addEventListener('click', () => api.installUpdate());
-$('shield').addEventListener('click', () => api.toggleSiteBlocking());
+$('shield').addEventListener('mousedown', (e) => e.preventDefault());
+$('shield').addEventListener('click', () => ($('sitepopup').hidden ? openShieldPopup() : closeSitePopup()));
 
 let currentAuth = null;
 api.onFocusAuth(() => $('auth-user').focus());
@@ -513,6 +514,7 @@ async function openSitePopup() {
   if (!info) return;
   const pop = $('sitepopup');
   pop.textContent = '';
+  pop.classList.remove('right');
   if (info.kind !== 'web') {
     pop.append(el('h3', '', info.title), el('div', 'line', "This is one of the browser's own pages."));
   } else {
@@ -567,6 +569,43 @@ async function openSitePopup() {
     data.append(clear);
     if (info.private) data.append(el('div', 'note', 'Changes here last until this private window closes.'));
     pop.append(data);
+  }
+  pop.hidden = false;
+  $('backdrop').hidden = false;
+  setOverlay();
+}
+
+// Shield: what was blocked on this page, and the switch for the site.
+async function openShieldPopup() {
+  const info = await api.adblockDetails();
+  if (!info) return;
+  const pop = $('sitepopup');
+  pop.textContent = '';
+  pop.classList.add('right');
+  pop.append(el('h3', '', info.site));
+  if (!info.available) {
+    pop.append(el('div', 'line', 'Ad and tracker blocking is turned off in Settings.'));
+  } else {
+    pop.append(el('div', 'line', info.on ? `Blocked ${info.blocked} ad and tracker request${info.blocked === 1 ? '' : 's'} on this page` : 'Blocking is off for this site'));
+    if (info.on && info.hosts.length) {
+      const list = el('div', 'sec blocked-list');
+      list.append(el('div', 'sec-title', 'Blocked from'));
+      for (const [host, count] of info.hosts) {
+        const row = el('div', 'perm');
+        row.append(el('span', 'host', host), el('span', 'count', String(count)));
+        list.append(row);
+      }
+      if (info.more) list.append(el('div', 'note', `and ${info.more} more`));
+      pop.append(list);
+    }
+    const sec = el('div', 'sec');
+    const btn = el('button', 'btn', info.on ? `Turn off for ${info.site}` : `Turn on for ${info.site}`);
+    btn.addEventListener('click', () => {
+      api.toggleSiteBlocking();
+      closeSitePopup();
+    });
+    sec.append(btn, el('div', 'note', info.on ? 'Turn off if the site doesn\u2019t work right. The page reloads.' : 'The page reloads.'));
+    pop.append(sec);
   }
   pop.hidden = false;
   $('backdrop').hidden = false;

@@ -17,7 +17,7 @@ const REFRESH_EVERY_MS = 7 * 24 * 60 * 60 * 1000;
 let engine = null;
 let cacheFile = '';
 // shouldBlock(webContentsId) -> boolean: is blocking on for the page in that tab?
-// onBlocked(webContentsId): a request was blocked in that tab.
+// onBlocked(webContentsId, url): a request was blocked in that tab.
 // beforeRequest(details) -> { redirectURL } | null: runs first for every request (Electron
 // allows one onBeforeRequest listener per session, so other features hook in here).
 let hooks = { shouldBlock: () => false, onBlocked: () => {}, beforeRequest: () => null };
@@ -76,11 +76,11 @@ function attach(ses) {
     if (request.isMainFrame()) return callback({});
     const { redirect, match } = engine.match(request);
     if (redirect) {
-      hooks.onBlocked(details.webContentsId);
+      hooks.onBlocked(details.webContentsId, details.url);
       return callback({ redirectURL: redirect.dataUrl });
     }
     if (match) {
-      hooks.onBlocked(details.webContentsId);
+      hooks.onBlocked(details.webContentsId, details.url);
       return callback({ cancel: true });
     }
     return callback({});
