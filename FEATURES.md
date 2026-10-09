@@ -85,12 +85,12 @@ Ordered by priority, then by what unblocks what.
 - [ ] **P1** Search engine choice in onboarding; custom engines
 - [x] Security indicator: lock for https, "Not secure" for http (certificate failures already stop the page)
 - [x] Show URL without noise when unfocused (hide `https://`, `www.`), full URL on focus; site highlighted (anti-spoofing)
-- [ ] **P1** Search suggestions from the chosen engine (opt-in for privacy)
+- [x] **P1** Search suggestions from the chosen engine (opt-in for privacy)
 - [x] "Switch to tab" suggestions for already-open tabs
 - [ ] **P1** Keyword search / site search shortcuts (`w wikipedia`, Tab-to-search), custom search engines (OpenSearch discovery)
 - [x] Paste and Go / Paste and Search in the address bar menu
 - [x] Delete a single history suggestion (Shift+Delete), including an inline completion
-- [ ] **P1** IDN homograph protection (show punycode for mixed-script domains)
+- [x] **P1** IDN homograph protection (show punycode for mixed-script domains)
 - [ ] **P2** Calculator / unit conversion / quick answers in suggestions
 - [ ] **P2** Command bar actions (Arc/Chrome: "clear history", "settings" as suggestions)
 
@@ -121,7 +121,7 @@ Ordered by priority, then by what unblocks what.
 - [x] Clear browsing data (Settings, Cmd/Ctrl+Shift+Backspace): time range × history, download list, cookies & site data, cache (cookies/cache always all time: Electron limit)
 - [ ] **P2** Clear site permissions from the same dialog
 - [x] Grouped by day with date headers; "Show more" for older entries
-- [ ] **P1** History menu shows recently closed tabs and recently visited pages
+- [x] **P1** History menu shows recently closed tabs and recently visited pages
 - [ ] **P1** Full-text indexed search (needs SQLite)
 - [ ] **P2** Auto-delete history older than N days; "clear on quit" option
 
@@ -139,7 +139,7 @@ Ordered by priority, then by what unblocks what.
 - [ ] **P2** Resume interrupted downloads from where they stopped (`session.createInterruptedDownload`)
 - [x] Remove a single entry from the downloads list
 - [ ] **P2** Delete the file from disk; drag a finished download into another app
-- [ ] **P1** Block downloads from insecure (http) origins on https pages (mixed-content downloads)
+- [x] **P1** Block downloads from insecure (http) origins on https pages (mixed-content downloads)
 - [ ] **P1** Multiple-automatic-downloads permission prompt
 - [ ] **P2** Malware reputation check for downloads (Web Risk API) *(Electron limit: no free Google Safe Browsing)*
 
@@ -152,7 +152,7 @@ Ordered by priority, then by what unblocks what.
 - [ ] **P1** Strong password generator on sign-up fields
 - [ ] **P1** Compatibility with 1Password/Bitwarden desktop apps (they need a supported browser or extension) *(Electron limit)*
 - [ ] **P1** Address & contact form autofill
-- [ ] **P1** Proxy authentication (today proxy auth is cancelled)
+- [x] **P1** Proxy authentication (today proxy auth is cancelled)
 - [ ] **P2** Payment card autofill (encrypted, CVC never stored)
 - [ ] **P2** Breached/reused/weak password checks
 - [ ] **P2** Client certificate selection (`select-client-certificate`)

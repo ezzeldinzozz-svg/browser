@@ -16,6 +16,11 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 - Tabs, address bar (URL or search with the chosen engine: DuckDuckGo default, Google, Bing, Brave, Ecosia, Kagi, Startpage), back/forward/reload/stop, keyboard shortcuts
 - Tab strip: drag to reorder, pinned tabs (kept left, restored), audio indicator with click-to-mute, right-click menu (new tab to the right, reload, duplicate, pin, mute, move to new window, close / others / to the right, reopen closed)
 - Bookmarks, history, downloads page, find in page, new-tab page, settings page
+- Search suggestions (opt-in, `searchSuggestions`): `searchSuggestions()` fetches the engine's OpenSearch suggest URL from a separate in-memory session without cookies, never in private windows; the UI adds them asynchronously (`suggest:search`) below the typed row and opens them with `nav:search`
+- International domains: `readableHost()` shows punycode hosts in Unicode only when `idnLooksSafe()` passes (no mixed scripts except Latin+CJK combos, no all-Cyrillic Latin lookalikes)
+- History menu lists the focused window's recently closed tabs and the last 10 visited pages (`recentMenuItems`, rebuilt via `rebuildMenuSoon()`)
+- Downloads: an http download started from an https page is blocked with a "Download Anyway" dialog (`isInsecureDownload`)
+- Proxy sign-in uses the same sign-in bar as HTTP auth ("Sign in to proxy host")
 - HTTPS-Only: `adblock.js` exposes a `beforeRequest` hook (Electron allows one onBeforeRequest per session); `upgradeToHttps` rewrites main-frame http:// to https:// and remembers it on the tab, so a failed upgrade shows `browser://error?desc=https-only` with "Continue to site" (session-only exception)
 - Memory saver: background tabs past the idle limit are put to sleep like restored tabs (`tab.pending` + about:blank); task manager at `browser://tasks` (`app.getAppMetrics` mapped to tabs/extensions)
 - Languages: `applyLanguages()` sets Accept-Language (via `setUserAgent`) and spellcheck per session
@@ -59,7 +64,6 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 
 **Known issues**
 - Notification permission reads as "denied" (not "default") until a site is allowed/blocked, so some sites hide their "enable notifications" button
-- Proxy sign-in not supported (proxy auth requests are cancelled)
 - Restored tabs may show pages from cache (same as Chrome), including pages that needed a sign-in
 - Popups that need `window.opener` (some OAuth logins) open as plain tabs
 - Google sign-in may block Electron despite the Chrome user agent

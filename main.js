@@ -3,7 +3,7 @@
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { pathToFileURL } = require('url');
+const { pathToFileURL, domainToUnicode } = require('url');
 const {
   app,
   BaseWindow,
@@ -66,13 +66,13 @@ const MIME = {
 const FAVICON_MAX_BYTES = 256 * 1024;
 const SESSION_ENTRY_LIMIT = 50; // back/forward entries kept per tab
 const SEARCH_ENGINES = {
-  duckduckgo: { name: 'DuckDuckGo', url: 'https://duckduckgo.com/?q=%s' },
-  google: { name: 'Google', url: 'https://www.google.com/search?q=%s' },
-  bing: { name: 'Bing', url: 'https://www.bing.com/search?q=%s' },
-  brave: { name: 'Brave Search', url: 'https://search.brave.com/search?q=%s' },
-  ecosia: { name: 'Ecosia', url: 'https://www.ecosia.org/search?q=%s' },
-  kagi: { name: 'Kagi', url: 'https://kagi.com/search?q=%s' },
-  startpage: { name: 'Startpage', url: 'https://www.startpage.com/do/search?q=%s' },
+  duckduckgo: { name: 'DuckDuckGo', url: 'https://duckduckgo.com/?q=%s', suggest: 'https://duckduckgo.com/ac/?q=%s&type=list' },
+  google: { name: 'Google', url: 'https://www.google.com/search?q=%s', suggest: 'https://suggestqueries.google.com/complete/search?client=firefox&q=%s' },
+  bing: { name: 'Bing', url: 'https://www.bing.com/search?q=%s', suggest: 'https://api.bing.com/osjson.aspx?query=%s' },
+  brave: { name: 'Brave Search', url: 'https://search.brave.com/search?q=%s', suggest: 'https://search.brave.com/api/suggest?q=%s' },
+  ecosia: { name: 'Ecosia', url: 'https://www.ecosia.org/search?q=%s', suggest: 'https://ac.ecosia.org/autocomplete?q=%s&type=list' },
+  kagi: { name: 'Kagi', url: 'https://kagi.com/search?q=%s' }, // its suggestions need a sign-in token
+  startpage: { name: 'Startpage', url: 'https://www.startpage.com/do/search?q=%s', suggest: 'https://www.startpage.com/suggestions?q=%s&format=opensearch' },
 };
 const HISTORY_LIMIT = 5000;
 const DOWNLOADS_LIMIT = 200;
@@ -129,6 +129,7 @@ function defaultSettings() {
     dnsCustom: '',
     askDownloadLocation: false,
     downloadDir: null, // null = the OS Downloads folder
+    searchSuggestions: false, // send what's typed in the address bar to the search engine (opt-in)
   };
 }
 
@@ -222,9 +223,63 @@ const isWeb = (u) => /^https?:\/\//i.test(u);
 function displayUrl(u) {
   const name = internalName(u);
   if (name === 'newtab') return '';
-  if (name === 'error') return new URL(u).searchParams.get('url') || '';
+  if (name === 'error') return readableHost(new URL(u).searchParams.get('url') || '');
   if (name) return `${SCHEME}://${name}`;
-  return u;
+  return readableHost(u);
+}
+
+// ---------------------------------------------------------------- international domain names
+
+// Chromium keeps hosts in their ASCII (punycode) form, e.g. "xn--bcher-kva.de". We show the real
+// letters ("bücher.de") unless the name could imitate another site: letters from scripts that
+// don't normally mix ("аpple" with a Cyrillic а), or a name written entirely in Cyrillic letters
+// that look Latin ("аррӏе"). Those stay in punycode, like Chrome and Firefox do.
+const IDN_SCRIPTS = ['Latin', 'Cyrillic', 'Greek', 'Armenian', 'Hebrew', 'Arabic', 'Devanagari', 'Bengali', 'Tamil', 'Thai', 'Georgian', 'Hangul', 'Hiragana', 'Katakana', 'Han', 'Bopomofo', 'Ethiopic', 'Khmer']
+  .map((name) => [name, new RegExp(`\\p{Script=${name}}`, 'u')]);
+const IDN_NEUTRAL = /[\p{Script=Common}\p{Script=Inherited}]/u;
+const IDN_CJK_MIXES = [
+  new Set(['Latin', 'Han', 'Hiragana', 'Katakana']),
+  new Set(['Latin', 'Han', 'Hangul']),
+  new Set(['Latin', 'Han', 'Bopomofo']),
+];
+const CYRILLIC_LOOKALIKES = new Set('аϲсԁеһіјӏорԛѕԝхуъьҽпгѵѡ'.normalize('NFC'));
+
+function labelScripts(label) {
+  const scripts = new Set();
+  for (const ch of label) {
+    if (IDN_NEUTRAL.test(ch)) continue;
+    const hit = IDN_SCRIPTS.find(([, re]) => re.test(ch));
+    scripts.add(hit ? hit[0] : `other:${ch}`);
+  }
+  return scripts;
+}
+
+function idnLooksSafe(unicodeHost) {
+  const labels = unicodeHost.split('.');
+  const tld = labels[labels.length - 1];
+  for (const label of labels) {
+    const scripts = labelScripts(label);
+    if ([...scripts].some((sc) => sc.startsWith('other:'))) return false;
+    if (scripts.size > 1 && !IDN_CJK_MIXES.some((mix) => [...scripts].every((sc) => mix.has(sc)))) return false;
+    if (
+      scripts.size === 1 && scripts.has('Cyrillic') && !labelScripts(tld).has('Cyrillic') &&
+      [...label].every((ch) => CYRILLIC_LOOKALIKES.has(ch) || IDN_NEUTRAL.test(ch))
+    ) return false;
+  }
+  return true;
+}
+
+function readableHost(u) {
+  try {
+    const parsed = new URL(u);
+    if (!isWeb(parsed.href) || !parsed.hostname.includes('xn--')) return u;
+    const unicode = domainToUnicode(parsed.hostname);
+    if (!unicode || !idnLooksSafe(unicode)) return u;
+    const at = u.indexOf(parsed.hostname, u.indexOf('://') + 3);
+    return at === -1 ? u : u.slice(0, at) + unicode + u.slice(at + parsed.hostname.length);
+  } catch {
+    return u;
+  }
 }
 
 function resolveInput(raw) {
@@ -298,7 +353,7 @@ function sendTabs(w) {
             : `${new URL(prompt.origin).host} wants to ${promptText(prompt.keys)}`,
         }
       : null,
-    auth: auth ? { id: auth.id, host: auth.host, realm: auth.realm, insecure: auth.insecure } : null,
+    auth: auth ? { id: auth.id, host: auth.host, realm: auth.realm, insecure: auth.insecure, proxy: auth.proxy } : null,
     find: current ? current.find : null,
     zoom: current ? Math.round(Math.pow(1.2, current.wc.getZoomLevel()) * 100) : 100,
     capture: current ? captureState(current) : null,
@@ -458,6 +513,7 @@ function createWindow({ private: isPrivate = false, session: saved = null, ses: 
   cwc.once('did-finish-load', () => sendTabs(w));
 
   win.on('focus', () => {
+    if (lastFocused !== w) rebuildMenuSoon(); // History → Recently Closed is per window
     lastFocused = w;
   });
   win.on('resize', () => {
@@ -1309,6 +1365,7 @@ function recordHistory(tab, url) {
     if (h.length > HISTORY_LIMIT) h.length = HISTORY_LIMIT;
   }
   store.save();
+  rebuildMenuSoon();
 }
 
 function updateHistoryTitle(tab) {
@@ -1318,6 +1375,7 @@ function updateHistoryTitle(tab) {
   if (entry) {
     entry.title = tab.wc.getTitle() || url;
     store.save();
+    rebuildMenuSoon();
   }
 }
 
@@ -1402,11 +1460,14 @@ function rememberClosedTab(w, tab, index) {
   if (!history) return;
   w.closedTabs.push({ history, index });
   if (w.closedTabs.length > 25) w.closedTabs.shift();
+  rebuildMenuSoon();
 }
 
-function reopenClosedTab(w) {
-  const closed = w.closedTabs.pop();
+// position: index in w.closedTabs (default: the most recently closed)
+function reopenClosedTab(w, position = w.closedTabs.length - 1) {
+  const [closed] = w.closedTabs.splice(position, 1);
   if (!closed) return;
+  rebuildMenuSoon();
   const tab = createTab(w, closed.history.entries[closed.history.index].url, { history: closed.history });
   // put it back where it was
   w.tabs.splice(w.tabs.indexOf(tab), 1);
@@ -1575,12 +1636,13 @@ let nextAuthId = 1;
 function onLogin(event, wc, details, authInfo, callback) {
   const tab = tabOfWc(wc);
   event.preventDefault();
-  if (!tab || authInfo.isProxy) return callback(); // cancels; proxy sign-in isn't supported yet
+  if (!tab) return callback(); // cancels (e.g. a request from a service worker)
   tab.auth.push({
     id: nextAuthId++,
     host: authInfo.port && ![80, 443].includes(authInfo.port) ? `${authInfo.host}:${authInfo.port}` : authInfo.host,
     realm: authInfo.realm || '',
-    insecure: !/^https:/i.test(details.url),
+    proxy: !!authInfo.isProxy,
+    insecure: !authInfo.isProxy && !/^https:/i.test(details.url),
     callback,
   });
   const w = tab.w;
@@ -2035,7 +2097,44 @@ function markAsDownloaded(filePath, url) {
   }
 }
 
+// A secure (https) page starting a download over plain http: anyone on the network could swap
+// the file. Blocked unless the user says to download it anyway (that one URL, once).
+const insecureDownloadsAllowed = new Set();
+function isInsecureDownload(item, wc) {
+  const page = wc && !wc.isDestroyed() ? wc.getURL() : '';
+  if (!/^https:/i.test(page)) return false;
+  return item.getURLChain().some((u) => {
+    try {
+      const parsed = new URL(u);
+      return parsed.protocol === 'http:' && !localHost(parsed.hostname);
+    } catch {
+      return false;
+    }
+  });
+}
+
 function onWillDownload(_e, item, wc) {
+  if (isInsecureDownload(item, wc) && !insecureDownloadsAllowed.delete(item.getURL())) {
+    item.cancel();
+    const url = item.getURL();
+    const owner = tabOfWc(wc)?.w || focusedWindow();
+    dialog
+      .showMessageBox(owner ? owner.win : undefined, {
+        type: 'warning',
+        message: `"${item.getFilename() || 'This file'}" was blocked because it isn't downloaded securely`,
+        detail: `${trimLabel(url, 120)}\n\nThe file comes over an unencrypted (http) connection, so someone on your network could replace it with something harmful.`,
+        buttons: ['Don\'t Download', 'Download Anyway'],
+        defaultId: 0,
+        cancelId: 0,
+      })
+      .then(({ response }) => {
+        if (response !== 1 || wc.isDestroyed()) return;
+        insecureDownloadsAllowed.add(url);
+        wc.downloadURL(url);
+      })
+      .catch(() => {});
+    return;
+  }
   let finalPath = uniqueDownloadPath(item.getFilename() || 'download');
   if (store.data.settings.askDownloadLocation) {
     const owner = tabOfWc(wc)?.w || focusedWindow();
@@ -2157,6 +2256,7 @@ async function clearBrowsingData(w, { range = 'hour', history, downloads, cookie
   if (history) {
     store.data.history = store.data.history.filter((h) => h.time < since);
     for (const win of windows) win.closedTabs = [];
+    rebuildMenuSoon();
   }
   if (downloads) {
     store.data.downloads = store.data.downloads.filter(
@@ -2250,6 +2350,41 @@ function suggestions(text) {
     inline,
     engine: searchEngine().name,
   };
+}
+
+// Suggestions from the search engine, only when the user turned them on and never in private
+// windows. Fetched without cookies from a separate in-memory session, so the engine can't tie
+// them to a signed-in account.
+let suggestSession = null;
+const suggestCache = new Map();
+async function searchSuggestions(w, text) {
+  const query = text.trim();
+  const engine = searchEngine();
+  if (!store.data.settings.searchSuggestions || w.private || !engine.suggest || !query || query.length > 200) return [];
+  const key = `${engine.name}\n${query.toLowerCase()}`;
+  if (suggestCache.has(key)) return suggestCache.get(key);
+  suggestSession ||= session.fromPartition('operecs-suggest'); // no "persist:" -> memory only
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 1500);
+  try {
+    const res = await suggestSession.fetch(engine.suggest.replace('%s', encodeURIComponent(query)), {
+      credentials: 'omit',
+      signal: controller.signal,
+    });
+    if (!res.ok) return [];
+    const data = await res.json();
+    const list = Array.isArray(data) && Array.isArray(data[1]) ? data[1] : [];
+    const result = list
+      .filter((x) => typeof x === 'string' && x.trim() && x.length <= 200 && x.toLowerCase() !== query.toLowerCase())
+      .slice(0, 4);
+    suggestCache.set(key, result);
+    if (suggestCache.size > 200) suggestCache.delete(suggestCache.keys().next().value);
+    return result;
+  } catch {
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 // Open tabs (same kind of window: normal or private) matching what's typed: "Switch to tab".
@@ -2439,6 +2574,11 @@ function setupIpc() {
     const url = resolveInput(text);
     if (url) tab.wc.loadURL(url).catch(() => {});
   });
+  handle('nav:search', fromChrome, (w, text) => {
+    const tab = activeTab(w);
+    const query = String(text || '').trim();
+    if (tab && query) tab.wc.loadURL(searchUrl(query)).catch(() => {});
+  });
 
   handle('tab:new', fromChrome, (w) => {
     createTab(w, internalURL('newtab'));
@@ -2456,8 +2596,10 @@ function setupIpc() {
     result.tabs = openTabSuggestions(w, String(text || ''));
     return result;
   });
+  handle('suggest:search', fromChrome, (w, text) => searchSuggestions(w, String(text || '')));
   handle('suggest:remove', fromChrome, (_w, url) => {
     store.data.history = store.data.history.filter((h) => h.url !== url);
+    rebuildMenuSoon();
     store.save();
   });
   handle('tab:switch', fromChrome, (w, tabId) => switchToTab(w, tabId));
@@ -2613,11 +2755,12 @@ function setupIpc() {
   });
   handle('data:history-remove', fromInternal, (_tab, url) => {
     store.data.history = store.data.history.filter((h) => h.url !== url);
+    rebuildMenuSoon();
     store.save();
   });
   handle('data:settings-set', fromInternal, (_tab, key, value) => {
     const valid =
-      (['restoreSession', 'adblock', 'askDownloadLocation', 'blockThirdPartyCookies', 'showHomeButton', 'confirmClose', 'gpc', 'httpsOnly', 'memorySaver', 'spellcheck'].includes(key) &&
+      (['restoreSession', 'adblock', 'askDownloadLocation', 'blockThirdPartyCookies', 'showHomeButton', 'confirmClose', 'gpc', 'httpsOnly', 'memorySaver', 'spellcheck', 'searchSuggestions'].includes(key) &&
         typeof value === 'boolean') ||
       (key === 'startup' && ['continue', 'newtab', 'pages'].includes(value)) ||
       (key === 'autoplay' && ['block-audible', 'allow'].includes(value)) ||
@@ -2719,10 +2862,12 @@ function setupIpc() {
   handle('data:licenses', fromInternal, async () => JSON.parse(await fs.promises.readFile(path.join(__dirname, 'gen', 'licenses.json'), 'utf8')));
   handle('data:history-remove-site', fromInternal, (_tab, site) => {
     store.data.history = store.data.history.filter((h) => siteOf(h.url) !== site);
+    rebuildMenuSoon();
     store.save();
   });
   handle('data:history-clear', fromInternal, () => {
     store.data.history = [];
+    rebuildMenuSoon();
     store.save();
   });
   handle('ext:list', fromInternal, () => extensionList());
@@ -2763,7 +2908,42 @@ function setupIpc() {
 
 // ---------------------------------------------------------------- menu
 
+let menuTimer = null;
+function rebuildMenuSoon() {
+  clearTimeout(menuTimer);
+  menuTimer = setTimeout(buildMenu, 1000);
+}
+
+// History menu: the focused window's closed tabs and the last pages visited.
+function recentMenuItems(inWindow) {
+  const w = focusedWindow();
+  const closed = w
+    ? w.closedTabs
+        .map((c, position) => ({ c, position }))
+        .reverse()
+        .slice(0, 10)
+        .map(({ c, position }) => {
+          const entry = c.history.entries[c.history.index];
+          return { label: trimLabel(entry.title || displayUrl(entry.url) || 'Tab', 60), click: () => liveWindow(w) && reopenClosedTab(w, position) };
+        })
+    : [];
+  const seen = new Set();
+  const visited = [];
+  for (const h of store.data.history) {
+    if (visited.length >= 10) break;
+    if (seen.has(h.url)) continue;
+    seen.add(h.url);
+    visited.push({ label: trimLabel(h.title || displayUrl(h.url), 60), click: inWindow((win) => createTab(win, h.url)) });
+  }
+  return [
+    { type: 'separator' },
+    { label: 'Recently Closed', enabled: closed.length > 0, submenu: closed.length ? closed : [{ label: 'Nothing yet', enabled: false }] },
+    ...(visited.length ? [{ type: 'separator' }, { label: 'Recently Visited', enabled: false }, ...visited] : []),
+  ];
+}
+
 function buildMenu() {
+  clearTimeout(menuTimer);
   // Menu commands act on the focused browser window, opening one if none is open.
   const inWindow = (fn) => () => {
     const w = focusedWindow() || createWindow();
@@ -2869,6 +3049,7 @@ function buildMenu() {
         { type: 'separator' },
         { label: 'Show History', accelerator: isMac ? 'Cmd+Y' : 'Ctrl+H', click: open('history') },
         { label: 'Show Downloads', accelerator: isMac ? 'Alt+Cmd+L' : 'Ctrl+J', click: open('downloads') },
+        ...recentMenuItems(inWindow),
         { type: 'separator' },
         {
           label: 'Clear Browsing Data…',

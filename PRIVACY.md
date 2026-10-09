@@ -13,6 +13,7 @@ Besides the websites you visit, Operecs itself contacts:
 | Update check | `github.com/ezzeldinzozz-svg/operecs-browser` (GitHub Releases) | At launch and every 6 hours, or when you click Check for updates | A normal web request for the release info and, when there's an update, the update file |
 | Ad and tracker block lists | Ghostery's CDN (`cdn.ghostery.com`) | First launch, then about once a week | A normal web request for the lists |
 | Your search engine | The one you choose (DuckDuckGo by default) | When you search from the address bar | What you typed |
+| Search suggestions (off by default) | Your search engine's suggestion service | Only if you turn on "Show search suggestions": as you type in the address bar (not in private windows) | What you're typing, without cookies |
 | Site icons | The site you're visiting | When a page has an icon | A request for the icon, without cookies |
 
 These requests include your IP address and a standard browser user agent, like any web request.

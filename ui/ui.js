@@ -206,7 +206,7 @@ function render(state) {
   const authText = $('auth-text');
   authText.textContent = '';
   if (auth) {
-    authText.append(`Sign in to ${auth.host}${auth.realm ? ` (“${auth.realm}”)` : ''}`);
+    authText.append(`Sign in to ${auth.proxy ? 'proxy ' : ''}${auth.host}${auth.realm ? ` (“${auth.realm}”)` : ''}`);
     if (auth.insecure) {
       const warn = document.createElement('span');
       warn.className = 'warn';
@@ -325,6 +325,9 @@ function renderSuggest(engine) {
       title.textContent = go ? r.text : `${r.text}`;
       url.textContent = go ? '' : `— Search ${engine}`;
       url.style.color = 'var(--fg-dim)';
+    } else if (r.kind === 'search') {
+      icon.textContent = '⌕';
+      title.textContent = r.text;
     } else if (r.kind === 'tab') {
       icon.textContent = '\u29C9';
       title.textContent = r.title;
@@ -377,6 +380,16 @@ async function updateSuggestions(allowInline) {
   rows = rows.filter((r, i) => i === 0 || !sameAddress(r.url, rows[0].text));
   selected = 0;
   renderSuggest(res.engine);
+
+  // Search engine suggestions arrive later (when turned on); add them below the typed row.
+  if (looksLikeAddress(text.trim())) return;
+  const extra = await api.suggestSearch(text);
+  if (seq !== suggestSeq || document.activeElement !== address || !extra.length) return;
+  const have = new Set(rows.map((r) => (r.text || '').toLowerCase()));
+  const searches = extra.filter((q) => !have.has(q.toLowerCase())).map((q) => ({ kind: 'search', text: q }));
+  rows.splice(1, 0, ...searches);
+  if (selected > 0) selected += searches.length;
+  renderSuggest(res.engine);
 }
 
 const bare = (u) => String(u).replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '').toLowerCase();
@@ -384,6 +397,7 @@ const sameAddress = (url, text) => bare(url) === bare(text);
 
 function navigate(row) {
   if (row.kind === 'tab') api.switchToTab(row.tabId);
+  else if (row.kind === 'search') api.search(row.text);
   else api.go(row.kind === 'page' ? row.url : row.text);
   closeSuggest();
   address.blur();
@@ -407,7 +421,7 @@ address.addEventListener('keydown', (e) => {
     renderSuggest(lastEngine);
   } else if (e.key === 'Enter') {
     e.preventDefault();
-    if (open && rows[selected] && rows[selected].kind !== 'typed') navigate(rows[selected]);
+    if (open && rows[selected] && rows[selected].kind !== 'typed' && !(rows[selected].kind === 'search' && address.value !== rows[selected].text)) navigate(rows[selected]);
     else navigate({ kind: 'typed', text: address.value });
   } else if (e.key === 'Escape') {
     if (open) {

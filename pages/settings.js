@@ -24,6 +24,7 @@ async function loadSettings() {
   document.getElementById('show-home').checked = s.showHomeButton;
   document.getElementById('confirm-close').checked = s.confirmClose;
   document.getElementById('gpc').checked = s.gpc;
+  document.getElementById('search-suggestions').checked = s.searchSuggestions;
   document.getElementById('https-only').checked = s.httpsOnly;
   document.getElementById('memory-saver').checked = s.memorySaver;
   document.getElementById('memory-saver-minutes').value = String(s.memorySaverMinutes);
@@ -302,6 +303,7 @@ document.getElementById('confirm-close').addEventListener('change', (e) => brows
 
 // ---- Privacy: GPC and secure DNS
 document.getElementById('gpc').addEventListener('change', (e) => browserAPI.setSetting('gpc', e.target.checked));
+document.getElementById('search-suggestions').addEventListener('change', (e) => browserAPI.setSetting('searchSuggestions', e.target.checked));
 document.getElementById('dns').addEventListener('change', async (e) => {
   const custom = document.getElementById('dns-custom');
   custom.hidden = e.target.value !== 'custom';
