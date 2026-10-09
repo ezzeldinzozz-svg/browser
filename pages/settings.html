@@ -9,7 +9,7 @@
 <body>
   <main>
     <h1>Settings</h1>
-    <input id="settings-search" type="search" placeholder="Search settings" autocomplete="off">
+    <input id="settings-search" aria-label="Search settings" type="search" placeholder="Search settings" autocomplete="off">
     <h2>About Operecs</h2>
     <div class="about">
       <div>
@@ -27,13 +27,13 @@
 
     <h2>Search engine</h2>
     <p class="hint">Used when you type something that isn't an address.</p>
-    <select id="engine"></select>
+    <select id="engine" aria-label="Search engine"></select>
     <p class="hint">Search any engine from the address bar by typing its keyword first, e.g. <code>w cats</code>.</p>
     <div id="engines"></div>
     <form id="engine-add" class="perm-add">
-      <input id="engine-name" type="text" placeholder="Name, e.g. Wikipedia" autocomplete="off" spellcheck="false">
-      <input id="engine-keyword" type="text" placeholder="Keyword, e.g. w" autocomplete="off" spellcheck="false" style="flex: 0 0 110px">
-      <input id="engine-url" type="text" placeholder="URL with %s, e.g. https://en.wikipedia.org/w/index.php?search=%s" autocomplete="off" spellcheck="false" style="flex: 2">
+      <input id="engine-name" aria-label="Search engine name" type="text" placeholder="Name, e.g. Wikipedia" autocomplete="off" spellcheck="false">
+      <input id="engine-keyword" aria-label="Search engine keyword" type="text" placeholder="Keyword, e.g. w" autocomplete="off" spellcheck="false" style="flex: 0 0 110px">
+      <input id="engine-url" aria-label="Search engine address with %s" type="text" placeholder="URL with %s, e.g. https://en.wikipedia.org/w/index.php?search=%s" autocomplete="off" spellcheck="false" style="flex: 2">
       <button type="submit">Add</button>
     </form>
     <p id="engine-error" class="hint" hidden></p>
@@ -95,7 +95,7 @@
     </label>
     <label class="check"><input id="show-home" type="checkbox"> Show Home button</label>
     <div class="homepage">
-      <input id="home-page" type="text" placeholder="Home page (empty = New Tab page)" spellcheck="false">
+      <input id="home-page" aria-label="Home page" type="text" placeholder="Home page (empty = New Tab page)" spellcheck="false">
     </div>
 
     <h2>Downloads</h2>
@@ -141,7 +141,7 @@
         <option value="off">Off</option>
       </select>
     </label>
-    <input id="dns-custom" type="text" placeholder="https://dns.example/dns-query" spellcheck="false" hidden>
+    <input id="dns-custom" aria-label="Custom secure DNS address" type="text" placeholder="https://dns.example/dns-query" spellcheck="false" hidden>
     <label class="dns">Proxy
       <select id="proxy-mode">
         <option value="system">Use the system's settings</option>
@@ -151,12 +151,12 @@
       </select>
     </label>
     <form id="proxy-manual" class="perm-add" hidden>
-      <input id="proxy-server" type="text" placeholder="host:port, or socks5://host:port" spellcheck="false">
-      <input id="proxy-bypass" type="text" placeholder="Bypass, e.g. &lt;local&gt;;*.example.com" spellcheck="false">
+      <input id="proxy-server" aria-label="Proxy server" type="text" placeholder="host:port, or socks5://host:port" spellcheck="false">
+      <input id="proxy-bypass" aria-label="Addresses that bypass the proxy" type="text" placeholder="Bypass, e.g. &lt;local&gt;;*.example.com" spellcheck="false">
       <button type="submit">Save</button>
     </form>
     <form id="proxy-pac" class="perm-add" hidden>
-      <input id="proxy-pac-url" type="text" placeholder="https://example.com/proxy.pac" spellcheck="false">
+      <input id="proxy-pac-url" aria-label="Proxy auto-configuration address" type="text" placeholder="https://example.com/proxy.pac" spellcheck="false">
       <button type="submit">Save</button>
     </form>
     <p id="proxy-saved" class="hint" hidden>Proxy settings saved.</p>
@@ -167,7 +167,7 @@
     <h2>Cookies and site data</h2>
     <p class="hint">Sites that have stored cookies on this computer. Removing a site's data also clears its other storage and signs you out of it.</p>
     <div class="sitedata-tools">
-      <input id="sitedata-search" type="search" placeholder="Search sites" autocomplete="off" spellcheck="false">
+      <input id="sitedata-search" aria-label="Search sites" type="search" placeholder="Search sites" autocomplete="off" spellcheck="false">
       <button id="sitedata-load">Show sites</button>
       <button id="sitedata-all" hidden>Remove all</button>
     </div>
@@ -179,9 +179,9 @@
     <p class="hint">Exceptions for specific sites:</p>
     <div id="list"></div>
     <form id="perm-add" class="perm-add">
-      <input id="perm-add-site" type="text" placeholder="Site, e.g. meet.example.com" autocomplete="off" spellcheck="false">
-      <select id="perm-add-key"></select>
-      <select id="perm-add-value"><option value="allow">Allow</option><option value="block">Block</option></select>
+      <input id="perm-add-site" aria-label="Site for the exception" type="text" placeholder="Site, e.g. meet.example.com" autocomplete="off" spellcheck="false">
+      <select id="perm-add-key" aria-label="Permission"></select>
+      <select id="perm-add-value" aria-label="Allow or block"><option value="allow">Allow</option><option value="block">Block</option></select>
       <button type="submit">Add exception</button>
     </form>
     <h2>Your data</h2>

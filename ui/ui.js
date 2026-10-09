@@ -170,7 +170,7 @@ function render(state) {
   $('shield').hidden = !shield.available;
   $('shield').classList.toggle('off', !shield.on);
   $('shield-count').textContent = shield.on && shield.blocked ? String(shield.blocked) : '';
-  $('shield').title = shield.on
+  $('shield').title = $('shield').ariaLabel = shield.on
     ? `Blocked ${shield.blocked} ads and trackers on ${shield.site}. Click for details.`
     : `Ad blocking is off for ${shield.site}. Click for details.`;
 
@@ -356,6 +356,8 @@ function renderSuggest(engine) {
   rows.forEach((r, i) => {
     const row = document.createElement('div');
     row.className = 'sg' + (i === selected ? ' sel' : '');
+    row.setAttribute('role', 'option');
+    row.setAttribute('aria-selected', String(i === selected));
     const icon = document.createElement('span');
     icon.className = 'ic';
     const title = document.createElement('span');

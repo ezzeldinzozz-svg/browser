@@ -246,7 +246,7 @@ Ordered by priority, then by what unblocks what.
 - [x] Visible focus rings in the toolbar
 - [x] Keyboard: arrow keys / Home / End through the tab strip, Enter selects, Delete closes; F6 switches between toolbar and page
 - [x] ARIA basics: `tablist`/`tab` roles with `aria-selected`, labels on icon buttons, permission bar as an alert
-- [ ] **P1** Full screen-reader pass (VoiceOver/NVDA) and labels for every bar
+- [x] **P1** Labels and roles for every toolbar control, bar, popup and settings field (dialogs, listbox/options, alerts)
 - [ ] **P1** VoiceOver / NVDA / Orca pass on toolbar and internal pages
 - [x] Forced colors (Windows high contrast) in the toolbar and internal pages
 - [ ] **P2** macOS increased contrast styles
