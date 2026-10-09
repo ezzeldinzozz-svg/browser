@@ -1,7 +1,7 @@
 {
   "name": "browser",
   "productName": "Operecs",
-  "version": "0.19.0",
+  "version": "0.20.0",
   "description": "Operecs: a fast, private, cross-platform web browser",
   "main": "main.js",
   "scripts": {
@@ -24,7 +24,7 @@
   "build": {
     "appId": "com.ezzeddinmagdy.browser",
     "productName": "Operecs",
-    "copyright": "Copyright \u00a9 2026 ezzeddinmagdy",
+    "copyright": "Copyright © 2026 ezzeddinmagdy",
     "files": [
       "main.js",
       "gen/preload.js",

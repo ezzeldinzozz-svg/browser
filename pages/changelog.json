@@ -1,6 +1,7 @@
 {
   "_comment": "Shown on browser://whatsnew after an update. Add user-visible changes to \"next\" as they land; `npm run release` renames \"next\" to the version it releases (and refuses to release without notes).",
-  "next": [
+  "next": [],
+  "0.20.0": [
     "History moved into a fast database, with full-text search on the History page",
     "Keep history for a chosen time, or clear history, downloads, cookies or cache whenever Operecs quits",
     "Interrupted downloads continue where they stopped, even after quitting",
