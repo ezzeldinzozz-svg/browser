@@ -1,6 +1,7 @@
 {
   "_comment": "Shown on browser://whatsnew after an update. Add user-visible changes to \"next\" as they land; `npm run release` renames \"next\" to the version it releases (and refuses to release without notes).",
-  "next": [
+  "next": [],
+  "0.21.2": [
     "Toolbar Screenshot button now asks whether to capture the Current Screen, Full Page, or Selection"
   ],
   "0.21.1": [
