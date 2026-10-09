@@ -285,9 +285,10 @@ Ordered by priority, then by what unblocks what.
 ## 15. Import, profiles & sync
 
 - [x] Import bookmarks from Chromium browsers and HTML files
-- [ ] **P1** Import history (needs reading the other browser's SQLite file), passwords (CSV), search engine
+- [x] **P1** Import history from Chrome/Brave/Edge/Vivaldi/Arc (History page; reads a copy of their SQLite file with `node:sqlite`)
+- [ ] **P2** Import search engines from other browsers
 - [ ] **P1** Profiles: separate persistent partitions per profile (data, cookies, permissions), profile switcher, per-profile window color
-- [ ] **P1** Export all data (bookmarks HTML, passwords CSV) as the interim "sync"
+- [x] **P1** Export all data (Settings → Your data: bookmarks HTML + history/settings/permissions JSON)
 - [ ] **P2** End-to-end encrypted sync (own server or file-based) for bookmarks, history, passwords, open tabs *(Electron limit: no Google Sync)*
 - [ ] **P2** Send tab to another device
 

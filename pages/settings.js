@@ -553,3 +553,8 @@ document.getElementById('proxy-pac').addEventListener('submit', async (e) => {
   await browserAPI.setSetting('proxyMode', 'pac');
   proxySaved();
 });
+
+document.getElementById('export-all').addEventListener('click', async () => {
+  const dir = await browserAPI.exportAllData();
+  document.getElementById('export-result').textContent = dir ? `Saved to ${dir}` : '';
+});

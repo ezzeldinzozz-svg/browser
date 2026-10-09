@@ -129,6 +129,8 @@ if (location.protocol === 'browser:' && window === window.top) {
     addBookmarkFolder: call('bm:add-folder'),
     bookmarkImportSources: call('bm:import-sources'),
     importBookmarks: call('bm:import'),
+    importHistory: call('history:import'),
+    exportAllData: call('data:export-all'),
     exportBookmarks: call('bm:export'),
     onDownloadStarted: on('download-started'),
     recentDownloads: call('downloads:recent'),

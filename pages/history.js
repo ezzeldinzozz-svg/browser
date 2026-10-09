@@ -107,3 +107,26 @@ document.getElementById('clear').addEventListener('click', async () => {
   load();
 });
 load();
+
+// ---- import from another browser
+browserAPI.bookmarkImportSources().then((sources) => {
+  if (!sources.length) return;
+  const select = document.getElementById('import-source');
+  for (const name of sources) select.append(new Option(`From ${name}`, name));
+  document.getElementById('import-bar').hidden = false;
+});
+document.getElementById('import').addEventListener('click', async () => {
+  const button = document.getElementById('import');
+  const result = document.getElementById('import-result');
+  button.disabled = true;
+  result.textContent = 'Importing\u2026';
+  try {
+    const r = await browserAPI.importHistory(document.getElementById('import-source').value);
+    result.textContent = r ? `Imported ${r.count} visits from ${r.from}.` : 'Nothing to import.';
+    load();
+  } catch {
+    result.textContent = "Couldn't read that browser's history. Close it and try again.";
+  } finally {
+    button.disabled = false;
+  }
+});

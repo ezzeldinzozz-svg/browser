@@ -1826,6 +1826,78 @@ async function importBookmarks(w, source) {
   return { count: bookmarks.importChromeJson(json, `Imported from ${src.name}`), from: src.name };
 }
 
+// History from a Chromium-based browser: its `History` SQLite file next to `Bookmarks`. The
+// browser keeps it locked while running, so we read a copy. Chrome stores times as
+// microseconds since 1601-01-01.
+const CHROME_EPOCH_OFFSET_MS = 11644473600000;
+async function importHistory(source) {
+  const src = importSources().find((c) => c.name === source);
+  if (!src) return null;
+  const file = path.join(path.dirname(src.file), 'History');
+  if (!fs.existsSync(file)) return { count: 0, from: src.name };
+  const copy = path.join(app.getPath('temp'), `operecs-history-import-${Date.now()}.sqlite`);
+  await fs.promises.copyFile(file, copy);
+  let rows = [];
+  try {
+    const { DatabaseSync } = require('node:sqlite');
+    const db = new DatabaseSync(copy, { readOnly: true });
+    rows = db
+      .prepare(
+        // visit_time is too large for a JS number; convert to Unix milliseconds in SQL
+        `SELECT u.url AS url, u.title AS title, (v.visit_time / 1000) - ${CHROME_EPOCH_OFFSET_MS} AS time FROM visits v JOIN urls u ON v.url = u.id
+         WHERE u.url LIKE 'http%' ORDER BY v.visit_time DESC LIMIT ${HISTORY_LIMIT}`,
+      )
+      .all();
+    db.close();
+  } finally {
+    fs.promises.rm(copy, { force: true }).catch(() => {});
+  }
+  const seen = new Set(store.data.history.map((h) => `${h.time}|${h.url}`));
+  let count = 0;
+  for (const r of rows) {
+    const time = Number(r.time);
+    if (!isWeb(r.url) || !(time > 0) || seen.has(`${time}|${r.url}`)) continue;
+    store.data.history.push({ url: r.url, title: r.title || r.url, time });
+    count++;
+  }
+  store.data.history.sort((a, b) => b.time - a.time);
+  if (store.data.history.length > HISTORY_LIMIT) store.data.history.length = HISTORY_LIMIT;
+  store.save();
+  rebuildMenuSoon();
+  return { count, from: src.name };
+}
+
+// Everything worth keeping, as plain files: bookmarks (HTML, importable anywhere) and history,
+// settings and site permissions (JSON).
+async function exportAllData(w) {
+  const { canceled, filePaths } = await dialog.showOpenDialog(w.win, {
+    title: 'Choose a folder for your Operecs data',
+    properties: ['openDirectory', 'createDirectory'],
+    defaultPath: app.getPath('documents'),
+  });
+  if (canceled || !filePaths[0]) return null;
+  const dir = path.join(filePaths[0], `Operecs data ${new Date().toISOString().slice(0, 10)}`);
+  await fs.promises.mkdir(dir, { recursive: true });
+  await fs.promises.writeFile(path.join(dir, 'bookmarks.html'), bookmarks.exportHtml());
+  await fs.promises.writeFile(
+    path.join(dir, 'operecs-data.json'),
+    JSON.stringify(
+      {
+        exported: new Date().toISOString(),
+        version: app.getVersion(),
+        history: store.data.history,
+        settings: store.data.settings,
+        permissions: store.data.permissions,
+        adblockAllowlist: store.data.adblockAllowlist,
+      },
+      null,
+      2,
+    ),
+  );
+  shell.showItemInFolder(path.join(dir, 'bookmarks.html'));
+  return dir;
+}
+
 async function exportBookmarks(w) {
   const { canceled, filePath } = await dialog.showSaveDialog(w.win, {
     title: 'Export bookmarks',
@@ -3670,6 +3742,8 @@ function setupIpc() {
   handle('bm:add-folder', fromInternal, (_tab, title, parentId) => bookmarks.addFolder(String(title || ''), String(parentId || 'bar')).id);
   handle('bm:import-sources', fromInternal, () => importSources().map((c) => c.name));
   handle('bm:import', fromInternal, (tab, source) => importBookmarks(tab.w, String(source)));
+  handle('data:export-all', fromInternal, (tab) => exportAllData(tab.w));
+  handle('history:import', fromInternal, (_tab, source) => importHistory(String(source)));
   handle('bm:export', fromInternal, (tab) => exportBookmarks(tab.w));
   handle('bm:star', fromChrome, (w) => starPage(w));
   handle('bm:open', fromChrome, (w, id, where) => {
