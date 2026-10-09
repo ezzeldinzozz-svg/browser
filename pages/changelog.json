@@ -1,0 +1,42 @@
+{
+  "_comment": "Shown on browser://whatsnew after an update. Add user-visible changes to \"next\" as they land; `npm run release` renames \"next\" to the version it releases (and refuses to release without notes).",
+  "next": [
+    "History moved into a fast database, with full-text search on the History page",
+    "Keep history for a chosen time, or clear history, downloads, cookies or cache whenever Operecs quits",
+    "Interrupted downloads continue where they stopped, even after quitting",
+    "A warning before a form on a secure page sends your data without encryption; the lock shows when a secure page loads anything insecurely",
+    "Closing a window or quitting asks first when a page has unsaved changes",
+    "Reloading a page you got by sending a form asks before sending it again (it used to do nothing)",
+    "Look Up, Speech and Emoji & Symbols in the right-click menu; Paste as Plain Text (Cmd+Shift+V)",
+    "The Bookmarks menu lists your bookmarks and folders, and bookmarks show their site icons",
+    "Extensions can be turned off without removing them, and their toolbar buttons hidden",
+    "Proxy settings, clearer pages when you're offline or a site can't be found, and help signing in to hotel and café Wi-Fi",
+    "Sites can connect to USB, serial, HID and Bluetooth devices you pick",
+    "Import history from Chrome, Brave, Edge, Vivaldi or Arc, and export all your data",
+    "Security: weekly checks for Electron security fixes, and urgent fixes install within minutes"
+  ],
+  "0.19.0": [
+    "Theme setting: match the system, dark or light",
+    "Drag a tab out to open it in its own window, or onto another window's tabs",
+    "A media button shows every tab playing audio or video, with play/pause",
+    "Sites only ask to show notifications right after you clicked or typed on them"
+  ],
+  "0.18.0": [
+    "A new look: tabs in the title bar, a dark canvas with violet accents, and pages in a rounded card",
+    "New tab, settings and every Operecs page redesigned to match, in light and dark"
+  ],
+  "0.17.0": [
+    "Reader mode for articles, with text size, font, width and theme",
+    "The shield shows what was blocked on the page",
+    "A certificate viewer in the site information popup",
+    "Notifications show the site's name and open its tab when clicked"
+  ],
+  "0.16.0": [
+    "Select several tabs with Cmd-click or Shift-click and act on them together",
+    "Sites ask before downloading several files on their own",
+    "Settings lists sites with cookies so you can remove their data",
+    "Custom search engines with keywords (type \"w cats\" to search Wikipedia)",
+    "Closing a tab with unsaved changes asks first",
+    "Share and Handoff on Mac"
+  ]
+}

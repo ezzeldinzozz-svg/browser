@@ -76,6 +76,7 @@ if (location.protocol === 'browser:' && window === window.top) {
     openDownloads: call('downloads:open'),
     installUpdate: call('update:install'),
     getAbout: call('about:info'),
+    getChangelog: call('data:changelog'),
     checkForUpdates: call('about:check'),
     installUpdateFromSettings: call('about:install'),
     respondAuth: call('auth:respond'),

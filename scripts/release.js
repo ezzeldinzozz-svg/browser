@@ -79,6 +79,15 @@ function main() {
   const tag = `v${version}`;
   const env = { ...process.env, GH_TOKEN: out('gh', ['auth', 'token', '--user', OWNER]) };
 
+  // 0. release notes: pages/changelog.json's "next" becomes this version (shown on What's new)
+  const logPath = path.join(ROOT, 'pages', 'changelog.json');
+  const log = JSON.parse(fs.readFileSync(logPath, 'utf8'));
+  if (!log[version]) {
+    if (!Array.isArray(log.next) || !log.next.length) throw new Error(`No release notes: add what changed to "next" in pages/changelog.json`);
+    const { _comment, next, ...older } = log;
+    fs.writeFileSync(logPath, JSON.stringify({ _comment, next: [], [version]: next, ...older }, null, 2) + '\n');
+  }
+
   // 1. version, commit, tag, push -> CI starts building Windows and Linux
   pkg.version = version;
   fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n');

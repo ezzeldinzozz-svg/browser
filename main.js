@@ -69,7 +69,7 @@ const PRELOAD = path.join(__dirname, 'gen', 'preload.js'); // bundled from prelo
 // The browser's own pages live at browser://<name>/ and are served from pages/<name>.html.
 // The toolbar is browser://ui/. Only these origins may call the privileged IPC API.
 const SCHEME = 'browser';
-const INTERNAL = new Set(['newtab', 'history', 'bookmarks', 'downloads', 'settings', 'error', 'welcome', 'privacy', 'extensions', 'shortcuts', 'licenses', 'tasks', 'reader']);
+const INTERNAL = new Set(['newtab', 'history', 'bookmarks', 'downloads', 'settings', 'error', 'welcome', 'privacy', 'extensions', 'shortcuts', 'licenses', 'tasks', 'reader', 'whatsnew']);
 const UI_URL = `${SCHEME}://ui/`;
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -3732,6 +3732,7 @@ function setupIpc() {
   handle('update:install', fromChrome, () => restartToUpdate());
   handle('about:info', fromInternal, () => ({ version: app.getVersion(), update: updater.getState() }));
   handle('about:check', fromInternal, () => updater.check());
+  handle('data:changelog', fromInternal, async () => JSON.parse(await fs.promises.readFile(path.join(__dirname, 'pages', 'changelog.json'), 'utf8')));
   handle('about:install', fromInternal, () => restartToUpdate());
   handle('adblock:toggle-site', fromChrome, (w) => toggleSiteBlocking(w));
   handle('adblock:details', fromChrome, (w) => {
@@ -4241,6 +4242,7 @@ function buildMenu() {
       role: 'help',
       submenu: [
         { label: 'Keyboard Shortcuts', accelerator: 'CmdOrCtrl+/', click: open('shortcuts') },
+        { label: "What's New", click: open('whatsnew') },
         {
           label: 'Report a Problem…',
           click: inWindow((w) => createTab(w, 'https://github.com/ezzeldinzozz-svg/operecs-browser/issues/new')),
@@ -4400,6 +4402,10 @@ app.whenReady().then(() => {
     );
   }
   // The previous run didn't reach before-quit: it crashed or was killed.
+  // After an update, show what changed (once per version).
+  const updatedFrom = store.data.lastVersion;
+  const justUpdated = !store.isNew && updatedFrom !== app.getVersion(); // (profiles before 1.0 have no lastVersion)
+  store.data.lastVersion = app.getVersion();
   const crashed = store.data.cleanExit === false;
   store.data.cleanExit = false;
   const firstRun = store.isNew && !store.data.welcomed;
@@ -4424,6 +4430,10 @@ app.whenReady().then(() => {
       layout(w);
       sendTabs(w);
     }
+  }
+  if (justUpdated && !firstRun) {
+    const w = windows.find((x) => !x.private && liveWindow(x));
+    if (w) createTab(w, internalURL('whatsnew'));
   }
   launched = true;
   for (const url of [...process.argv.slice(1).map(urlFromArg).filter(Boolean), ...pendingOpens.splice(0)]) {

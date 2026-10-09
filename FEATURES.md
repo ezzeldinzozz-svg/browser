@@ -31,7 +31,7 @@ Edit freely: move lines between sections, delete what you don't want, add your o
 - [x] Resume interrupted downloads where they stopped (also after quitting Operecs, when the server supports it)
 - [x] Auto-delete history older than 7/30/90/365 days; clear history, downloads, cookies or cache when Operecs quits
 - [x] Paste as plain text (Cmd+Shift+V, Edit menu and right-click in text fields)
-- [ ] "What's new" page after an update
+- [x] "What's new" page after an update (browser://whatsnew, Help → What's New; notes in pages/changelog.json)
 - [x] Bookmarks menu in the menu bar listing bookmarks and folders (with icons)
 - [x] Favicons stored for bookmarks (bar, menu, manager, new tab)
 
