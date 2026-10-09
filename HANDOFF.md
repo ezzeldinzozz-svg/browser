@@ -13,13 +13,14 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 ## Status
 
 **Done**
-- Tabs, address bar (URL or DuckDuckGo search), back/forward/reload/stop, keyboard shortcuts
+- Tabs, address bar (URL or search with the chosen engine: DuckDuckGo default, Google, Bing, Brave, Ecosia, Kagi, Startpage), back/forward/reload/stop, keyboard shortcuts
+- Tab strip: drag to reorder, pinned tabs (kept left, restored), audio indicator with click-to-mute, right-click menu (new tab to the right, reload, duplicate, pin, mute, move to new window, close / others / to the right, reopen closed)
 - Bookmarks, history, downloads page, find in page, new-tab page, settings page
 - Per-site permission prompts (camera, mic, location, notifications, clipboard, MIDI, external apps), remembered per site, resettable in Settings
 - HTML video fullscreen
 - HTTP sign-in bar (username/password for sites using HTTP auth), with a warning on plain http
 - Right-click menus: links (open in background tab, copy), images (open, copy, save), text (copy, search), editable fields (spelling fixes, cut/copy/paste), page (back/forward/reload, print, view source), Inspect Element; edit menu in the toolbar's text fields
-- Multiple windows (Cmd/Ctrl+N); all normal windows and their tabs restored on launch
+- Multiple windows (Cmd/Ctrl+N); all normal windows and their tabs restored on launch; on macOS the app stays open with no windows (Dock click or Dock menu opens one)
 - Private windows (Cmd/Ctrl+Shift+N): purple frame, separate in-memory session per window, nothing recorded (history, session, permissions, downloads list), all data wiped when the window closes
 - Ad & tracker blocking (Ghostery engine, EasyList/EasyPrivacy, lists refreshed weekly and cached in the profile): toolbar shield shows the blocked count and turns blocking off per site; global switch in Settings
 - Print (Cmd/Ctrl+P), session restore with back/forward history (toggle in Settings), Reopen Closed Tab (Cmd/Ctrl+Shift+T); links opened from a page line up next to it
@@ -38,7 +39,6 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 - Default Electron icon; product name "Browser" is a placeholder
 - macOS asks once for keychain access ("Browser Safe Storage", the cookie-encryption key) when moving to v0.4.0, the first build signed with our self-signed certificate. Choose "Always Allow"; later versions keep the same identity and shouldn't ask again
 - Ad blocking: prebuilt lists skip generic cosmetic rules (site-specific hiding works); no details popup yet
-- macOS: closing the last window quits the app (Mac apps usually stay open)
 
 ## Roadmap (next, in order)
 

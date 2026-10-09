@@ -14,14 +14,14 @@ Ordered by priority, then by what unblocks what.
 
 1. ~~Private windows~~ done in v0.4.0
 2. ~~Built-in ad/tracker blocking with per-site toggle~~ done in v0.4.0 (a shield popup with details is still open)
-3. **P0** macOS "app stays open with no windows" (multiple windows are done in v0.4.0)
+3. ~~macOS app stays open with no windows~~ done in v0.5.0
 4. **P0** Storage: JSON → SQLite, needed before address-bar autocomplete, history ranges, passwords and sync
 5. **P0** Address-bar autocomplete from history + bookmarks, with a dropdown and keyboard selection
-6. **P0** Search engine choice (DuckDuckGo, Google, Bing, Brave, Ecosia, Kagi, custom) in Settings
+6. ~~Search engine choice~~ done in v0.5.0 (custom engines still open)
 7. **P0** Site info popup: lock/"Not secure" icon in the address bar, with permissions, cookies and certificate
 8. **P0** Clear browsing data dialog (history, cookies/site data, cache, downloads; time ranges)
-9. **P0** Tab context menu: duplicate, pin, mute, reload, close others/to the right, move to new window
-10. **P0** Tab drag-to-reorder, plus an audio-playing/muted indicator on tabs
+9. ~~Tab context menu~~ done in v0.5.0
+10. ~~Tab drag-to-reorder, audio indicator~~ done in v0.5.0
 11. **P0** Dangerous download warning (.exe, .dmg, .pkg, scripts) and a "Save as / always ask where" option
 12. **P0** Open links from other apps / set as default browser (`open-url`, `second-instance` argv, protocol registration)
 13. **P0** Bookmarks bar, bookmark folders, edit bookmark dialog, import from Chrome/Safari/Firefox (bookmarks + history)
@@ -40,14 +40,16 @@ Ordered by priority, then by what unblocks what.
 - [x] Open link in background tab (context menu; Cmd/Ctrl+click via `background-tab` disposition)
 - [x] Back / forward / reload / stop / hard reload (Cmd/Ctrl+Shift+R)
 - [x] Popups (`window.open`) open as tabs; navigation to `browser://` from websites blocked
-- [ ] **P0** Tab context menu (right-click a tab): reload, duplicate, pin, mute, close others / to the right, move to new window
-- [ ] **P0** Drag tabs to reorder
-- [ ] **P0** Audio-playing indicator on tabs, click to mute; "Mute site"
-- [ ] **P0** Duplicate tab
+- [x] Tab context menu (right-click a tab): new tab to the right, reload, duplicate, pin, mute, move to new window, close, close others / to the right, reopen closed tab
+- [x] Drag tabs to reorder (within the pinned / unpinned groups)
+- [x] Audio-playing indicator on tabs, click to mute
+- [ ] **P2** "Mute site" (all tabs of a site)
+- [x] Duplicate tab (keeps back/forward history)
 - [ ] **P0** Tab overflow handling (shrink, then scroll) with many tabs; tab tooltips with URL
 - [ ] **P0** Long-press / right-click back and forward buttons for the history list
-- [ ] **P1** Pin tabs (small, left-aligned, survive restart)
-- [ ] **P1** Move tab to new window / tear off by dragging out; drag a tab into another window
+- [x] Pin tabs (small, left-aligned, survive restart; Close Other Tabs keeps them)
+- [x] Move tab to new window (context menu; the page keeps running)
+- [ ] **P1** Tear off by dragging a tab out; drag a tab into another window
 - [ ] **P1** Tab search (Cmd/Ctrl+Shift+A style list of open tabs, also matched in the address bar: "Switch to tab")
 - [ ] **P1** Close multiple selected tabs (Shift/Cmd-click to select)
 - [ ] **P1** Popups that need `window.opener` (OAuth sign-in) open as real popup windows (known issue)
@@ -63,7 +65,7 @@ Ordered by priority, then by what unblocks what.
 - [x] Single-instance lock: launching again focuses the existing window
 - [x] Window full screen (Ctrl+Cmd+F / F11) and HTML video full screen
 - [x] Multiple windows: New Window (Cmd/Ctrl+N), Close Window (Cmd/Ctrl+Shift+W), each with its own tabs; all normal windows restored on launch
-- [ ] **P0** macOS: closing the last window keeps the app running; Dock click reopens a window (today closing quits)
+- [x] macOS: closing the last window keeps the app running; Dock click opens a new window
 - [x] Private window (Cmd/Ctrl+Shift+N): purple frame, in-memory session per window, no history/session/permission/download records kept, wiped on close; "Open Link in Private Window"
 - [ ] **P0** Remember window size/position (per-window tabs are already restored)
 - [x] Window menu (macOS): list windows, Minimize, Zoom, Bring All to Front
@@ -78,7 +80,8 @@ Ordered by priority, then by what unblocks what.
 - [x] Select-all on focus, Esc to revert, Cmd/Ctrl+L to focus
 - [x] Edit context menu (cut/copy/paste/select all) in toolbar fields
 - [ ] **P0** Autocomplete dropdown from history and bookmarks (frecency ranking, inline completion)
-- [ ] **P0** Search engine choice in Settings (and in onboarding)
+- [x] Search engine choice in Settings: DuckDuckGo, Google, Bing, Brave Search, Ecosia, Kagi, Startpage
+- [ ] **P1** Search engine choice in onboarding; custom engines
 - [ ] **P0** Security indicator: lock / "Not secure" for http / warning on cert problems
 - [ ] **P0** Show URL without noise when unfocused (hide `https://`, `www.`), full URL on focus; highlight the domain (anti-spoofing)
 - [ ] **P1** Search suggestions from the chosen engine (opt-in for privacy)
@@ -232,7 +235,7 @@ Ordered by priority, then by what unblocks what.
 
 - [x] Settings page (Cmd/Ctrl+,) with "reopen tabs from last time" and site permissions
 - [ ] **P0** Make this my default browser button + status (`app.setAsDefaultProtocolClient('http'/'https')`, plus macOS/Windows file and URL associations)
-- [ ] **P0** Search engine setting
+- [x] Search engine setting
 - [ ] **P0** Privacy & security section (clear data, cookies, tracker blocking level, HTTPS-only, DoH, safe browsing)
 - [ ] **P0** On startup: new tab / continue where you left off / specific pages
 - [ ] **P1** Appearance: light/dark/system theme (toolbar and internal pages follow `nativeTheme`), accent color, show bookmarks bar, show home button
@@ -301,7 +304,8 @@ Ordered by priority, then by what unblocks what.
 - [ ] **P0** Register as default browser candidate: `CFBundleURLTypes` (http/https) + HTML document types in Info.plist, Windows registry `RegisteredApplications`/ProgId, Linux `.desktop` with `x-scheme-handler`
 - [ ] **P0** Open local files (drag a .html/.pdf onto the window or Dock icon, `open-file` event)
 - [ ] **P1** Drag & drop: URLs/text onto the tab strip or address bar to open; drag links/images out of pages; drag files into upload fields (verify)
-- [ ] **P1** Dock menu (macOS) / Jump List (Windows): New Window, New Private Window
+- [x] Dock menu (macOS): New Window, New Private Window
+- [ ] **P1** Jump List (Windows) with the same items
 - [ ] **P1** Share menu (macOS `ShareMenu`, Windows share) for the current page
 - [ ] **P1** Handoff / continuity on macOS (`app.setUserActivity` with the current URL)
 - [ ] **P1** Web app protocol handlers (`navigator.registerProtocolHandler`)

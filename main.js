@@ -36,7 +36,15 @@ const MIME = {
 };
 const FAVICON_MAX_BYTES = 256 * 1024;
 const SESSION_ENTRY_LIMIT = 50; // back/forward entries kept per tab
-const SEARCH_URL = 'https://duckduckgo.com/?q=';
+const SEARCH_ENGINES = {
+  duckduckgo: { name: 'DuckDuckGo', url: 'https://duckduckgo.com/?q=%s' },
+  google: { name: 'Google', url: 'https://www.google.com/search?q=%s' },
+  bing: { name: 'Bing', url: 'https://www.bing.com/search?q=%s' },
+  brave: { name: 'Brave Search', url: 'https://search.brave.com/search?q=%s' },
+  ecosia: { name: 'Ecosia', url: 'https://www.ecosia.org/search?q=%s' },
+  kagi: { name: 'Kagi', url: 'https://kagi.com/search?q=%s' },
+  startpage: { name: 'Startpage', url: 'https://www.startpage.com/do/search?q=%s' },
+};
 const HISTORY_LIMIT = 5000;
 const DOWNLOADS_LIMIT = 200;
 
@@ -77,7 +85,7 @@ class Store {
     } catch {
       // first run or unreadable file: start empty
     }
-    this.data.settings = { restoreSession: true, adblock: true, ...this.data.settings };
+    this.data.settings = { restoreSession: true, adblock: true, searchEngine: 'duckduckgo', ...this.data.settings };
   }
   save() {
     clearTimeout(this.timer);
@@ -149,7 +157,15 @@ function resolveInput(raw) {
     if (/^(localhost|(\d{1,3}\.){3}\d{1,3})(:\d+)?([/?#].*)?$/i.test(text)) return 'http://' + text;
     if (/^([\w-]+\.)+[a-z]{2,}(:\d+)?([/?#].*)?$/i.test(text)) return 'https://' + text;
   }
-  return SEARCH_URL + encodeURIComponent(text);
+  return searchUrl(text);
+}
+
+function searchEngine() {
+  return SEARCH_ENGINES[store.data.settings.searchEngine] || SEARCH_ENGINES.duckduckgo;
+}
+
+function searchUrl(query) {
+  return searchEngine().url.replace('%s', encodeURIComponent(query));
 }
 
 // "www.example.com" and "example.com" are the same site for site-level switches.
@@ -213,6 +229,9 @@ function sendTabs(w) {
         favicon: t.favicon,
         canGoBack: canGo(t.wc, 'back'),
         canGoForward: canGo(t.wc, 'forward'),
+        pinned: t.pinned,
+        audible: t.wc.isCurrentlyAudible(),
+        muted: t.wc.isAudioMuted(),
       };
     }),
   });
@@ -241,8 +260,10 @@ function layout(w) {
 
 // options.private: a private window with its own throwaway session
 // options.session: { tabs: [history...], active } to restore
-function createWindow({ private: isPrivate = false, session: saved = null } = {}) {
-  const ses = isPrivate ? createPrivateSession() : session.defaultSession;
+// options.ses: reuse this private session (a private tab moved to its own window)
+// options.empty: start without a tab (one is about to be moved in)
+function createWindow({ private: isPrivate = false, session: saved = null, ses: reuse = null, empty = false } = {}) {
+  const ses = isPrivate ? reuse || createPrivateSession() : session.defaultSession;
   const win = new BaseWindow({
     width: 1280,
     height: 800,
@@ -290,7 +311,7 @@ function createWindow({ private: isPrivate = false, session: saved = null } = {}
   if (saved && saved.tabs.length) {
     for (const h of saved.tabs) createTab(w, h.entries[h.index].url, { background: true, history: h });
     selectTab(w, w.tabs[Math.min(saved.active, w.tabs.length - 1)].id);
-  } else {
+  } else if (!empty) {
     createTab(w, internalURL('newtab'));
   }
   if (!isPrivate) sessionFrozen = false;
@@ -319,7 +340,7 @@ function onWindowClosed(w) {
     if (!t.wc.isDestroyed()) t.wc.close();
   }
   if (!w.chromeView.webContents.isDestroyed()) w.chromeView.webContents.close();
-  if (w.private) {
+  if (w.private && !windows.some((o) => o.ses === w.ses)) {
     // Nothing from a private window outlives it.
     w.ses.clearStorageData().catch(() => {});
     w.ses.clearCache().catch(() => {});
@@ -378,18 +399,20 @@ function createTab(w, url, { background = false, after = null, history = null } 
     find: { open: false, text: '', active: 0, matches: 0 },
     fullscreen: false,
     blocked: 0, // ads/trackers blocked on the current page
+    pinned: !!(history && history.pinned),
     openerId: after ? after.id : null,
   };
   const afterIdx = after ? w.tabs.indexOf(after) : -1;
   if (afterIdx === -1) w.tabs.push(tab);
   else w.tabs.splice(afterIdx + 1 + openerRunLength(w, after, afterIdx), 0, tab);
+  normalizeOrder(w);
   view.setVisible(false);
   w.win.contentView.addChildView(view);
 
   wc.setWindowOpenHandler(({ url: target, disposition }) => {
     if (!isBlockedNavigation(wc.getURL(), target)) {
       const resolved = resolveInput(target);
-      if (resolved) createTab(w, resolved, { after: tab, background: disposition === 'background-tab' });
+      if (resolved) createTab(tab.w, resolved, { after: tab, background: disposition === 'background-tab' });
     }
     return { action: 'deny' };
   });
@@ -403,11 +426,12 @@ function createTab(w, url, { background = false, after = null, history = null } 
 
   wc.on('page-title-updated', () => {
     updateHistoryTitle(tab);
-    sendTabs(w);
+    sendTabs(tab.w);
   });
   wc.on('page-favicon-updated', (_e, favicons) => loadFavicon(tab, favicons[0]));
-  wc.on('did-start-loading', () => sendTabs(w));
-  wc.on('did-stop-loading', () => sendTabs(w));
+  wc.on('audio-state-changed', () => sendTabs(tab.w));
+  wc.on('did-start-loading', () => sendTabs(tab.w));
+  wc.on('did-stop-loading', () => sendTabs(tab.w));
   wc.on('did-start-navigation', (details) => {
     if (details.isMainFrame && !details.isSameDocument) tab.blocked = 0;
   });
@@ -418,28 +442,28 @@ function createTab(w, url, { background = false, after = null, history = null } 
     tab.find.active = tab.find.matches = 0;
     recordHistory(tab, u);
     saveSession();
-    sendTabs(w);
+    sendTabs(tab.w);
   });
   wc.on('did-navigate-in-page', (_e, u, isMainFrame) => {
     if (!isMainFrame) return;
     recordHistory(tab, u);
     saveSession();
-    sendTabs(w);
+    sendTabs(tab.w);
   });
   wc.on('found-in-page', (_e, result) => {
     tab.find.active = result.activeMatchOrdinal;
     tab.find.matches = result.matches;
-    sendTabs(w);
+    sendTabs(tab.w);
   });
   wc.on('enter-html-full-screen', () => {
     tab.fullscreen = true;
-    if (!w.win.isFullScreen()) w.win.setFullScreen(true);
-    layout(w);
+    if (!tab.w.win.isFullScreen()) tab.w.win.setFullScreen(true);
+    layout(tab.w);
   });
   wc.on('leave-html-full-screen', () => {
     tab.fullscreen = false;
-    if (w.win.isFullScreen()) w.win.setFullScreen(false);
-    layout(w);
+    if (tab.w.win.isFullScreen()) tab.w.win.setFullScreen(false);
+    layout(tab.w);
   });
   wc.on('did-fail-load', (_e, code, desc, failedUrl, isMainFrame) => {
     if (!isMainFrame || code === -3 /* aborted */ || isInternalScheme(failedUrl)) return;
@@ -519,6 +543,111 @@ function closeTab(w, id) {
   if (id === w.activeId) selectTab(w, w.tabs[Math.min(idx, w.tabs.length - 1)].id);
   else sendTabs(w);
   saveSession();
+}
+
+// Pinned tabs always come first; this keeps that true after any insert or move.
+function normalizeOrder(w) {
+  const pinned = w.tabs.filter((t) => t.pinned);
+  if (pinned.length === 0) return;
+  w.tabs = [...pinned, ...w.tabs.filter((t) => !t.pinned)];
+}
+
+function setPinned(tab, pinned) {
+  const { w } = tab;
+  if (tab.pinned === pinned) return;
+  tab.pinned = pinned;
+  w.tabs.splice(w.tabs.indexOf(tab), 1);
+  const firstUnpinned = w.tabs.filter((t) => t.pinned).length;
+  w.tabs.splice(firstUnpinned, 0, tab); // end of the pinned group, or start of the rest
+  sendTabs(w);
+  saveSession();
+}
+
+// Drag-and-drop reorder; a tab stays within its group (pinned or not).
+function moveTab(w, id, toIndex) {
+  const tab = getTab(w, id);
+  if (!tab || !Number.isInteger(toIndex)) return;
+  w.tabs.splice(w.tabs.indexOf(tab), 1);
+  const pinnedCount = w.tabs.filter((t) => t.pinned).length;
+  const [min, max] = tab.pinned ? [0, pinnedCount] : [pinnedCount, w.tabs.length];
+  w.tabs.splice(Math.min(max, Math.max(min, toIndex)), 0, tab);
+  sendTabs(w);
+  saveSession();
+}
+
+function duplicateTab(tab) {
+  const history = tabHistory(tab);
+  createTab(tab.w, tab.wc.getURL(), { after: tab, history: history ? { ...history, pinned: false } : null });
+}
+
+function toggleMute(tab) {
+  tab.wc.setAudioMuted(!tab.wc.isAudioMuted());
+  sendTabs(tab.w);
+}
+
+// Takes the tab out of its window without closing its page.
+function detachTab(tab) {
+  const { w } = tab;
+  const idx = w.tabs.indexOf(tab);
+  w.tabs.splice(idx, 1);
+  dismissPrompts(tab);
+  cancelAuth(tab);
+  exitFullscreen(tab);
+  w.win.contentView.removeChildView(tab.view);
+  if (w.tabs.length === 0) w.win.close();
+  else if (tab.id === w.activeId) selectTab(w, w.tabs[Math.min(idx, w.tabs.length - 1)].id);
+  else sendTabs(w);
+}
+
+function moveTabToNewWindow(tab) {
+  const from = tab.w;
+  if (from.tabs.length < 2) return;
+  const target = createWindow({ private: from.private, ses: from.private ? from.ses : null, empty: true });
+  detachTab(tab);
+  tab.w = target;
+  tab.openerId = null;
+  target.tabs.push(tab);
+  normalizeOrder(target);
+  target.win.contentView.addChildView(tab.view);
+  layout(target);
+  selectTab(target, tab.id);
+}
+
+function closeTabs(w, keep) {
+  for (const t of w.tabs.filter((x) => !keep(x))) closeTab(w, t.id);
+}
+
+function showTabMenu(w, id) {
+  const tab = getTab(w, id);
+  if (!tab) return;
+  const idx = w.tabs.indexOf(tab);
+  const muted = tab.wc.isAudioMuted();
+  Menu.buildFromTemplate([
+    {
+      label: 'New Tab to the Right',
+      click: () => {
+        const t = createTab(w, internalURL('newtab'));
+        moveTab(w, t.id, w.tabs.indexOf(tab) + 1);
+      },
+    },
+    { type: 'separator' },
+    { label: 'Reload', click: () => tab.wc.reload() },
+    { label: 'Duplicate', click: () => duplicateTab(tab) },
+    { label: tab.pinned ? 'Unpin' : 'Pin', click: () => setPinned(tab, !tab.pinned) },
+    { label: muted ? 'Unmute Tab' : 'Mute Tab', click: () => toggleMute(tab) },
+    { type: 'separator' },
+    { label: 'Move to New Window', enabled: w.tabs.length > 1, click: () => moveTabToNewWindow(tab) },
+    { type: 'separator' },
+    { label: 'Close', click: () => closeTab(w, tab.id) },
+    { label: 'Close Other Tabs', enabled: w.tabs.length > 1, click: () => closeTabs(w, (t) => t === tab || t.pinned) },
+    {
+      label: 'Close Tabs to the Right',
+      enabled: idx < w.tabs.length - 1,
+      click: () => closeTabs(w, (t) => w.tabs.indexOf(t) <= w.tabs.indexOf(tab) || t.pinned),
+    },
+    { type: 'separator' },
+    { label: 'Reopen Closed Tab', enabled: w.closedTabs.length > 0, click: () => reopenClosedTab(w) },
+  ]).popup({ window: w.win });
 }
 
 function cycleTab(w, step) {
@@ -602,7 +731,7 @@ function tabHistory(tab) {
   if (!keep[index]) return null;
   index -= keep.slice(0, index).filter((k) => !k).length;
   entries = entries.filter((_e, i) => keep[i]);
-  return entries.length ? { entries, index } : null;
+  return entries.length ? { entries, index, pinned: tab.pinned } : null;
 }
 
 // Saves every open normal window (private windows are never saved).
@@ -899,8 +1028,8 @@ function showPageMenu(tab, params) {
     groups.push([
       { label: 'Copy', click: () => wc.copy() },
       {
-        label: `Search for “${trimLabel(params.selectionText)}”`,
-        click: () => createTab(w, SEARCH_URL + encodeURIComponent(params.selectionText.trim()), { after: tab }),
+        label: `Search ${searchEngine().name} for “${trimLabel(params.selectionText)}”`,
+        click: () => createTab(w, searchUrl(params.selectionText.trim()), { after: tab }),
       },
     ]);
   }
@@ -1119,6 +1248,12 @@ function setupIpc() {
   });
   handle('tab:close', fromChrome, (w, id) => closeTab(w, id));
   handle('tab:select', fromChrome, (w, id) => selectTab(w, id));
+  handle('tab:menu', fromChrome, (w, id) => showTabMenu(w, id));
+  handle('tab:move', fromChrome, (w, id, index) => moveTab(w, id, index));
+  handle('tab:mute', fromChrome, (w, id) => {
+    const tab = getTab(w, id);
+    if (tab) toggleMute(tab);
+  });
   handle('nav:back', fromChrome, (w) => activeTab(w)?.wc.navigationHistory.goBack());
   handle('nav:forward', fromChrome, (w) => activeTab(w)?.wc.navigationHistory.goForward());
   handle('nav:reload', fromChrome, (w) => {
@@ -1170,9 +1305,14 @@ function setupIpc() {
   handle('data:settings', fromInternal, () => ({
     ...store.data.settings,
     adblockAllowlist: store.data.adblockAllowlist,
+    searchEngines: Object.entries(SEARCH_ENGINES).map(([id, e]) => ({ id, name: e.name })),
+    searchEngineName: searchEngine().name,
   }));
   handle('data:settings-set', fromInternal, (_tab, key, value) => {
-    if (!['restoreSession', 'adblock'].includes(key) || typeof value !== 'boolean') return;
+    const valid =
+      (['restoreSession', 'adblock'].includes(key) && typeof value === 'boolean') ||
+      (key === 'searchEngine' && Object.hasOwn(SEARCH_ENGINES, value));
+    if (!valid) return;
     store.data.settings[key] = value;
     store.save();
     sendAll();
@@ -1402,6 +1542,14 @@ app.whenReady().then(() => {
 
   setupIpc();
   buildMenu();
+  if (isMac) {
+    app.dock.setMenu(
+      Menu.buildFromTemplate([
+        { label: 'New Window', click: () => createWindow() },
+        { label: 'New Private Window', click: () => createWindow({ private: true }) },
+      ]),
+    );
+  }
   const restore = store.data.settings.restoreSession ? savedWindows() : [];
   if (restore.length) for (const s of restore) createWindow({ session: s });
   else createWindow();
@@ -1443,4 +1591,10 @@ app.on('before-quit', () => {
   }
   updater.install(false); // a downloaded update is applied whenever the app quits
 });
-app.on('window-all-closed', () => app.quit());
+// macOS apps keep running with no windows; the Dock icon or a menu command opens a new one.
+app.on('window-all-closed', () => {
+  if (!isMac) app.quit();
+});
+app.on('activate', () => {
+  if (app.isReady() && store && windows.length === 0) createWindow();
+});

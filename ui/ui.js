@@ -5,6 +5,111 @@ const $ = (id) => document.getElementById(id);
 const tablist = $('tablist');
 const address = $('address');
 
+const SPEAKER =
+  '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M3 9v6h4l5 4V5L7 9H3z"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M16 8.5a5 5 0 0 1 0 7"/></svg>';
+const SPEAKER_MUTED =
+  '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M3 9v6h4l5 4V5L7 9H3z"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M16 9l5 6M21 9l-5 6"/></svg>';
+
+let dragId = null;
+
+function renderTab(t, isActive) {
+  const el = document.createElement('div');
+  el.className = 'tab' + (isActive ? ' active' : '') + (t.pinned ? ' pinned' : '');
+  el.title = t.title;
+  el.draggable = true;
+
+  if (t.loading) {
+    const s = document.createElement('div');
+    s.className = 'spinner';
+    el.append(s);
+  } else if (t.favicon) {
+    const img = document.createElement('img');
+    img.src = t.favicon;
+    img.onerror = () => img.remove();
+    el.append(img);
+  } else if (t.pinned) {
+    const dot = document.createElement('span');
+    dot.className = 'letter';
+    dot.textContent = (t.title || '?').trim().charAt(0).toUpperCase();
+    el.append(dot);
+  }
+
+  if (!t.pinned) {
+    const title = document.createElement('span');
+    title.className = 'title';
+    title.textContent = t.title;
+    el.append(title);
+  }
+
+  if (t.audible || t.muted) {
+    const audio = document.createElement('button');
+    audio.className = 'audio' + (t.muted ? ' muted' : '');
+    audio.innerHTML = t.muted ? SPEAKER_MUTED : SPEAKER;
+    audio.title = t.muted ? 'Unmute tab' : 'Mute tab';
+    audio.addEventListener('mousedown', (e) => {
+      e.stopPropagation();
+      if (e.button === 0) api.muteTab(t.id);
+    });
+    el.append(audio);
+  }
+
+  if (!t.pinned) {
+    const close = document.createElement('button');
+    close.className = 'close';
+    close.textContent = '×';
+    close.title = 'Close tab';
+    close.addEventListener('mousedown', (e) => {
+      e.stopPropagation();
+      if (e.button === 0) api.closeTab(t.id);
+    });
+    el.append(close);
+  }
+
+  el.addEventListener('mousedown', (e) => {
+    if (e.button === 1) {
+      e.preventDefault();
+      api.closeTab(t.id);
+    } else if (e.button === 0) {
+      api.selectTab(t.id);
+    }
+  });
+  el.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    api.tabMenu(t.id);
+  });
+
+  // Drag to reorder: drop before or after a tab depending on which half the cursor is over.
+  el.addEventListener('dragstart', (e) => {
+    dragId = t.id;
+    e.dataTransfer.effectAllowed = 'move';
+    el.classList.add('dragging');
+  });
+  el.addEventListener('dragend', () => {
+    dragId = null;
+    el.classList.remove('dragging');
+    for (const x of tablist.querySelectorAll('.drop-before, .drop-after')) x.classList.remove('drop-before', 'drop-after');
+  });
+  el.addEventListener('dragover', (e) => {
+    if (dragId === null || dragId === t.id) return;
+    e.preventDefault();
+    const after = e.offsetX > el.offsetWidth / 2;
+    el.classList.toggle('drop-after', after);
+    el.classList.toggle('drop-before', !after);
+  });
+  el.addEventListener('dragleave', () => el.classList.remove('drop-before', 'drop-after'));
+  el.addEventListener('drop', (e) => {
+    e.preventDefault();
+    if (dragId === null || dragId === t.id) return;
+    const ids = [...tablist.children].map((x) => Number(x.dataset.id));
+    const from = ids.indexOf(dragId);
+    let to = ids.indexOf(t.id) + (el.classList.contains('drop-after') ? 1 : 0);
+    if (from < to) to -= 1; // the dragged tab leaves its old slot first
+    api.moveTab(dragId, to);
+  });
+  el.dataset.id = String(t.id);
+  return el;
+}
+
 function render(state) {
   const active = state.tabs.find((t) => t.id === state.activeId);
   document.body.classList.toggle('private', state.private);
@@ -19,46 +124,7 @@ function render(state) {
     : `Ad blocking is off for ${shield.site}. Click to turn it on.`;
 
   tablist.textContent = '';
-  for (const t of state.tabs) {
-    const el = document.createElement('div');
-    el.className = 'tab' + (t.id === state.activeId ? ' active' : '');
-    el.title = t.title;
-
-    if (t.loading) {
-      const s = document.createElement('div');
-      s.className = 'spinner';
-      el.append(s);
-    } else if (t.favicon) {
-      const img = document.createElement('img');
-      img.src = t.favicon;
-      img.onerror = () => img.remove();
-      el.append(img);
-    }
-
-    const title = document.createElement('span');
-    title.className = 'title';
-    title.textContent = t.title;
-
-    const close = document.createElement('button');
-    close.className = 'close';
-    close.textContent = '×';
-    close.title = 'Close tab';
-    close.addEventListener('mousedown', (e) => {
-      e.stopPropagation();
-      if (e.button === 0) api.closeTab(t.id);
-    });
-
-    el.append(title, close);
-    el.addEventListener('mousedown', (e) => {
-      if (e.button === 1) {
-        e.preventDefault();
-        api.closeTab(t.id);
-      } else if (e.button === 0) {
-        api.selectTab(t.id);
-      }
-    });
-    tablist.append(el);
-  }
+  for (const t of state.tabs) tablist.append(renderTab(t, t.id === state.activeId));
 
   $('back').disabled = !active || !active.canGoBack;
   $('forward').disabled = !active || !active.canGoForward;

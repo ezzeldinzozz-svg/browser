@@ -88,6 +88,22 @@ button {
   color: var(--fg-dim);
 }
 .tab .close:hover { background: var(--border); color: var(--fg); }
+.tab.pinned { flex: none; min-width: 0; width: 40px; padding: 0; justify-content: center; }
+.tab .letter {
+  width: 16px; height: 16px; border-radius: 4px; flex: none;
+  background: var(--border); color: var(--fg); font-size: 10px; line-height: 16px; text-align: center;
+}
+.tab .audio {
+  display: flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; flex: none; padding: 0; border-radius: 50%; color: var(--fg-dim);
+}
+.tab .audio:hover { background: var(--border); color: var(--fg); }
+.tab .audio.muted { color: var(--accent); }
+.tab.pinned .audio { position: absolute; margin: -14px -22px 0 0; width: 14px; height: 14px; }
+.tab { position: relative; }
+.tab.dragging { opacity: 0.4; }
+.tab.drop-before { box-shadow: inset 2px 0 0 var(--accent); }
+.tab.drop-after { box-shadow: inset -2px 0 0 var(--accent); }
 .spinner {
   border: 2px solid var(--border);
   border-top-color: var(--accent);

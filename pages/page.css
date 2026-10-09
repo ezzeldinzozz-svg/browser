@@ -54,6 +54,10 @@ h2 { font-size: 16px; font-weight: 500; }
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg); }
 button:disabled { opacity: 0.5; cursor: default; }
 .check input { width: 16px; height: 16px; margin: 0; }
+select {
+  height: 32px; padding: 0 8px; margin-bottom: 28px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--card); color: var(--fg); font: inherit;
+}
 .row a.t { display: block; }
 .row .t.muted { color: var(--dim); }
 

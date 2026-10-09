@@ -15,10 +15,15 @@ const list = document.getElementById('list');
 const restore = document.getElementById('restore');
 const adblock = document.getElementById('adblock');
 const allowlist = document.getElementById('allowlist');
+const engine = document.getElementById('engine');
 
 async function loadSettings() {
   const s = await browserAPI.getSettings();
   restore.checked = s.restoreSession;
+  if (!engine.options.length) {
+    for (const e of s.searchEngines) engine.append(new Option(e.name, e.id));
+  }
+  engine.value = s.searchEngine;
   adblock.checked = s.adblock;
   allowlist.textContent = '';
   if (s.adblockAllowlist.length === 0) {
@@ -46,6 +51,7 @@ async function loadSettings() {
 
 restore.addEventListener('change', () => browserAPI.setSetting('restoreSession', restore.checked));
 adblock.addEventListener('change', () => browserAPI.setSetting('adblock', adblock.checked));
+engine.addEventListener('change', () => browserAPI.setSetting('searchEngine', engine.value));
 loadSettings();
 
 async function load() {
