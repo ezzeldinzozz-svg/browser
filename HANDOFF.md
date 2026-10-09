@@ -5,6 +5,8 @@ in the same commit as any change to features, architecture, setup, or plans.
 
 _Last updated: 2026-10-09 · Current release: v0.18.0 (all platforms)_
 
+**On `main` but not released yet** (release with `npm run release -- 0.19.0`): theme setting (system/dark/light), notification permission fix + quieter prompts, tab tear-off / drag between windows, media hub.
+
 ## What this is
 
 **Operecs** (renamed from "Browser" after v0.13.0): a basic cross-platform web browser (macOS, Windows, Linux) built on Electron. Goal right now: a
@@ -25,6 +27,9 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 - Notifications: capture-preload.js wraps `window.Notification` in the page (adds the site as the last body line, reports clicks); `notification:click` selects that tab and focuses its window. Service-worker notifications aren't wrapped
 - Design (v0.18): same language as the brand / ezzeddin.work — near-black canvas (`#0c0a11`, light `#ecebf1`, private `#120a22`; `CANVAS` in main.js must match `--canvas` in ui/style.css), violet `#9b6cff` with gradient primary buttons, pill controls, violet-glow panels, Outfit + Azeret Mono (OFL; copies in `ui/fonts` and `pages/fonts`, source in `brand/fonts`). Pages are a rounded card (`PAGE_INSET` 8, `PAGE_RADIUS` 12 via `setBorderRadius`) except in page fullscreen. The tab strip is the title bar: macOS `hiddenInset` traffic lights (UI gets `body.mac` / `.fullscreen` via `window:fullscreen`), Windows `titleBarOverlay` (`windowsTitleBar`, recoloured on theme change), Linux framed. Toolbar icons are inline SVG (`.ico`)
 - Tab drag between windows: the tab's drag carries `application/x-operecs-tab`; a drop on another window's strip calls `tab:adopt` (`adoptTab`), a drop where nothing accepts (`dropEffect === 'none'`) calls `tab:tear-off` (`tearOffTab`: new window at the cursor unless the cursor is still over the strip)
+- Media hub: `media-started-playing` / `media-paused` set `tab.media`; `mediaTabs(w)` goes out with the tab state; the toolbar `#media` button opens a list (reuses `#sitepopup` with class `media`) with play/pause (`media:toggle` → `toggleMedia` runs a small script in every frame) and jump-to-tab
+- Theme: Settings → Appearance → Theme sets `settings.theme` → `nativeTheme.themeSource` (also applied at startup and on Reset)
+- Notifications: capture-preload.js reports `Notification.permission` "default" / permissions.query "prompt" while the site is undecided (`notification:undecided`); `onPermissionRequest` refuses notification prompts unless the tab had input in the last 5 s (`tab.lastInput`)
 - Multi-tab selection: Cmd/Ctrl-click toggles, Shift-click selects a range (`w.multi`, `clickTab`); the tab menu then acts on all of them (reload, duplicate, pin, mute, move to new window, close) and Cmd/Ctrl+W closes them. `selectTab(w, id, keepSelection)` clears the selection unless asked not to; the extensions library calls back `selectTab` when we select a tab, so that callback only acts when the tab isn't already active
 - Automatic downloads: a page gets one download on its own; `allowAutomaticDownload` resets on a click/keypress in the page (`input-event`) and otherwise asks with the normal permission bar ("download multiple files", site permission `automatic-downloads`). Cancelled downloads restart via `userDownload()` when allowed; Save As/Retry also go through `userDownload()` so they're never counted
 - Cookies and site data (Settings): `siteDataList` groups cookies by site (`siteKey`, a small heuristic instead of the public suffix list); Remove deletes that site's cookies and clears storage for each host (https and http); Remove all clears every kind of storage. Only sites with cookies can be listed (Chromium doesn't enumerate other storage)
@@ -88,14 +93,31 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 
 ## Roadmap (next, in order)
 
-The full prioritized checklist is in `FEATURES.md` (P0/P1/P2). Short version:
+The full prioritized checklist is in `FEATURES.md` (P0/P1/P2). Work was going through the
+remaining basics one at a time, aiming at "ready to be a daily driver". Next, in order:
 
-1. Intel/universal Mac build; Windows code signing (SignPath, free for open source) to avoid SmartScreen warnings
-2. Verify password-manager extensions end to end (Bitwarden sign-in + autofill), pin/hide extension buttons
-3. Passkeys (need a Developer ID-signed app on macOS)
-3. Windows/Linux builds + their updaters (electron-updater works unsigned there)
-5. Storage: JSON file → SQLite (before passwords and sync)
-6. Later: Apple Developer ID ($99/yr) to remove the first-launch warning; Windows signing (SignPath Foundation is free for open source)
+1. Context menu extras: macOS Look Up (`wc.showDefinitionForSelection`), Speech (`startSpeaking`/`stopSpeaking` roles), Emoji & Symbols (`app.showEmojiPanel`); custom spellcheck dictionary list in Settings (`ses.listWordsInSpellCheckerDictionary` / `removeWordFromSpellCheckerDictionary`)
+2. Extensions page: pin/hide toolbar buttons, enable/disable without removing (keep a disabled list, unload/load)
+3. Form re-submission warning on reload after POST (remember the main-frame method per tab via `webRequest`, confirm before `reload`)
+4. Proxy settings (system by default; manual / PAC via `ses.setProxy`)
+5. Offline page copy for `ERR_INTERNET_DISCONNECTED`; captive-portal hint ("Sign in to the network" opening `http://neverssl.com`)
+6. Device chooser for WebHID / Web Serial / WebUSB / Web Bluetooth (`select-hid-device`, `select-serial-port`, `select-usb-device`, `select-bluetooth-device`), or deny with a message
+7. Windows Jump List (`app.setUserTasks`: New Window, New Private Window); verify default-browser registration on Windows (registry) and Linux (`x-scheme-handler`) with real builds
+8. Import history from Chrome/Brave/Edge (their `History` SQLite file, via `node:sqlite`); export all data (bookmarks HTML + settings JSON)
+9. Profiles (separate persistent partitions, switcher, per-profile window color)
+10. UI translation layer + Arabic + right-to-left layout; UI language follows the OS with an override
+11. Intel Mac build (x64 or universal; the updater needs a `mac-x64` manifest/platform key)
+12. Accessibility pass (labels on every bar/popup, VoiceOver/NVDA)
+13. Storage: JSON → SQLite (`node:sqlite`), then full-text history search
+14. Weekly Electron patch bump (currently 44.7.0)
+
+Blocked or decided against (don't pick up without the user):
+- Passkeys, Developer ID signing/notarization, iCloud Passwords: need the paid Apple Developer Program (the user's enrollment was under review on 2026-10-09). iCloud Passwords also needs Apple to grant `com.apple.developer.web-browser.public-key-credential`
+- Windows code signing (SignPath for OSS or a paid certificate)
+- DRM (Netflix/Spotify): castLabs Electron fork + Widevine signing
+- Safe Browsing: Google Web Risk is paid
+- Built-in password manager: the user wants none (extensions only)
+- Opt-in crash reporting: needs a Sentry/Backtrace account
 
 See `research/browser-lessons.md` for the full research on how Brave and others are built.
 

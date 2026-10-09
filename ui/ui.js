@@ -184,6 +184,10 @@ function render(state) {
   $('forward').disabled = !active || !active.canGoForward;
   $('reload').classList.toggle('loading', !!(active && active.loading));
   $('reload').title = active && active.loading ? 'Stop' : 'Reload';
+  lastMedia = state.media || [];
+  $('media').hidden = lastMedia.length === 0;
+  $('media').classList.toggle('on', lastMedia.some((m) => m.playing));
+  if (!$('sitepopup').hidden && $('sitepopup').classList.contains('media')) renderMediaPopup();
   $('reader').hidden = !state.reader;
   $('reader').classList.toggle('on', state.reader === 'on');
   $('reader').title = state.reader === 'on' ? 'Leave reader mode' : 'Reader mode';
@@ -546,7 +550,7 @@ async function openSitePopup() {
   if (!info) return;
   const pop = $('sitepopup');
   pop.textContent = '';
-  pop.classList.remove('right');
+  pop.classList.remove('right', 'media');
   if (info.kind !== 'web') {
     pop.append(el('h3', '', info.title), el('div', 'line', "This is one of the browser's own pages."));
   } else {
@@ -652,6 +656,43 @@ function certificateSection(cert) {
   return box;
 }
 
+// Media hub: every tab playing (or paused) audio/video, with play/pause and a jump to the tab.
+let lastMedia = [];
+const PLAY = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg>';
+const PAUSE = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>';
+function renderMediaPopup() {
+  const pop = $('sitepopup');
+  pop.textContent = '';
+  pop.append(el('div', 'sec-title', 'Playing'));
+  if (!lastMedia.length) pop.append(el('div', 'line', 'Nothing is playing.'));
+  for (const m of lastMedia) {
+    const row = el('div', 'media-row');
+    const info = el('button', 'media-info');
+    info.title = 'Go to this tab';
+    info.append(el('span', 'media-title', m.title), el('span', 'media-site', m.site + (m.current ? ' \u00b7 this tab' : '')));
+    info.addEventListener('click', () => {
+      api.switchToTab(m.id);
+      closeSitePopup();
+    });
+    const btn = el('button', 'media-btn');
+    btn.innerHTML = m.playing ? PAUSE : PLAY;
+    btn.title = m.playing ? 'Pause' : 'Play';
+    btn.addEventListener('click', () => api.toggleMedia(m.id));
+    row.append(info, btn);
+    pop.append(row);
+  }
+}
+function openMediaPopup() {
+  const pop = $('sitepopup');
+  pop.classList.add('right', 'media');
+  renderMediaPopup();
+  pop.hidden = false;
+  $('backdrop').hidden = false;
+  setOverlay();
+}
+$('media').addEventListener('mousedown', (e) => e.preventDefault());
+$('media').addEventListener('click', () => ($('sitepopup').hidden ? openMediaPopup() : closeSitePopup()));
+
 // Shield: what was blocked on this page, and the switch for the site.
 async function openShieldPopup() {
   const info = await api.adblockDetails();
@@ -659,6 +700,7 @@ async function openShieldPopup() {
   const pop = $('sitepopup');
   pop.textContent = '';
   pop.classList.add('right');
+  pop.classList.remove('media');
   pop.append(el('h3', '', info.site));
   if (!info.available) {
     pop.append(el('div', 'line', 'Ad and tracker blocking is turned off in Settings.'));

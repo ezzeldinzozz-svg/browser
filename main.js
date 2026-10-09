@@ -591,7 +591,53 @@ function sendTabs(w) {
         muted: t.wc.isAudioMuted(),
       };
     }),
+    media: mediaTabs(w),
   });
+}
+
+// ---------------------------------------------------------------- media hub
+
+// Tabs (in windows of the same kind) that are playing or have paused media, for the toolbar's
+// media button. Chromium's own media-key / Now Playing support handles the keyboard.
+function mediaTabs(w) {
+  const current = activeTab(w);
+  return allTabs()
+    .filter((t) => t.w.private === w.private && t.media && !t.wc.isDestroyed())
+    .map((t) => ({
+      id: t.id,
+      title: t.wc.getTitle() || displayUrl(t.wc.getURL()),
+      site: siteOf(t.wc.getURL()) || '',
+      favicon: t.favicon,
+      playing: t.media === 'playing',
+      current: t === current,
+    }));
+}
+
+function setMediaState(tab, state) {
+  if (tab.media === state) return;
+  tab.media = state;
+  windows.filter((x) => x.private === tab.w.private).forEach(sendTabs);
+}
+
+// Play/pause the media in every frame of the tab (videos inside iframes too).
+const MEDIA_TOGGLE = (pause) => `(() => {
+  const els = [...document.querySelectorAll('video, audio')];
+  if (${pause}) { els.forEach((m) => { if (!m.paused) m.pause(); }); return els.length; }
+  const target = els.find((m) => m.paused && m.currentTime > 0) || els.find((m) => m.paused);
+  if (target) target.play().catch(() => {});
+  return target ? 1 : 0;
+})()`;
+
+async function toggleMedia(tab) {
+  const pause = tab.media === 'playing';
+  for (const frame of tab.wc.mainFrame.framesInSubtree) {
+    try {
+      const n = await frame.executeJavaScript(MEDIA_TOGGLE(pause));
+      if (!pause && n) break; // resume one thing, not every player on the page
+    } catch {
+      // frame went away
+    }
+  }
 }
 
 const sendAll = () => windows.forEach(sendTabs);
@@ -1016,6 +1062,8 @@ function createTab(w, url, { background = false, after = null, history = null, l
     if (tab.id === tab.w.activeId) showStatus(tab.w, url);
   });
   wc.on('did-start-loading', () => sendTabs(tab.w));
+  wc.on('media-started-playing', () => setMediaState(tab, 'playing'));
+  wc.on('media-paused', () => setMediaState(tab, 'paused'));
   wc.on('did-stop-loading', () => {
     sendTabs(tab.w);
     checkReaderable(tab);
@@ -1025,6 +1073,7 @@ function createTab(w, url, { background = false, after = null, history = null, l
       tab.blocked = 0;
       tab.blockedHosts.clear();
       tab.readerable = false;
+      if (tab.media) setMediaState(tab, null);
     }
   });
   // A page may start one download on its own; more need the user's OK unless they clicked or
@@ -3115,6 +3164,10 @@ function setupIpc() {
   });
   handle('tab:move', fromChrome, (w, id, index) => moveTab(w, id, index));
   handle('tab:tear-off', fromChrome, (w, id) => tearOffTab(w, id));
+  handle('media:toggle', fromChrome, (w, id) => {
+    const tab = allTabs().find((t) => t.id === id && t.w.private === w.private);
+    if (tab) return toggleMedia(tab);
+  });
   handle('tab:adopt', fromChrome, (w, id, index) => adoptTab(w, Number(id), Number(index)));
   handle('tab:mute', fromChrome, (w, id) => {
     const tab = getTab(w, id);

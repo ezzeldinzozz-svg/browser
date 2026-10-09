@@ -203,8 +203,8 @@ Ordered by priority, then by what unblocks what.
 - [ ] **P2** Picture-in-picture toolbar button
 - [x] Autoplay setting: block media with sound until the user interacts (default) or allow
 - [ ] **P2** Per-site autoplay exceptions
-- [ ] **P1** Media keys / Now Playing integration on macOS (verify Chromium's hardware media key handling is on)
-- [ ] **P1** Global media controls (toolbar popup for playing tabs)
+- [ ] **P1** Media keys / Now Playing integration on macOS (Chromium's hardware media key handling is on by default in Electron; not verified by hand)
+- [x] **P1** Global media controls: toolbar media button lists tabs playing/paused media with play/pause and jump-to-tab
 - [x] Video/audio context menu: play/pause, mute, loop, show controls, picture in picture, open/save/copy address
 - [ ] **P1** Widevine DRM for Netflix/Spotify/Disney+ via castLabs ECS + EVS signing, or a clear "not supported" message *(Electron limit)*
 - [ ] **P2** Cast / AirPlay *(Electron limit: no Chromecast media router)*
