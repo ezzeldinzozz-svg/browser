@@ -527,6 +527,7 @@ async function openSitePopup() {
           el('div', 'line', `Certificate issued by ${cert.issuer}`),
           el('div', 'line', `Valid until ${new Date(cert.validExpiry).toLocaleDateString()}`),
         );
+        if (cert.details) pop.append(certificateSection(cert));
       } else {
         pop.append(el('div', 'line', 'Certificate details are shown after the site is loaded over a new connection.'));
       }
@@ -573,6 +574,50 @@ async function openSitePopup() {
   pop.hidden = false;
   $('backdrop').hidden = false;
   setOverlay();
+}
+
+// "sha256/<base64>" -> "AB:CD:…", the way certificate viewers show it
+function hexFingerprint(fp) {
+  try {
+    return [...atob(String(fp).replace(/^sha256\//, ''))].map((c) => c.charCodeAt(0).toString(16).padStart(2, '0')).join(':').toUpperCase();
+  } catch {
+    return String(fp || '');
+  }
+}
+
+// Site popup: the full certificate, shown on request.
+function certificateSection(cert) {
+  const d = cert.details;
+  const box = el('div', 'sec cert');
+  const toggle = el('button', 'linkish', 'Show certificate');
+  const body = el('div', 'cert-body');
+  body.hidden = true;
+  const name = (n) => (n ? [n.commonName, ...(n.organizations || [])].filter(Boolean).join(', ') : '');
+  const fmt = (t) => new Date(t).toLocaleString();
+  const rows = [
+    ['Issued to', name(d.subject) || cert.subject],
+    ['Issued by', name(d.issuer) || cert.issuer],
+    ['Valid from', fmt(cert.validStart)],
+    ['Valid until', fmt(cert.validExpiry)],
+    ['Check', cert.ok ? 'Trusted' : cert.verification || 'Not trusted'],
+    ['Chain', d.chain.length ? d.chain.join(' \u2192 ') : '(none sent)'],
+    ['Serial number', d.serialNumber],
+    ['SHA-256 fingerprint', hexFingerprint(d.fingerprint)],
+  ];
+  for (const [k, v] of rows) {
+    const row = el('div', 'cert-row');
+    row.append(el('div', 'k', k), el('div', 'v', v || '\u2014'));
+    body.append(row);
+  }
+  const exp = el('button', 'btn', 'Export…');
+  exp.addEventListener('click', () => api.exportCertificate());
+  body.append(exp);
+  toggle.addEventListener('click', () => {
+    body.hidden = !body.hidden;
+    toggle.textContent = body.hidden ? 'Show certificate' : 'Hide certificate';
+  });
+  box.append(toggle, body);
+  return box;
 }
 
 // Shield: what was blocked on this page, and the switch for the site.

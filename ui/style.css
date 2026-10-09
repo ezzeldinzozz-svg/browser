@@ -264,6 +264,13 @@ body.private #site.insecure { color: #ff8a80; }
 }
 #sitepopup[hidden] { display: none; }
 #sitepopup.right { left: auto; right: 72px; }
+#sitepopup .linkish { background: none; border: 0; padding: 0; color: var(--accent); cursor: pointer; font: inherit; }
+#sitepopup .cert-body { margin-top: 8px; }
+#sitepopup { max-height: calc(100vh - 96px); overflow-y: auto; box-sizing: border-box; }
+#sitepopup .cert-body[hidden] { display: none; }
+#sitepopup .cert-row { margin: 0 0 6px; }
+#sitepopup .cert-row .k { color: var(--fg-dim); font-size: 11px; }
+#sitepopup .cert-row .v { overflow-wrap: anywhere; font-size: 12px; }
 #sitepopup .blocked-list { max-height: 260px; overflow-y: auto; }
 #sitepopup .blocked-list .host { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 #sitepopup .blocked-list .count { color: var(--fg-dim); font-variant-numeric: tabular-nums; margin-left: 12px; }

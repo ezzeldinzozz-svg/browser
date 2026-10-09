@@ -178,7 +178,7 @@ Ordered by priority, then by what unblocks what.
 - [x] `file://` policy: typed addresses and files opened from the OS load; web pages can't navigate, redirect, frame or open `file:` URLs
 - [x] External protocol handling (`mailto:`, `zoommtg:`, `slack:`): asks before opening another app (names the link type), remembers per site
 - [x] HTTPS-Only (on by default): http:// sites load over https://; sites without https get a warning page with "Continue to site"; local/intranet hosts exempt
-- [ ] **P1** Full certificate viewer (issuer and expiry are shown in the site info popup)
+- [x] **P1** Certificate viewer in the site info popup (subject, issuer, validity, chain, serial, SHA-256 fingerprint, export as PEM)
 - [ ] **P1** Safe browsing / phishing & malware protection (Web Risk API, paid, or ship without and say so) *(Electron limit)*
 - [x] Secure DNS setting: Automatic / Cloudflare / Quad9 / custom DoH / Off (`app.configureHostResolver`)
 - [ ] **P1** Mixed-content handling / indicator; block insecure forms on https pages

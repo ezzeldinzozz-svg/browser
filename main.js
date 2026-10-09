@@ -821,15 +821,31 @@ function createPrivateSession() {
 
 // Chromium verifies certificates as usual (callback(-3)); we only remember what it saw so the
 // site info popup can show who issued the certificate and until when it's valid.
-const certificates = new Map(); // hostname -> { issuer, subject, validExpiry, ok }
+const certificates = new Map(); // hostname -> { issuer, subject, validStart, validExpiry, ok, details }
+
+function certificateDetails(c) {
+  const chain = [];
+  for (let x = c.issuerCert, n = 0; x && n < 6; x = x.issuerCert, n++) chain.push(x.subjectName);
+  return {
+    subject: c.subject ? { commonName: c.subject.commonName, organizations: c.subject.organizations, country: c.subject.country } : null,
+    issuer: c.issuer ? { commonName: c.issuer.commonName, organizations: c.issuer.organizations, country: c.issuer.country } : null,
+    serialNumber: c.serialNumber,
+    fingerprint: c.fingerprint, // "sha256/<base64>"
+    chain,
+    pem: c.data,
+  };
+}
 
 function onVerifyCertificate(request, callback) {
   const c = request.certificate;
   certificates.set(request.hostname, {
     issuer: c.issuerName,
     subject: c.subjectName,
+    validStart: c.validStart * 1000,
     validExpiry: c.validExpiry * 1000,
     ok: request.verificationResult === 'net::OK',
+    verification: request.verificationResult,
+    details: certificateDetails(c),
   });
   if (certificates.size > 500) certificates.delete(certificates.keys().next().value);
   callback(-3);
@@ -2980,6 +2996,16 @@ function setupIpc() {
   handle('data:site-data-remove-all', fromInternal, async (tab) => {
     const ses = tab.w.private ? tab.w.ses : session.defaultSession;
     await ses.clearStorageData({ storages: ['cookies', 'localstorage', 'indexdb', 'serviceworkers', 'cachestorage', 'filesystem', 'websql', 'shadercache'] });
+  });
+  handle('site:export-certificate', fromChrome, async (w) => {
+    const info = siteInfo(w);
+    const pem = info && info.certificate && info.certificate.details && info.certificate.details.pem;
+    if (!pem) return;
+    const { canceled, filePath } = await dialog.showSaveDialog(w.win, {
+      defaultPath: path.join(app.getPath('downloads'), `${info.host.replace(/[^\w.-]/g, '_')}.pem`),
+      filters: [{ name: 'Certificate (PEM)', extensions: ['pem', 'crt'] }],
+    });
+    if (!canceled && filePath) await fs.promises.writeFile(filePath, pem);
   });
   handle('site:clear-data', fromChrome, async (w) => {
     const tab = activeTab(w);

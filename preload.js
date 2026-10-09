@@ -76,6 +76,7 @@ if (location.protocol === 'browser:' && window === window.top) {
     respondAuth: call('auth:respond'),
     toggleSiteBlocking: call('adblock:toggle-site'),
     adblockDetails: call('adblock:details'),
+    exportCertificate: call('site:export-certificate'),
     removeAdblockException: call('data:adblock-allow-remove'),
     getSettings: call('data:settings'),
     setSetting: call('data:settings-set'),
