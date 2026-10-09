@@ -45,7 +45,7 @@ Ordered by priority, then by what unblocks what.
 - [x] Audio-playing indicator on tabs, click to mute
 - [ ] **P2** "Mute site" (all tabs of a site)
 - [x] Duplicate tab (keeps back/forward history)
-- [ ] **P0** Tab overflow handling (shrink, then scroll) with many tabs; tab tooltips with URL
+- [x] Tab overflow handling (shrink to 56px, then scroll; active tab kept in view); tab tooltips with URL
 - [x] Long-press / right-click back and forward buttons for the history list
 - [x] Pin tabs (small, left-aligned, survive restart; Close Other Tabs keeps them)
 - [x] Move tab to new window (context menu; the page keeps running)
@@ -83,7 +83,7 @@ Ordered by priority, then by what unblocks what.
 - [x] Search engine choice in Settings: DuckDuckGo, Google, Bing, Brave Search, Ecosia, Kagi, Startpage
 - [ ] **P1** Search engine choice in onboarding; custom engines
 - [x] Security indicator: lock for https, "Not secure" for http (certificate failures already stop the page)
-- [ ] **P0** Show URL without noise when unfocused (hide `https://`, `www.`), full URL on focus; highlight the domain (anti-spoofing)
+- [x] Show URL without noise when unfocused (hide `https://`, `www.`), full URL on focus; site highlighted (anti-spoofing)
 - [ ] **P1** Search suggestions from the chosen engine (opt-in for privacy)
 - [ ] **P1** "Switch to tab" suggestions for already-open tabs
 - [ ] **P1** Keyword search / site search shortcuts (`w wikipedia`, Tab-to-search), custom search engines (OpenSearch discovery)
@@ -131,7 +131,7 @@ Ordered by priority, then by what unblocks what.
 - [x] Dangerous-file warning: risky types download as `.unconfirmed` until Keep/Discard (toolbar bar + downloads page)
 - [x] Downloads marked as from the internet (macOS quarantine attribute, Windows Mark of the Web) so Gatekeeper/SmartScreen check them
 - [x] Option "Ask where to save each file" and a choose-download-folder setting
-- [ ] **P0** Download bubble/panel from the toolbar (not just a full page), with "download finished" feedback
+- [x] Downloads panel from the toolbar button (recent items, progress, Open/Show/Cancel/Keep/Discard), button pulses when a download starts
 - [ ] **P1** Retry/resume interrupted downloads (`session.createInterruptedDownload`)
 - [ ] **P1** Remove a single entry; delete file from disk; drag a finished download into another app
 - [ ] **P1** Block downloads from insecure (http) origins on https pages (mixed-content downloads)
@@ -167,7 +167,7 @@ Ordered by priority, then by what unblocks what.
 - [ ] **P2** List of cookies in use per site
 - [ ] **P0** Permission defaults per type (ask/block for all sites) and add/edit exceptions, not just reset
 - [ ] **P0** Block third-party cookies by default (or partition them); cookie settings page with per-site exceptions
-- [ ] **P0** Decide `file://` policy: typed `file://` URLs load today; block web pages from navigating to `file:` and restrict to top-level user navigation
+- [x] `file://` policy: typed addresses and files opened from the OS load; web pages can't navigate, redirect, frame or open `file:` URLs
 - [x] External protocol handling (`mailto:`, `zoommtg:`, `slack:`): asks before opening another app (names the link type), remembers per site
 - [ ] **P1** HTTPS-Only / HTTPS-upgrade mode with a "continue to http" interstitial
 - [ ] **P1** Full certificate viewer (issuer and expiry are shown in the site info popup)
@@ -230,8 +230,10 @@ Ordered by priority, then by what unblocks what.
 ## 12. Accessibility
 
 - [x] Web content inherits Chromium accessibility (screen readers read pages)
-- [ ] **P0** Toolbar keyboard access: Tab/arrow focus through toolbar and tab strip, visible focus rings, F6 to cycle regions
-- [ ] **P0** ARIA for the toolbar: `tablist`/`tab` roles, labels on icon buttons, live region for permission/auth/find bars
+- [x] Visible focus rings in the toolbar
+- [ ] **P0** Toolbar keyboard access: arrow keys through the tab strip, F6 to cycle regions
+- [x] ARIA basics: `tablist`/`tab` roles with `aria-selected`, labels on icon buttons, permission bar as an alert
+- [ ] **P1** Full screen-reader pass (VoiceOver/NVDA) and labels for every bar
 - [ ] **P1** VoiceOver / NVDA / Orca pass on toolbar and internal pages
 - [ ] **P1** Respect high contrast / increased contrast / forced colors in the toolbar and internal pages
 - [ ] **P1** Respect `prefers-reduced-motion`; font size follows OS text size where possible
@@ -256,7 +258,7 @@ Ordered by priority, then by what unblocks what.
 ## 14. New tab page
 
 - [x] New tab page with search box and bookmark tiles
-- [ ] **P0** Dark mode support for new tab and all internal pages
+- [x] Dark mode support for new tab and all internal pages (follows the system)
 - [ ] **P1** Most-visited / pinned shortcut tiles (with favicons), remove/edit tiles
 - [ ] **P1** Customization: background image/color, show/hide shortcuts
 - [ ] **P2** Option to use a custom URL as the new tab page
@@ -374,7 +376,7 @@ Ordered by priority, then by what unblocks what.
 ## 25. Other expected basics
 
 - [ ] **P0** Home button (optional) and keyboard shortcut to go home
-- [ ] **P0** Status bubble showing the link URL on hover (bottom-left)
+- [x] Status bubble showing the link URL on hover (bottom-left)
 - [x] "Leave site? Changes you made may not be saved" (`will-prevent-unload`) dialog on navigation/reload
 - [ ] **P1** Same prompt when closing a tab or window with unsaved changes
 - [ ] **P0** JavaScript dialogs (`alert`/`confirm`/`prompt`) styled and tab-modal, with "prevent this page from creating more dialogs"

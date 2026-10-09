@@ -15,7 +15,10 @@ let dragId = null;
 function renderTab(t, isActive) {
   const el = document.createElement('div');
   el.className = 'tab' + (isActive ? ' active' : '') + (t.pinned ? ' pinned' : '');
-  el.title = t.title;
+  el.title = t.url && t.url !== t.title ? `${t.title}\n${t.url}` : t.title;
+  el.setAttribute('role', 'tab');
+  el.setAttribute('aria-selected', String(isActive));
+  el.setAttribute('aria-label', t.title + (t.audible ? ', playing audio' : '') + (t.muted ? ', muted' : ''));
   el.draggable = true;
 
   if (t.loading) {
@@ -125,6 +128,8 @@ function render(state) {
 
   tablist.textContent = '';
   for (const t of state.tabs) tablist.append(renderTab(t, t.id === state.activeId));
+  const activeEl = tablist.querySelector('.tab.active');
+  if (activeEl) activeEl.scrollIntoView({ block: 'nearest', inline: 'nearest' });
 
   $('back').disabled = !active || !active.canGoBack;
   $('forward').disabled = !active || !active.canGoForward;
@@ -139,6 +144,8 @@ function render(state) {
 
   shownUrl = active ? active.url : '';
   if (document.activeElement !== address) address.value = shownUrl;
+  renderAddressView();
+  if (!$('dlpanel').hidden) renderDownloadPanel();
   renderSiteButton(state.security);
 
   currentWarning = state.downloadWarning;
@@ -210,7 +217,6 @@ findInput.addEventListener('keydown', (e) => {
 $('find-next').addEventListener('click', () => api.find(findInput.value, { forward: true }));
 $('find-prev').addEventListener('click', () => api.find(findInput.value, { forward: false }));
 $('find-close').addEventListener('click', () => api.closeFind());
-$('downloads').addEventListener('click', () => api.openDownloads());
 $('update').addEventListener('click', () => api.installUpdate());
 $('shield').addEventListener('click', () => api.toggleSiteBlocking());
 
@@ -251,7 +257,7 @@ $('star').addEventListener('click', () => api.toggleBookmark());
 
 let overlayOpen = false;
 function setOverlay() {
-  const open = !$('suggest').hidden || !$('sitepopup').hidden || !$('screenpicker').hidden;
+  const open = !$('suggest').hidden || !$('sitepopup').hidden || !$('screenpicker').hidden || !$('dlpanel').hidden;
   if (open !== overlayOpen) {
     overlayOpen = open;
     api.setOverlay(open);
@@ -590,3 +596,110 @@ for (const [id, dir] of [['back', 'back'], ['forward', 'forward']]) {
 }
 
 $('zoom').addEventListener('click', () => api.resetZoom());
+
+// ---- unfocused address bar: show "example.com/path" with the site highlighted
+
+function renderAddressView() {
+  const view = $('addrview');
+  const omni = $('omnibox');
+  let parsed = null;
+  try {
+    parsed = /^https?:\/\//i.test(shownUrl) ? new URL(shownUrl) : null;
+  } catch {
+    parsed = null;
+  }
+  const show = !!parsed && document.activeElement !== address;
+  view.hidden = !show;
+  omni.classList.toggle('formatted', show);
+  if (!show) return;
+  const host = parsed.host.replace(/^www\./, '');
+  let rest = shownUrl.slice(shownUrl.indexOf(parsed.host) + parsed.host.length);
+  if (rest === '/') rest = '';
+  view.textContent = '';
+  view.append(el('span', 'host', host), el('span', 'rest', rest));
+}
+address.addEventListener('focus', renderAddressView);
+address.addEventListener('blur', renderAddressView);
+
+// ---- downloads panel
+
+function sizeText(bytes) {
+  if (!bytes) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.min(units.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
+  return `${(bytes / 1024 ** i).toFixed(i ? 1 : 0)} ${units[i]}`;
+}
+
+async function renderDownloadPanel() {
+  const items = await api.recentDownloads();
+  const panel = $('dlpanel');
+  panel.textContent = '';
+  if (items.length === 0) panel.append(el('div', 'empty', 'No downloads yet.'));
+  for (const d of items) {
+    const row = el('div', 'dl');
+    const main = el('div', 'main');
+    main.append(el('div', 'nm', d.filename));
+    const action = (label, name) => {
+      const b = el('button', '', label);
+      b.addEventListener('click', async () => {
+        await api.downloadAction(d.id, name);
+        renderDownloadPanel();
+      });
+      return b;
+    };
+    if (d.state === 'progressing') {
+      const pct = d.total ? Math.floor((d.received / d.total) * 100) : null;
+      main.append(el('div', 'st', `${sizeText(d.received)}${d.total ? ` of ${sizeText(d.total)}` : ''}`));
+      const bar = el('div', 'bar');
+      const fill = document.createElement('span');
+      fill.style.width = `${pct ?? 30}%`;
+      bar.append(fill);
+      main.append(bar);
+      row.append(main, action('Cancel', 'cancel'));
+    } else if (d.state === 'dangerous') {
+      main.append(el('div', 'st bad', 'Can harm your computer'));
+      row.append(main, action('Keep', 'keep'), action('Discard', 'discard'));
+    } else if (d.state === 'completed') {
+      main.append(el('div', 'st', sizeText(d.received)));
+      row.append(main, action('Open', 'open'), action('Show', 'show'));
+    } else {
+      main.append(el('div', 'st', d.discarded ? 'Discarded' : d.state === 'cancelled' ? 'Cancelled' : 'Failed'));
+      row.append(main);
+    }
+    panel.append(row);
+  }
+  const foot = el('div', 'foot');
+  const all = el('button', 'all', 'Show all downloads');
+  all.addEventListener('click', () => {
+    closeDownloadPanel();
+    api.openDownloads();
+  });
+  foot.append(all);
+  panel.append(foot);
+}
+
+function closeDownloadPanel() {
+  $('dlpanel').hidden = true;
+  $('backdrop').hidden = $('sitepopup').hidden;
+  setOverlay();
+}
+
+$('downloads').addEventListener('click', async () => {
+  if (!$('dlpanel').hidden) return closeDownloadPanel();
+  await renderDownloadPanel();
+  $('dlpanel').hidden = false;
+  $('backdrop').hidden = false;
+  setOverlay();
+});
+$('backdrop').addEventListener('mousedown', () => {
+  if (!$('dlpanel').hidden) closeDownloadPanel();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('dlpanel').hidden) closeDownloadPanel();
+});
+api.onDownloadStarted(() => {
+  const b = $('downloads');
+  b.classList.remove('pulse');
+  void b.offsetWidth; // restart the animation
+  b.classList.add('pulse');
+});

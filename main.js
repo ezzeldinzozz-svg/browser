@@ -279,6 +279,24 @@ function chromeHeight(w) {
   return CHROME_H + bars * BAR_H;
 }
 
+const STATUS_H = 24;
+
+// Shows (or hides, for '') the hovered link's URL in the bottom-left corner of the page.
+function showStatus(w, url) {
+  if (!liveWindow(w) || !w.statusView) return;
+  w.statusText = url ? displayUrl(url) || url : '';
+  w.statusView.webContents.send('status', w.statusText);
+  if (w.statusText) w.win.contentView.addChildView(w.statusView); // keep it above the tab views
+  layoutStatus(w);
+}
+
+function layoutStatus(w) {
+  const [width, height] = w.win.getContentSize();
+  const textWidth = Math.min(Math.round(width * 0.6), 7 * w.statusText.length + 28);
+  w.statusView.setBounds({ x: 0, y: height - STATUS_H, width: Math.max(80, textWidth), height: STATUS_H });
+  w.statusView.setVisible(!!w.statusText);
+}
+
 function layout(w) {
   if (!liveWindow(w)) return;
   const [width, height] = w.win.getContentSize();
@@ -289,6 +307,7 @@ function layout(w) {
   for (const t of w.tabs) {
     t.view.setBounds({ x: 0, y: top, width, height: Math.max(0, height - top) });
   }
+  if (w.statusView) layoutStatus(w);
 }
 
 // options.private: a private window with its own throwaway session
@@ -319,6 +338,8 @@ function createWindow({ private: isPrivate = false, session: saved = null, ses: 
     overlay: false, // toolbar dropdown/popup open
     downloadWarnings: [], // ids of finished risky downloads awaiting Keep/Discard
     screenPick: null, // pending screen-sharing request
+    statusView: null, // link-hover URL bubble
+    statusText: '',
     permissions: {}, // private windows only
     allowlist: new Set(), // private windows only: sites with ad blocking switched off
   };
@@ -347,6 +368,16 @@ function createWindow({ private: isPrivate = false, session: saved = null, ses: 
   win.on('leave-full-screen', () => exitFullscreen(activeTab(w)));
   win.on('close', () => onWindowClose(w));
   win.on('closed', () => onWindowClosed(w));
+
+  const statusView = new WebContentsView({
+    webPreferences: { preload: PRELOAD, sandbox: true, contextIsolation: true, nodeIntegration: false },
+  });
+  statusView.setBackgroundColor('#00000000');
+  statusView.setVisible(false);
+  statusView.webContents.loadURL(`${SCHEME}://ui/status.html`);
+  statusView.webContents.on('will-navigate', (e) => e.preventDefault());
+  w.statusView = statusView;
+  win.contentView.addChildView(statusView);
 
   layout(w);
   if (saved && saved.tabs.length) {
@@ -390,6 +421,7 @@ function onWindowClosed(w) {
     if (!t.wc.isDestroyed()) t.wc.close();
   }
   if (!w.chromeView.webContents.isDestroyed()) w.chromeView.webContents.close();
+  if (!w.statusView.webContents.isDestroyed()) w.statusView.webContents.close();
   if (w.private && !windows.some((o) => o.ses === w.ses)) {
     // Nothing from a private window outlives it.
     w.ses.clearStorageData().catch(() => {});
@@ -499,6 +531,9 @@ function createTab(w, url, { background = false, after = null, history = null } 
   });
   wc.on('page-favicon-updated', (_e, favicons) => loadFavicon(tab, favicons[0]));
   wc.on('audio-state-changed', () => sendTabs(tab.w));
+  wc.on('update-target-url', (_e, url) => {
+    if (tab.id === tab.w.activeId) showStatus(tab.w, url);
+  });
   wc.on('did-start-loading', () => sendTabs(tab.w));
   wc.on('did-stop-loading', () => sendTabs(tab.w));
   wc.on('did-start-navigation', (details) => {
@@ -590,7 +625,10 @@ function openerRunLength(w, opener, openerIdx) {
   return n;
 }
 
+// Websites may not open the browser's own pages or local files. (Typing a file:// address,
+// or opening a file from Finder, isn't a page-initiated navigation and still works.)
 function isBlockedNavigation(fromUrl, toUrl) {
+  if (/^file:/i.test(toUrl)) return !/^file:/i.test(fromUrl);
   if (!isInternalScheme(toUrl)) return false;
   return !internalName(fromUrl); // only internal pages may link to other internal pages
 }
@@ -618,7 +656,10 @@ async function loadFavicon(tab, url) {
 function selectTab(w, id) {
   const tab = getTab(w, id);
   if (!tab) return;
-  if (w.activeId !== id) exitFullscreen(activeTab(w));
+  if (w.activeId !== id) {
+    exitFullscreen(activeTab(w));
+    w.statusText = '';
+  }
   w.activeId = id;
   for (const t of w.tabs) t.view.setVisible(t.id === id);
   layout(w);
@@ -1431,6 +1472,7 @@ function onWillDownload(_e, item, wc) {
 
   store.save();
   notifyDownloads(true);
+  if (liveWindow(w)) w.chromeView.webContents.send('download-started');
 }
 
 function warnAboutDownload(w, rec) {
@@ -1714,6 +1756,15 @@ function setupIpc() {
   handle('find:query', fromChrome, (w, text, opts) => findInTab(activeTab(w), String(text || ''), opts || {}));
   handle('find:close', fromChrome, (w) => closeFind(activeTab(w)));
   handle('downloads:open', fromChrome, (w) => openInternalPage(w, 'downloads'));
+  handle('downloads:recent', fromChrome, (w) => visibleDownloads(w).slice(0, 6));
+  handle('downloads:action', fromChrome, (w, id, action) => {
+    const d = visibleDownloads(w).find((x) => x.id === id);
+    if (!d) return;
+    if (action === 'open' && d.state === 'completed') return shell.openPath(d.path).then(() => undefined);
+    if (action === 'show') return shell.showItemInFolder(d.path);
+    if (action === 'cancel') return liveDownloads.get(id)?.cancel();
+    if (action === 'keep' || action === 'discard') return resolveDangerousDownload(id, action);
+  });
   handle('download:warning-decide', fromChrome, (w, id, decision) => {
     if (w.downloadWarnings.includes(id) && ['keep', 'discard'].includes(decision)) resolveDangerousDownload(id, decision);
   });

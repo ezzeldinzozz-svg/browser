@@ -16,6 +16,7 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 - Tabs, address bar (URL or search with the chosen engine: DuckDuckGo default, Google, Bing, Brave, Ecosia, Kagi, Startpage), back/forward/reload/stop, keyboard shortcuts
 - Tab strip: drag to reorder, pinned tabs (kept left, restored), audio indicator with click-to-mute, right-click menu (new tab to the right, reload, duplicate, pin, mute, move to new window, close / others / to the right, reopen closed)
 - Bookmarks, history, downloads page, find in page, new-tab page, settings page
+- Toolbar polish: unfocused address shows `site.com/path` with the site highlighted; link-hover URL bubble bottom-left (a small `statusView` per window, `ui/status.html`); tab strip scrolls when full; downloads panel from the ↓ button
 - Page robustness: crash page with Reload, "Page unresponsive" (Wait / Exit Page), "Leave site?" on navigation for pages with unsaved changes
 - Back/forward history list (right-click or long-press), per-site zoom remembered (badge in the address bar resets it), window size/position remembered
 - Downloads: choose the download folder, optional "Ask where to save each file"; history page can remove single entries
