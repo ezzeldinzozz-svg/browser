@@ -75,6 +75,10 @@ function render(state) {
   btn.classList.toggle('active', dl.active > 0);
   btn.dataset.badge = dl.progress >= 0 ? `${Math.floor(dl.progress * 100)}%` : String(dl.active);
   btn.title = dl.active ? `Downloads (${dl.active} in progress)` : 'Downloads';
+
+  const update = state.update || {};
+  $('update').hidden = update.status !== 'ready';
+  $('update').title = update.version ? `Install Browser ${update.version}` : '';
 }
 
 const findInput = $('find-input');
@@ -91,6 +95,7 @@ $('find-next').addEventListener('click', () => api.find(findInput.value, { forwa
 $('find-prev').addEventListener('click', () => api.find(findInput.value, { forward: false }));
 $('find-close').addEventListener('click', () => api.closeFind());
 $('downloads').addEventListener('click', () => api.openDownloads());
+$('update').addEventListener('click', () => api.installUpdate());
 
 let currentPrompt = null;
 const respond = (decision) => currentPrompt && api.respondPermission(currentPrompt.id, decision);

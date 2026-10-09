@@ -27,6 +27,7 @@ if (location.protocol === 'browser:' && window === window.top) {
     find: call('find:query'),
     closeFind: call('find:close'),
     openDownloads: call('downloads:open'),
+    installUpdate: call('update:install'),
     getDownloads: call('data:downloads'),
     openDownload: call('download:open'),
     showDownload: call('download:show'),

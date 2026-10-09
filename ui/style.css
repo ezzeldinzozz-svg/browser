@@ -153,6 +153,18 @@ button {
   line-height: 12px;
 }
 
+#toolbar #update {
+  width: auto;
+  padding: 0 12px;
+  border-radius: 15px;
+  background: var(--accent);
+  color: var(--bg-active);
+  font-size: 12px;
+  white-space: nowrap;
+}
+#toolbar #update[hidden] { display: none; }
+#toolbar #update:hover { filter: brightness(1.1); background: var(--accent); }
+
 #findbar {
   display: flex;
   align-items: center;

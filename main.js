@@ -2,7 +2,8 @@
 
 const path = require('path');
 const fs = require('fs');
-const { app, BaseWindow, WebContentsView, ipcMain, Menu, protocol, session, shell } = require('electron');
+const { app, BaseWindow, WebContentsView, dialog, ipcMain, Menu, protocol, session, shell } = require('electron');
+const updater = require('./updater');
 
 const CHROME_H = 80; // tab strip (36) + toolbar (44)
 const BAR_H = 44; // optional bars under the toolbar: permission prompt, find
@@ -146,6 +147,7 @@ function sendTabs() {
     prompt: prompt ? { id: prompt.id, text: `${new URL(prompt.origin).host} wants to ${promptText(prompt.keys)}` } : null,
     find: current ? current.find : null,
     downloads: downloadSummary(),
+    update: updater.getState(),
     tabs: tabs.map((t) => {
       const url = t.wc.getURL();
       return {
@@ -654,6 +656,7 @@ function setupIpc() {
   handle('find:query', fromChrome, (_e, text, opts) => findInTab(activeTab(), String(text || ''), opts || {}));
   handle('find:close', fromChrome, () => closeFind(activeTab()));
   handle('downloads:open', fromChrome, () => openDownloadsPage());
+  handle('update:install', fromChrome, () => restartToUpdate());
 
   handle('data:downloads', fromInternal, () => store.data.downloads);
   handle('download:open', fromInternal, (_e, id) => {
@@ -705,7 +708,25 @@ function buildMenu() {
   const goForward = () => activeTab()?.wc.navigationHistory.goForward();
 
   const template = [
-    ...(isMac ? [{ role: 'appMenu' }] : []),
+    ...(isMac
+      ? [
+          {
+            role: 'appMenu',
+            submenu: [
+              { role: 'about' },
+              { label: 'Check for Updates…', click: checkForUpdatesManually },
+              { type: 'separator' },
+              { role: 'services' },
+              { type: 'separator' },
+              { role: 'hide' },
+              { role: 'hideOthers' },
+              { role: 'unhide' },
+              { type: 'separator' },
+              { role: 'quit' },
+            ],
+          },
+        ]
+      : []),
     {
       label: 'File',
       submenu: [
@@ -869,7 +890,37 @@ app.whenReady().then(() => {
   setupIpc();
   buildMenu();
   createWindow();
+  updater.start(() => sendTabs());
 });
 
-app.on('before-quit', () => store && store.flush());
+// ---------------------------------------------------------------- updates
+
+function restartToUpdate() {
+  if (updater.install(true)) app.quit();
+}
+
+async function checkForUpdatesManually() {
+  const state = await updater.check();
+  const version = app.getVersion();
+  if (state.status === 'ready') {
+    const { response } = await dialog.showMessageBox(win, {
+      message: `Browser ${state.version} is ready to install.`,
+      detail: `You have ${version}. Browser will restart to finish updating.`,
+      buttons: ['Restart Now', 'Later'],
+      defaultId: 0,
+    });
+    if (response === 0) restartToUpdate();
+  } else if (state.status === 'none') {
+    dialog.showMessageBox(win, { message: "You're up to date.", detail: `Browser ${version} is the latest version.` });
+  } else if (state.status === 'checking' || state.status === 'downloading') {
+    dialog.showMessageBox(win, { message: 'An update is already being downloaded.' });
+  } else {
+    dialog.showMessageBox(win, { type: 'warning', message: "Couldn't check for updates.", detail: state.error || '' });
+  }
+}
+
+app.on('before-quit', () => {
+  if (store) store.flush();
+  updater.install(false); // a downloaded update is applied whenever the app quits
+});
 app.on('window-all-closed', () => app.quit());
