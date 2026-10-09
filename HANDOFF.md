@@ -16,6 +16,8 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 - Tabs, address bar (URL or search with the chosen engine: DuckDuckGo default, Google, Bing, Brave, Ecosia, Kagi, Startpage), back/forward/reload/stop, keyboard shortcuts
 - Tab strip: drag to reorder, pinned tabs (kept left, restored), audio indicator with click-to-mute, right-click menu (new tab to the right, reload, duplicate, pin, mute, move to new window, close / others / to the right, reopen closed)
 - Bookmarks, history, downloads page, find in page, new-tab page, settings page
+- Address bar: suggestions from history + bookmarks (frequency/recency ranking), inline completion, arrow keys / Enter / Esc; lock icon or "Not secure" opens a site info popup (connection, certificate issuer/expiry, per-site permissions, ad blocking switch, clear site data)
+- Toolbar dropdowns/popups: while one is open the transparent toolbar view is stretched over the whole window (`ui:overlay`), and clicks outside close it
 - Per-site permission prompts (camera, mic, location, notifications, clipboard, MIDI, external apps), remembered per site, resettable in Settings
 - HTML video fullscreen
 - HTTP sign-in bar (username/password for sites using HTTP auth), with a warning on plain http
@@ -44,11 +46,11 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 
 The full prioritized checklist is in `FEATURES.md` (P0/P1/P2). Short version:
 
-1. Storage: JSON file → SQLite, then address-bar autocomplete and search engine choice
-2. Site info popup, clear browsing data, tab context menu, tab drag-to-reorder
-3. Dangerous-download warning, open links from other apps / default browser
-4. Windows/Linux builds + their updaters (electron-updater works unsigned there)
-5. Name + icon
+1. Clear browsing data, dangerous-download warning, open links from other apps / default browser, screen-sharing picker
+2. Bookmarks bar and folders, import from other browsers
+3. Windows/Linux builds + their updaters (electron-updater works unsigned there)
+4. Name + icon
+5. Storage: JSON file → SQLite (before passwords and sync)
 6. Later: Apple Developer ID ($99/yr) to remove the first-launch warning; Windows signing (SignPath Foundation is free for open source)
 
 See `research/browser-lessons.md` for the full research on how Brave and others are built.

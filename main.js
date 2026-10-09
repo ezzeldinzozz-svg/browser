@@ -211,6 +211,14 @@ function sendTabs(w) {
     prompt: prompt ? { id: prompt.id, text: `${new URL(prompt.origin).host} wants to ${promptText(prompt.keys)}` } : null,
     auth: auth ? { id: auth.id, host: auth.host, realm: auth.realm, insecure: auth.insecure } : null,
     find: current ? current.find : null,
+    // lock icon in the address bar
+    security: /^https:/i.test(currentUrl)
+      ? 'secure'
+      : /^http:/i.test(currentUrl)
+        ? 'insecure'
+        : internalName(currentUrl) && internalName(currentUrl) !== 'newtab'
+          ? 'internal'
+          : 'none',
     downloads: downloadSummary(w),
     update: updater.getState(),
     shield: {
@@ -252,7 +260,8 @@ function layout(w) {
   const [width, height] = w.win.getContentSize();
   const top = chromeHeight(w);
   w.chromeView.setVisible(top > 0);
-  w.chromeView.setBounds({ x: 0, y: 0, width, height: top || CHROME_H });
+  // While a dropdown or popup is open the (transparent) toolbar view covers the whole window.
+  w.chromeView.setBounds({ x: 0, y: 0, width, height: w.overlay && top ? height : top || CHROME_H });
   for (const t of w.tabs) {
     t.view.setBounds({ x: 0, y: top, width, height: Math.max(0, height - top) });
   }
@@ -284,12 +293,14 @@ function createWindow({ private: isPrivate = false, session: saved = null, ses: 
     private: isPrivate,
     ses,
     closedTabs: [], // most recent last
+    overlay: false, // toolbar dropdown/popup open
     permissions: {}, // private windows only
     allowlist: new Set(), // private windows only: sites with ad blocking switched off
   };
   windows.push(w);
   lastFocused = w;
   win.contentView.addChildView(chromeView);
+  chromeView.setBackgroundColor('#00000000');
 
   const cwc = chromeView.webContents;
   cwc.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -361,7 +372,24 @@ function createPrivateSession() {
   return ses;
 }
 
+// Chromium verifies certificates as usual (callback(-3)); we only remember what it saw so the
+// site info popup can show who issued the certificate and until when it's valid.
+const certificates = new Map(); // hostname -> { issuer, subject, validExpiry, ok }
+
+function onVerifyCertificate(request, callback) {
+  const c = request.certificate;
+  certificates.set(request.hostname, {
+    issuer: c.issuerName,
+    subject: c.subjectName,
+    validExpiry: c.validExpiry * 1000,
+    ok: request.verificationResult === 'net::OK',
+  });
+  if (certificates.size > 500) certificates.delete(certificates.keys().next().value);
+  callback(-3);
+}
+
 function configureSession(ses) {
+  ses.setCertificateVerifyProc(onVerifyCertificate);
   // Present as plain Chrome: sites such as Google sign-in reject the Electron token.
   ses.setUserAgent(
     app.userAgentFallback.replace(/ Electron\/\S+/, '').replace(` ${app.getName()}/${app.getVersion()}`, ''),
@@ -1217,6 +1245,114 @@ function openInternalPage(w, name) {
   else createTab(w, url);
 }
 
+// ---------------------------------------------------------------- address bar suggestions
+
+const SUGGESTION_LIMIT = 6;
+
+// Ranks bookmarks and history for what's typed: matches at the start of the host score highest,
+// then title/URL matches, weighted by how often and how recently the page was visited.
+function suggestions(text) {
+  const query = text.trim().toLowerCase();
+  if (!query) return { items: [], inline: null };
+
+  const pages = new Map(); // url -> { url, title, visits, last, bookmarked }
+  for (const h of store.data.history) {
+    const p = pages.get(h.url) || { url: h.url, title: h.title, visits: 0, last: 0, bookmarked: false };
+    p.visits++;
+    if (h.time > p.last) {
+      p.last = h.time;
+      p.title = h.title;
+    }
+    pages.set(h.url, p);
+  }
+  for (const b of store.data.bookmarks) {
+    const p = pages.get(b.url) || { url: b.url, title: b.title, visits: 0, last: 0 };
+    p.bookmarked = true;
+    p.title = p.title || b.title;
+    pages.set(b.url, p);
+  }
+
+  const bare = (u) => u.replace(/^https?:\/\//i, '').replace(/^www\./i, '');
+  const now = Date.now();
+  const scored = [];
+  for (const p of pages.values()) {
+    const short = bare(p.url).toLowerCase();
+    const title = (p.title || '').toLowerCase();
+    let score = 0;
+    if (short.startsWith(query)) score = 100;
+    else if (short.includes(query)) score = 40;
+    else if (title.includes(query)) score = 30;
+    else continue;
+    const days = (now - p.last) / 86400000;
+    score += Math.min(p.visits, 20) * 2 + (p.bookmarked ? 15 : 0) + Math.max(0, 10 - days);
+    scored.push({ ...p, score, short });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  const top = scored.slice(0, SUGGESTION_LIMIT);
+
+  // Inline completion: finish the typed text when the best match's address starts with it,
+  // completing to the host first (like other browsers) unless the user typed a path.
+  let inline = null;
+  const best = top[0];
+  if (best && best.short.toLowerCase().startsWith(query) && !/\s/.test(query)) {
+    const host = best.short.split('/')[0];
+    const target = query.includes('/') || host.length <= query.length ? best.short.replace(/\/$/, '') : host;
+    if (target.toLowerCase().startsWith(query) && target.length > query.length) inline = target;
+  }
+
+  return {
+    items: top.map((p) => ({ url: p.url, title: p.title || p.short, display: p.short, bookmarked: !!p.bookmarked })),
+    inline,
+    engine: searchEngine().name,
+  };
+}
+
+// ---------------------------------------------------------------- site info
+
+const SITE_PERMISSIONS = ['camera', 'microphone', 'geolocation', 'notifications', 'clipboard-read', 'openExternal'];
+const PERMISSION_NAMES = {
+  camera: 'Camera',
+  microphone: 'Microphone',
+  geolocation: 'Location',
+  notifications: 'Notifications',
+  'clipboard-read': 'Clipboard',
+  openExternal: 'Open apps',
+};
+
+function siteInfo(w) {
+  const tab = activeTab(w);
+  if (!tab) return null;
+  const url = tab.wc.getURL();
+  const name = internalName(url);
+  if (name) return { kind: 'internal', title: `${SCHEME}://${name}` };
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (!isWeb(url)) return { kind: 'other', title: parsed.protocol.replace(':', '') };
+  const origin = parsed.origin;
+  const decisions = permissionStore(w)[origin] || {};
+  const site = siteOf(url);
+  // A reused connection may have been verified under a sibling hostname (e.g. without "www.").
+  const host = parsed.hostname;
+  const cert =
+    parsed.protocol === 'https:'
+      ? certificates.get(host) || certificates.get(host.replace(/^www\./, '')) || certificates.get(`www.${host}`) || null
+      : null;
+  return {
+    kind: 'web',
+    origin,
+    host: parsed.host,
+    secure: parsed.protocol === 'https:',
+    certificate: cert,
+    permissions: SITE_PERMISSIONS.map((key) => ({ key, name: PERMISSION_NAMES[key], value: decisions[key] || 'ask' })),
+    adblock: { available: store.data.settings.adblock, on: blockingOnFor(w, site), blocked: tab.blocked },
+    private: w.private,
+  };
+}
+
 // ---------------------------------------------------------------- ipc
 
 // Each guard returns the caller's context (window or tab) or null to reject the call.
@@ -1249,6 +1385,29 @@ function setupIpc() {
   handle('tab:close', fromChrome, (w, id) => closeTab(w, id));
   handle('tab:select', fromChrome, (w, id) => selectTab(w, id));
   handle('tab:menu', fromChrome, (w, id) => showTabMenu(w, id));
+  handle('ui:overlay', fromChrome, (w, open) => {
+    w.overlay = !!open;
+    if (w.overlay) w.win.contentView.addChildView(w.chromeView); // bring the toolbar view to the front
+    layout(w);
+  });
+  handle('suggest', fromChrome, (_w, text) => suggestions(String(text || '')));
+  handle('site:info', fromChrome, (w) => siteInfo(w));
+  handle('site:set-permission', fromChrome, (w, origin, key, value) => {
+    if (!PERM_LABELS[key] || !['allow', 'block', 'ask'].includes(value) || origin !== originOf(origin)) return;
+    const perms = permissionStore(w);
+    const site = (perms[origin] ||= {});
+    if (value === 'ask') delete site[key];
+    else site[key] = value;
+    if (Object.keys(site).length === 0) delete perms[origin];
+    if (!w.private) store.save();
+  });
+  handle('site:clear-data', fromChrome, async (w) => {
+    const tab = activeTab(w);
+    const origin = tab && originOf(tab.wc.getURL());
+    if (!origin) return;
+    await w.ses.clearStorageData({ origin });
+    tab.wc.reload();
+  });
   handle('tab:move', fromChrome, (w, id, index) => moveTab(w, id, index));
   handle('tab:mute', fromChrome, (w, id) => {
     const tab = getTab(w, id);

@@ -134,7 +134,9 @@ function render(state) {
   $('star').classList.toggle('on', state.bookmarked);
   $('star').textContent = state.bookmarked ? '★' : '☆';
 
-  if (document.activeElement !== address) address.value = active ? active.url : '';
+  shownUrl = active ? active.url : '';
+  if (document.activeElement !== address) address.value = shownUrl;
+  renderSiteButton(state.security);
 
   currentPrompt = state.prompt;
   $('prompt').hidden = !currentPrompt;
@@ -232,16 +234,265 @@ $('forward').addEventListener('click', () => api.forward());
 $('reload').addEventListener('click', () => api.reload());
 $('star').addEventListener('click', () => api.toggleBookmark());
 
+// ---- overlay: the toolbar view stretches over the page while a dropdown or popup is open
+
+let overlayOpen = false;
+function setOverlay() {
+  const open = !$('suggest').hidden || !$('sitepopup').hidden;
+  if (open !== overlayOpen) {
+    overlayOpen = open;
+    api.setOverlay(open);
+  }
+}
+
+// ---- address bar: suggestions from history and bookmarks, inline completion
+
+let shownUrl = '';
+let typed = ''; // what the user actually typed (without inline completion)
+let rows = []; // [{ kind: 'typed' | 'page', url?, ... }]
+let selected = 0;
+let suggestSeq = 0;
+
+const looksLikeAddress = (t) =>
+  /^[a-z][\w+.-]*:\/\//i.test(t) || /^(localhost|(\d{1,3}\.){3}\d{1,3}|([\w-]+\.)+[a-z]{2,})(:\d+)?([/?#]\S*)?$/i.test(t);
+
+function closeSuggest() {
+  $('suggest').hidden = true;
+  rows = [];
+  setOverlay();
+}
+
+function renderSuggest(engine) {
+  const box = $('suggest');
+  box.textContent = '';
+  rows.forEach((r, i) => {
+    const row = document.createElement('div');
+    row.className = 'sg' + (i === selected ? ' sel' : '');
+    const icon = document.createElement('span');
+    icon.className = 'ic';
+    const title = document.createElement('span');
+    title.className = 'tt';
+    const url = document.createElement('span');
+    url.className = 'uu';
+    if (r.kind === 'typed') {
+      const go = looksLikeAddress(r.text);
+      icon.textContent = go ? '↗' : '⌕';
+      title.textContent = go ? r.text : `${r.text}`;
+      url.textContent = go ? '' : `— Search ${engine}`;
+      url.style.color = 'var(--fg-dim)';
+    } else {
+      icon.textContent = r.bookmarked ? '★' : '◷';
+      title.textContent = r.title;
+      url.textContent = r.display;
+    }
+    row.append(icon, title, url);
+    // mousedown (not click) so the address bar doesn't blur first
+    row.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      navigate(r);
+    });
+    row.addEventListener('mousemove', () => {
+      if (selected !== i) {
+        selected = i;
+        renderSuggest(engine);
+      }
+    });
+    box.append(row);
+  });
+  box.hidden = rows.length === 0;
+  setOverlay();
+}
+
+let lastEngine = '';
+async function updateSuggestions(allowInline) {
+  const seq = ++suggestSeq;
+  const text = typed;
+  if (!text.trim()) return closeSuggest();
+  const res = await api.suggest(text);
+  if (seq !== suggestSeq || document.activeElement !== address) return; // stale
+  lastEngine = res.engine;
+  if (allowInline && res.inline && res.inline.toLowerCase().startsWith(text.toLowerCase())) {
+    address.value = text + res.inline.slice(text.length);
+    address.setSelectionRange(text.length, address.value.length);
+  }
+  rows = [{ kind: 'typed', text: address.value }, ...res.items.map((p) => ({ kind: 'page', ...p }))];
+  // don't list the inline-completed page twice
+  rows = rows.filter((r, i) => i === 0 || !sameAddress(r.url, rows[0].text));
+  selected = 0;
+  renderSuggest(res.engine);
+}
+
+const bare = (u) => String(u).replace(/^https?:\/\//i, '').replace(/^www\./i, '').replace(/\/$/, '').toLowerCase();
+const sameAddress = (url, text) => bare(url) === bare(text);
+
+function navigate(row) {
+  api.go(row.kind === 'page' ? row.url : row.text);
+  closeSuggest();
+  address.blur();
+}
+
 address.addEventListener('focus', () => address.select());
+address.addEventListener('input', (e) => {
+  typed = address.value;
+  // only complete inline while typing forward at the end, never while deleting
+  const atEnd = address.selectionStart === address.value.length;
+  updateSuggestions(atEnd && e.inputType === 'insertText');
+});
 address.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    api.go(address.value);
-    address.blur();
+  const open = !$('suggest').hidden && rows.length > 0;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    if (!open) return;
+    e.preventDefault();
+    selected = (selected + (e.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length;
+    const r = rows[selected];
+    address.value = r.kind === 'page' ? r.url : r.text;
+    renderSuggest(lastEngine);
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (open && rows[selected] && rows[selected].kind === 'page') navigate(rows[selected]);
+    else navigate({ kind: 'typed', text: address.value });
   } else if (e.key === 'Escape') {
+    if (open) {
+      closeSuggest();
+      address.value = typed;
+    } else {
+      address.value = shownUrl;
+      address.blur();
+    }
+  } else if (e.key === 'Delete' || e.key === 'Backspace') {
+    // first Backspace removes the inline completion, like other browsers
+    if (address.selectionStart !== address.selectionEnd && address.selectionEnd === address.value.length && address.value !== typed) {
+      e.preventDefault();
+      address.value = typed;
+      updateSuggestions(false);
+    }
+  }
+});
+function leaveAddressBar() {
+  getSelection().removeAllRanges();
+  closeSuggest();
+  address.value = shownUrl;
+}
+address.addEventListener('blur', leaveAddressBar);
+// While the dropdown is open the toolbar covers the page, so a click "on the page" lands here.
+document.addEventListener('mousedown', (e) => {
+  if (!$('suggest').hidden && !$('omnibox').contains(e.target)) {
+    leaveAddressBar();
     address.blur();
   }
 });
-// After blurring, restore the active tab's URL on the next update.
-address.addEventListener('blur', () => {
-  getSelection().removeAllRanges();
+window.addEventListener('blur', () => {
+  if (!$('suggest').hidden) leaveAddressBar();
+});
+
+// ---- site info popup (lock icon)
+
+const LOCK =
+  '<svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path fill="currentColor" d="M7 10V7a5 5 0 0 1 10 0v3h1a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1v-9a1 1 0 0 1 1-1zm2 0h6V7a3 3 0 0 0-6 0z"/></svg>';
+const INFO =
+  '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><path fill="currentColor" d="M11 10h2v7h-2zm0-4h2v2h-2z"/></svg>';
+
+function renderSiteButton(security) {
+  const btn = $('site');
+  const omni = $('omnibox');
+  const show = security === 'secure' || security === 'insecure' || security === 'internal';
+  btn.hidden = !show;
+  omni.classList.toggle('has-site', show);
+  omni.classList.toggle('insecure', security === 'insecure');
+  btn.classList.toggle('insecure', security === 'insecure');
+  if (security === 'secure') {
+    btn.innerHTML = LOCK;
+    btn.title = 'Connection is secure. Click for site settings.';
+  } else if (security === 'insecure') {
+    btn.innerHTML = INFO + '<span>Not secure</span>';
+    btn.title = 'Connection is not secure. Click for site settings.';
+  } else if (security === 'internal') {
+    btn.innerHTML = INFO;
+    btn.title = 'Browser page';
+  }
+}
+
+function el(tag, cls, text) {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+
+function closeSitePopup() {
+  $('sitepopup').hidden = true;
+  $('backdrop').hidden = true;
+  setOverlay();
+}
+
+async function openSitePopup() {
+  const info = await api.siteInfo();
+  if (!info) return;
+  const pop = $('sitepopup');
+  pop.textContent = '';
+  if (info.kind !== 'web') {
+    pop.append(el('h3', '', info.title), el('div', 'line', "This is one of the browser's own pages."));
+  } else {
+    pop.append(el('h3', '', info.host));
+    if (info.secure) {
+      const cert = info.certificate;
+      pop.append(el('div', cert && !cert.ok ? 'line bad' : 'line', cert && !cert.ok ? 'Certificate problem' : 'Connection is secure'));
+      if (cert) {
+        pop.append(
+          el('div', 'line', `Certificate issued by ${cert.issuer}`),
+          el('div', 'line', `Valid until ${new Date(cert.validExpiry).toLocaleDateString()}`),
+        );
+      } else {
+        pop.append(el('div', 'line', 'Certificate details are shown after the site is loaded over a new connection.'));
+      }
+    } else {
+      pop.append(el('div', 'line bad', "Connection is not secure. Don't enter passwords or card details on this site."));
+    }
+
+    const perms = el('div', 'sec');
+    perms.append(el('div', 'sec-title', 'Permissions'));
+    for (const p of info.permissions) {
+      const row = el('div', 'perm');
+      const select = document.createElement('select');
+      for (const [v, label] of [['ask', 'Ask'], ['allow', 'Allow'], ['block', 'Block']]) select.append(new Option(label, v));
+      select.value = p.value;
+      select.addEventListener('change', () => api.setSitePermission(info.origin, p.key, select.value));
+      row.append(el('span', '', p.name), select);
+      perms.append(row);
+    }
+    pop.append(perms);
+
+    if (info.adblock.available) {
+      const ab = el('div', 'sec');
+      const row = el('div', 'perm');
+      const btn = el('button', 'btn', info.adblock.on ? 'Turn off' : 'Turn on');
+      btn.addEventListener('click', () => {
+        api.toggleSiteBlocking();
+        closeSitePopup();
+      });
+      row.append(el('span', '', info.adblock.on ? `Ad blocking: on (${info.adblock.blocked} blocked)` : 'Ad blocking: off'), btn);
+      ab.append(row);
+      pop.append(ab);
+    }
+
+    const data = el('div', 'sec');
+    const clear = el('button', 'btn', 'Clear cookies and site data');
+    clear.addEventListener('click', async () => {
+      await api.clearSiteData();
+      closeSitePopup();
+    });
+    data.append(clear);
+    if (info.private) data.append(el('div', 'note', 'Changes here last until this private window closes.'));
+    pop.append(data);
+  }
+  pop.hidden = false;
+  $('backdrop').hidden = false;
+  setOverlay();
+}
+
+$('site').addEventListener('mousedown', (e) => e.preventDefault()); // keep address bar focus logic out of it
+$('site').addEventListener('click', () => ($('sitepopup').hidden ? openSitePopup() : closeSitePopup()));
+$('backdrop').addEventListener('mousedown', closeSitePopup);
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('sitepopup').hidden) closeSitePopup();
 });

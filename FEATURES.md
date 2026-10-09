@@ -15,10 +15,10 @@ Ordered by priority, then by what unblocks what.
 1. ~~Private windows~~ done in v0.4.0
 2. ~~Built-in ad/tracker blocking with per-site toggle~~ done in v0.4.0 (a shield popup with details is still open)
 3. ~~macOS app stays open with no windows~~ done in v0.5.0
-4. **P0** Storage: JSON → SQLite, needed before address-bar autocomplete, history ranges, passwords and sync
-5. **P0** Address-bar autocomplete from history + bookmarks, with a dropdown and keyboard selection
+4. **P1** Storage: JSON → SQLite (autocomplete works in memory over the JSON store for now; needed before passwords and sync)
+5. ~~Address-bar autocomplete~~ done in v0.5.0
 6. ~~Search engine choice~~ done in v0.5.0 (custom engines still open)
-7. **P0** Site info popup: lock/"Not secure" icon in the address bar, with permissions, cookies and certificate
+7. ~~Site info popup~~ done in v0.5.0
 8. **P0** Clear browsing data dialog (history, cookies/site data, cache, downloads; time ranges)
 9. ~~Tab context menu~~ done in v0.5.0
 10. ~~Tab drag-to-reorder, audio indicator~~ done in v0.5.0
@@ -79,10 +79,10 @@ Ordered by priority, then by what unblocks what.
 - [x] Search via DuckDuckGo (fixed)
 - [x] Select-all on focus, Esc to revert, Cmd/Ctrl+L to focus
 - [x] Edit context menu (cut/copy/paste/select all) in toolbar fields
-- [ ] **P0** Autocomplete dropdown from history and bookmarks (frecency ranking, inline completion)
+- [x] Autocomplete dropdown from history and bookmarks (frequency + recency ranking, inline completion, arrow keys, Esc)
 - [x] Search engine choice in Settings: DuckDuckGo, Google, Bing, Brave Search, Ecosia, Kagi, Startpage
 - [ ] **P1** Search engine choice in onboarding; custom engines
-- [ ] **P0** Security indicator: lock / "Not secure" for http / warning on cert problems
+- [x] Security indicator: lock for https, "Not secure" for http (certificate failures already stop the page)
 - [ ] **P0** Show URL without noise when unfocused (hide `https://`, `www.`), full URL on focus; highlight the domain (anti-spoofing)
 - [ ] **P1** Search suggestions from the chosen engine (opt-in for privacy)
 - [ ] **P1** "Switch to tab" suggestions for already-open tabs
@@ -160,13 +160,14 @@ Ordered by priority, then by what unblocks what.
 - [x] Site permissions list with reset in Settings
 - [x] Built-in ad & tracker blocking (`@ghostery/adblocker-electron`, EasyList/EasyPrivacy, weekly list refresh), toolbar shield with blocked count and per-site off switch, global switch in Settings
 - [ ] **P1** Shield popup with details (what was blocked, cookie-banner blocking level)
-- [ ] **P0** Site info popup (click lock): connection status, permissions for this site, cookies in use, "Site settings", clear site data
+- [x] Site info popup (click lock): connection status, certificate issuer/expiry, per-site permissions (Ask/Allow/Block), ad blocking switch, clear cookies and site data
+- [ ] **P2** List of cookies in use per site
 - [ ] **P0** Permission defaults per type (ask/block for all sites) and add/edit exceptions, not just reset
 - [ ] **P0** Block third-party cookies by default (or partition them); cookie settings page with per-site exceptions
 - [ ] **P0** Decide `file://` policy: typed `file://` URLs load today; block web pages from navigating to `file:` and restrict to top-level user navigation
 - [ ] **P0** External protocol handling (`mailto:`, `zoommtg:`, `slack:`): ask before opening another app, remember choice
 - [ ] **P1** HTTPS-Only / HTTPS-upgrade mode with a "continue to http" interstitial
-- [ ] **P1** Certificate viewer (from the site info popup)
+- [ ] **P1** Full certificate viewer (issuer and expiry are shown in the site info popup)
 - [ ] **P1** Safe browsing / phishing & malware protection (Web Risk API, paid, or ship without and say so) *(Electron limit)*
 - [ ] **P1** DNS over HTTPS setting (`app.configureHostResolver` secure DNS mode + provider)
 - [ ] **P1** Mixed-content handling / indicator; block insecure forms on https pages
