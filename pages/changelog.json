@@ -1,7 +1,15 @@
 {
   "_comment": "Shown on browser://whatsnew after an update. Add user-visible changes to \"next\" as they land; `npm run release` renames \"next\" to the version it releases (and refuses to release without notes).",
   "next": [
-    "Calculator, unit conversions (\"10 km in miles\") and quick actions (\"settings\", \"clear history\") in the address bar"
+    "Calculator, unit conversions (\"10 km in miles\") and quick actions (\"settings\", \"clear history\") in the address bar",
+    "Tab groups (named, colored, collapsible) and workspaces to organize your tabs",
+    "Vertical tabs sidebar (⌥⌘V), side-by-side Split View (⌥⌘S), and tab hover preview cards",
+    "Two-finger trackpad swipe back and forward with an on-screen arrow",
+    "Cookie banner auto-reject and fingerprinting protection (canvas, WebGL and audio noise) in Settings → Privacy",
+    "Built-in screenshots (visible page, selection or full page), Read Aloud, in-page translation, and QR code sharing",
+    "Picture-in-Picture button in the media hub, and per-site autoplay permissions",
+    "Accent color themes, compact mode, customizable keyboard shortcuts, and installable web apps (PWA windows)",
+    "Single-tab screen sharing, client certificate selection, and custom protocol handlers (mailto:, web+…)"
   ],
   "0.20.0": [
     "History moved into a fast database, with full-text search on the History page",

@@ -11,6 +11,14 @@
   <div id="bar" role="toolbar" aria-label="Reader settings">
     <button id="exit" title="Leave reader mode">← Original page</button>
     <span class="spacer"></span>
+    <button id="listen" title="Read aloud (⌥⇧S)" aria-label="Read aloud">Listen</button>
+    <select id="rate" aria-label="Reading speed" hidden>
+      <option value="0.8">0.8×</option>
+      <option value="1" selected>1×</option>
+      <option value="1.25">1.25×</option>
+      <option value="1.5">1.5×</option>
+      <option value="2">2×</option>
+    </select>
     <button id="smaller" title="Smaller text" aria-label="Smaller text">A−</button>
     <button id="bigger" title="Larger text" aria-label="Larger text">A+</button>
     <select id="font" aria-label="Font"><option value="serif">Serif</option><option value="sans">Sans-serif</option></select>

@@ -328,3 +328,457 @@ if (/^https?:$/.test(location.protocol) && window === window.top) {
     if (a.name && (a.street || a.email || a.phone)) ipcRenderer.send('autofill:offer', a);
   }, true);
 }
+
+// ---- Privacy & site features: fingerprinting protection, per-site autoplay, cookie-banner
+// auto-reject, registerProtocolHandler, two-finger swipe back/forward, selection screenshot,
+// and read aloud.
+
+if (/^https?:$/.test(location.protocol)) {
+  let siteFeatures = null;
+  try {
+    siteFeatures = ipcRenderer.sendSync('site:features');
+  } catch {
+    siteFeatures = null;
+  }
+
+  // 1. Fingerprinting protection (canvas, WebGL, AudioContext, hardware concurrency) +
+  //    per-site autoplay blocking + navigator.registerProtocolHandler
+  if (siteFeatures) {
+    try {
+      contextBridge.executeInMainWorld({
+        func: (fpOn, seed, blockAutoplay, reportProtocol) => {
+          if (fpOn) {
+            // Deterministic per-session, per-origin byte tweak on canvas readbacks
+            let h = seed ^ 0x811c9dc5;
+            for (let i = 0; i < location.origin.length; i++) {
+              h ^= location.origin.charCodeAt(i);
+              h = Math.imul(h, 0x01000193);
+            }
+            const getImageData = CanvasRenderingContext2D.prototype.getImageData;
+            CanvasRenderingContext2D.prototype.getImageData = function (sx, sy, sw, sh, ...rest) {
+              const img = getImageData.call(this, sx, sy, sw, sh, ...rest);
+              if (img && img.data && img.data.length >= 16) {
+                const idx = ((Math.abs(h) % 4) * 4) + 2;
+                img.data[idx] = img.data[idx] ^ 1;
+              }
+              return img;
+            };
+            const toDataURL = HTMLCanvasElement.prototype.toDataURL;
+            HTMLCanvasElement.prototype.toDataURL = function (...args) {
+              try {
+                const ctx = this.getContext('2d');
+                if (ctx && this.width > 1 && this.height > 1) {
+                  const p = getImageData.call(ctx, 0, 0, 1, 1);
+                  p.data[2] ^= 1;
+                  ctx.putImageData(p, 0, 0);
+                  const res = toDataURL.apply(this, args);
+                  p.data[2] ^= 1;
+                  ctx.putImageData(p, 0, 0);
+                  return res;
+                }
+              } catch {}
+              return toDataURL.apply(this, args);
+            };
+            for (const Proto of [ window.WebGLRenderingContext?.prototype, window.WebGL2RenderingContext?.prototype ]) {
+              if (!Proto || !Proto.getParameter) continue;
+              const orig = Proto.getParameter;
+              Proto.getParameter = function (param) {
+                if (param === 0x9245) return 'Apple Inc.';
+                if (param === 0x9246) return 'Apple GPU';
+                return orig.call(this, param);
+              };
+            }
+            if (window.AudioBuffer?.prototype?.getChannelData) {
+              const origChannel = AudioBuffer.prototype.getChannelData;
+              AudioBuffer.prototype.getChannelData = function (ch) {
+                const data = origChannel.call(this, ch);
+                if (data && data.length > 0 && !data.__operecsNoised) {
+                  Object.defineProperty(data, '__operecsNoised', { value: true });
+                  const step = Math.max(1, Math.floor(data.length / 16));
+                  for (let i = 0; i < data.length; i += step) data[i] += ((h & 1) ? 1e-7 : -1e-7);
+                }
+                return data;
+              };
+            }
+            try {
+              Object.defineProperty(Navigator.prototype, 'hardwareConcurrency', { get: () => 8, configurable: true });
+              if ('deviceMemory' in Navigator.prototype) {
+                Object.defineProperty(Navigator.prototype, 'deviceMemory', { get: () => 8, configurable: true });
+              }
+            } catch {}
+          }
+
+          if (blockAutoplay) {
+            const origPlay = HTMLMediaElement.prototype.play;
+            HTMLMediaElement.prototype.play = function (...args) {
+              const active = navigator.userActivation ? navigator.userActivation.hasBeenActive : true;
+              if (!active && !this.muted && this.volume > 0) {
+                return Promise.reject(new DOMException('Autoplay is blocked for this site.', 'NotAllowedError'));
+              }
+              return origPlay.apply(this, args);
+            };
+          }
+
+          const SAFE_SCHEMES = new Set(['bitcoin', 'geo', 'im', 'irc', 'ircs', 'magnet', 'mailto', 'Matrix', 'mms', 'news', 'nntp', 'openpgp4fpr', 'sftp', 'sip', 'sms', 'smsto', 'ssh', 'tel', 'urn', 'webcal', 'wtai', 'xmpp']);
+          Navigator.prototype.registerProtocolHandler = function (scheme, url) {
+            const s = String(scheme || '').trim().toLowerCase();
+            if (!SAFE_SCHEMES.has(s) && !/^web\+[a-z]+$/.test(s)) {
+              throw new DOMException(`Scheme "${s}" is not allowed.`, 'SecurityError');
+            }
+            const resolved = new URL(String(url || ''), location.href);
+            if (resolved.origin !== location.origin || !resolved.href.includes('%s')) {
+              throw new DOMException('Handler URL must be on the same site and include "%s".', 'SyntaxError');
+            }
+            reportProtocol(s, resolved.href);
+          };
+        },
+        args: [
+          !!siteFeatures.fingerprintingProtection,
+          siteFeatures.seed || 12345,
+          !!siteFeatures.blockAutoplay,
+          (scheme, url) => ipcRenderer.send('protocol:register', { scheme, url }),
+        ],
+      });
+    } catch {
+      // page world not available
+    }
+  }
+
+  // 2. Cookie banner auto-reject (top frame)
+  if (siteFeatures && siteFeatures.rejectCookies && window === window.top) {
+    const REJECT_SELECTORS = [
+      '#onetrust-reject-all-handler',
+      '#CybotCookiebotDialogBodyButtonDecline',
+      '#didomi-notice-disagree-button',
+      '.qc-cmp2-summary-buttons button[mode="secondary"]',
+      '#truste-consent-required',
+      '.cmplz-deny',
+      '.cm-btn-decline',
+      '.osano-cm-deny',
+      '.osano-cm-button--type_deny',
+      '[data-cookie-refuse]',
+      'button[data-testid="uc-deny-all-button"]',
+      'button[id*="reject-all" i]',
+      'button[class*="reject-all" i]',
+    ];
+    const REJECT_TEXT = /^(reject all|decline all|deny all|refuse all|only necessary|necessary only|essential only|use necessary cookies only|reject optional cookies|do not accept|continue without accepting)$/i;
+
+    const tryRejectCookieBanner = () => {
+      for (const sel of REJECT_SELECTORS) {
+        const btn = document.querySelector(sel);
+        if (btn && btn instanceof HTMLElement && btn.getClientRects().length > 0) {
+          btn.click();
+          return true;
+        }
+      }
+      const containers = document.querySelectorAll('[id*="cookie" i], [class*="cookie" i], [id*="consent" i], [class*="consent" i], [id*="gdpr" i], [class*="gdpr" i], [aria-label*="cookie" i], [aria-label*="consent" i]');
+      for (const box of containers) {
+        for (const btn of box.querySelectorAll('button, a[role="button"], input[type="button"]')) {
+          const label = (btn.textContent || btn.getAttribute('aria-label') || btn.value || '').trim();
+          if (REJECT_TEXT.test(label) && btn.getClientRects().length > 0) {
+            btn.click();
+            return true;
+          }
+        }
+      }
+      return false;
+    };
+
+    const startCookieWatcher = () => {
+      if (tryRejectCookieBanner()) return;
+      const obs = new MutationObserver(() => {
+        if (tryRejectCookieBanner()) obs.disconnect();
+      });
+      if (document.documentElement) obs.observe(document.documentElement, { childList: true, subtree: true });
+      setTimeout(() => obs.disconnect(), 8000);
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', startCookieWatcher, { once: true });
+    else startCookieWatcher();
+  }
+}
+
+// ---- Two-finger horizontal swipe back/forward with an arrow indicator (top frame)
+if ((/^https?:$/.test(location.protocol) || /^browser:$/.test(location.protocol)) && window === window.top && location.href !== 'browser://ui/') {
+  let swipeX = 0;
+  let swipeTimer = null;
+  let arrowHost = null;
+  let arrowEl = null;
+
+  function canScrollH(target, dx) {
+    for (let el = target instanceof Element ? target : document.scrollingElement; el && el !== document; el = el.parentElement) {
+      const st = getComputedStyle(el);
+      const ox = st.overflowX;
+      if ((ox === 'auto' || ox === 'scroll' || el === document.scrollingElement || el === document.documentElement) && el.scrollWidth > el.clientWidth + 2) {
+        if (dx < 0 && el.scrollLeft > 0) return true;
+        if (dx > 0 && el.scrollLeft + el.clientWidth < el.scrollWidth - 1) return true;
+      }
+    }
+    return false;
+  }
+
+  function ensureArrow() {
+    if (arrowHost && document.documentElement?.contains(arrowHost)) return arrowEl;
+    arrowHost = document.createElement('div');
+    const root = arrowHost.attachShadow({ mode: 'closed' });
+    const style = document.createElement('style');
+    style.textContent = `
+      .arrow {
+        position: fixed; top: 50%; z-index: 2147483647; width: 42px; height: 42px; margin-top: -21px;
+        border-radius: 50%; background: rgba(20, 17, 28, 0.92); color: #f3f1f7;
+        border: 1px solid rgba(155, 108, 255, 0.45); box-shadow: 0 10px 28px rgba(0,0,0,0.45);
+        display: flex; align-items: center; justify-content: center; pointer-events: none;
+        font: 600 18px/1 -apple-system, sans-serif; opacity: 0; transition: opacity 0.12s;
+      }
+      .arrow.ready { background: linear-gradient(135deg, #9b6cff 0%, #6e3ce0 100%); color: #fff; }
+    `;
+    arrowEl = document.createElement('div');
+    arrowEl.className = 'arrow';
+    root.append(style, arrowEl);
+    document.documentElement?.append(arrowHost);
+    return arrowEl;
+  }
+
+  window.addEventListener('wheel', (e) => {
+    if (Math.abs(e.deltaX) <= Math.abs(e.deltaY) * 1.3 || Math.abs(e.deltaX) < 1.5) return;
+    if (canScrollH(e.target, e.deltaX)) {
+      swipeX = 0;
+      return;
+    }
+    swipeX += -e.deltaX;
+    const dir = swipeX > 0 ? 'back' : 'forward';
+    const dist = Math.min(Math.abs(swipeX), 140);
+    if (dist > 18) {
+      const el = ensureArrow();
+      el.textContent = dir === 'back' ? '←' : '→';
+      el.style.opacity = String(Math.min(1, (dist - 18) / 60));
+      const offset = Math.round(Math.min(24, (dist - 18) * 0.45));
+      el.style.left = dir === 'back' ? `${offset - 12}px` : 'auto';
+      el.style.right = dir === 'forward' ? `${offset - 12}px` : 'auto';
+      el.classList.toggle('ready', dist >= 100);
+    }
+    clearTimeout(swipeTimer);
+    swipeTimer = setTimeout(() => {
+      const trigger = Math.abs(swipeX) >= 100 ? (swipeX > 0 ? 'back' : 'forward') : null;
+      swipeX = 0;
+      if (arrowEl) {
+        arrowEl.style.opacity = '0';
+        arrowEl.classList.remove('ready');
+      }
+      if (trigger) ipcRenderer.send('swipe:navigate', trigger);
+    }, 130);
+  }, { passive: true });
+}
+
+// ---- Selection screenshot & Read aloud (top frame)
+if (window === window.top && location.href !== 'browser://ui/') {
+  ipcRenderer.on('screenshot:select-start', () => {
+    const host = document.createElement('div');
+    const root = host.attachShadow({ mode: 'closed' });
+    const style = document.createElement('style');
+    style.textContent = `
+      .ov { position: fixed; inset: 0; z-index: 2147483647; cursor: crosshair; background: rgba(12, 10, 17, 0.28); user-select: none; }
+      .box { position: fixed; border: 2px solid #9b6cff; background: rgba(155, 108, 255, 0.12); box-shadow: 0 0 0 9999px rgba(12, 10, 17, 0.42); pointer-events: none; display: none; border-radius: 4px; }
+      .hint { position: fixed; top: 16px; left: 50%; transform: translateX(-50%); background: rgba(20, 17, 28, 0.92); color: #f3f1f7; padding: 6px 14px; border-radius: 999px; font: 500 12.5px/1.3 -apple-system, sans-serif; border: 1px solid rgba(155, 108, 255, 0.35); pointer-events: none; }
+    `;
+    const ov = document.createElement('div');
+    ov.className = 'ov';
+    const box = document.createElement('div');
+    box.className = 'box';
+    const hint = document.createElement('div');
+    hint.className = 'hint';
+    hint.textContent = 'Drag to capture an area · Esc to cancel';
+    ov.append(box, hint);
+    root.append(style, ov);
+    document.documentElement.append(host);
+
+    let startX = 0, startY = 0, dragging = false;
+    const cleanup = () => {
+      window.removeEventListener('keydown', onKey, true);
+      host.remove();
+    };
+    const onKey = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        cleanup();
+      }
+    };
+    window.addEventListener('keydown', onKey, true);
+    ov.addEventListener('mousedown', (e) => {
+      dragging = true;
+      startX = e.clientX;
+      startY = e.clientY;
+      box.style.display = 'block';
+      hint.style.display = 'none';
+    });
+    ov.addEventListener('mousemove', (e) => {
+      if (!dragging) return;
+      const x = Math.min(startX, e.clientX);
+      const y = Math.min(startY, e.clientY);
+      const w = Math.abs(e.clientX - startX);
+      const h = Math.abs(e.clientY - startY);
+      box.style.left = `${x}px`;
+      box.style.top = `${y}px`;
+      box.style.width = `${w}px`;
+      box.style.height = `${h}px`;
+    });
+    ov.addEventListener('mouseup', (e) => {
+      if (!dragging) return;
+      dragging = false;
+      const x = Math.round(Math.min(startX, e.clientX));
+      const y = Math.round(Math.min(startY, e.clientY));
+      const width = Math.round(Math.abs(e.clientX - startX));
+      const height = Math.round(Math.abs(e.clientY - startY));
+      cleanup();
+      if (width > 8 && height > 8) {
+        requestAnimationFrame(() => {
+          setTimeout(() => ipcRenderer.send('screenshot:rect', { x, y, width, height }), 40);
+        });
+      }
+    });
+  });
+
+  // Read aloud controller
+  let speechHost = null;
+  let speechRate = 1;
+  ipcRenderer.on('speech:toggle', () => {
+    const synth = window.speechSynthesis;
+    if (!synth) return;
+    if (speechHost && document.documentElement.contains(speechHost)) {
+      synth.cancel();
+      speechHost.remove();
+      speechHost = null;
+      return;
+    }
+    const sel = String(window.getSelection() || '').trim();
+    const rootEl = document.querySelector('article, main, [role="main"]') || document.body;
+    const text = (sel || rootEl?.innerText || '').replace(/\s+/g, ' ').trim().slice(0, 18000);
+    if (!text) return;
+
+    speechHost = document.createElement('div');
+    const root = speechHost.attachShadow({ mode: 'closed' });
+    const style = document.createElement('style');
+    style.textContent = `
+      .bar { position: fixed; bottom: 18px; right: 18px; z-index: 2147483647; display: flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 999px; background: rgba(20, 17, 28, 0.94); color: #f3f1f7; border: 1px solid rgba(155, 108, 255, 0.4); box-shadow: 0 12px 32px rgba(0,0,0,0.5); font: 500 12.5px/1 -apple-system, sans-serif; }
+      button { border: 0; background: rgba(255,255,255,0.08); color: #f3f1f7; padding: 5px 10px; border-radius: 999px; cursor: pointer; font: inherit; }
+      button:hover { background: rgba(155, 108, 255, 0.28); }
+      .lbl { padding: 0 4px; color: #c3a6ff; }
+    `;
+    const bar = document.createElement('div');
+    bar.className = 'bar';
+    const lbl = document.createElement('span');
+    lbl.className = 'lbl';
+    lbl.textContent = 'Reading aloud';
+    const pauseBtn = document.createElement('button');
+    pauseBtn.textContent = 'Pause';
+    const rateBtn = document.createElement('button');
+    rateBtn.textContent = '1×';
+    const stopBtn = document.createElement('button');
+    stopBtn.textContent = 'Stop';
+    bar.append(lbl, pauseBtn, rateBtn, stopBtn);
+    root.append(style, bar);
+    document.documentElement.append(speechHost);
+
+    const speakFrom = () => {
+      synth.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = speechRate;
+      u.onend = () => {
+        speechHost?.remove();
+        speechHost = null;
+      };
+      synth.speak(u);
+    };
+    pauseBtn.addEventListener('click', () => {
+      if (synth.paused) {
+        synth.resume();
+        pauseBtn.textContent = 'Pause';
+      } else {
+        synth.pause();
+        pauseBtn.textContent = 'Resume';
+      }
+    });
+    rateBtn.addEventListener('click', () => {
+      speechRate = speechRate === 1 ? 1.25 : speechRate === 1.25 ? 1.5 : 1;
+      rateBtn.textContent = `${speechRate}×`;
+      speakFrom();
+    });
+    stopBtn.addEventListener('click', () => {
+      synth.cancel();
+      speechHost?.remove();
+      speechHost = null;
+    });
+    speakFrom();
+  });
+
+  // In-page translation controller
+  let translateHost = null;
+  const originalNodes = new Map();
+  ipcRenderer.on('translate:toggle', async (_e, targetLang = 'en') => {
+    if (translateHost && document.documentElement.contains(translateHost)) {
+      for (const [node, orig] of originalNodes) node.nodeValue = orig;
+      originalNodes.clear();
+      translateHost.remove();
+      translateHost = null;
+      return;
+    }
+    const walker = document.createTreeWalker(document.body || document.documentElement, NodeFilter.SHOW_TEXT, {
+      acceptNode(n) {
+        const p = n.parentElement;
+        if (!p || /^(SCRIPT|STYLE|NOSCRIPT|CODE|PRE|TEXTAREA|INPUT|SVG)$/i.test(p.tagName) || p.isContentEditable) return NodeFilter.FILTER_REJECT;
+        const t = n.nodeValue.trim();
+        return t.length >= 3 && /\p{L}/u.test(t) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+      },
+    });
+    const nodes = [];
+    while (walker.nextNode() && nodes.length < 180) nodes.push(walker.currentNode);
+    if (!nodes.length) return;
+
+    translateHost = document.createElement('div');
+    const root = translateHost.attachShadow({ mode: 'closed' });
+    const style = document.createElement('style');
+    style.textContent = `
+      .bar { position: fixed; bottom: 18px; left: 18px; z-index: 2147483647; display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: rgba(20, 17, 28, 0.94); color: #f3f1f7; border: 1px solid rgba(155, 108, 255, 0.4); box-shadow: 0 12px 32px rgba(0,0,0,0.5); font: 500 12.5px/1 -apple-system, sans-serif; }
+      button { border: 0; background: rgba(255,255,255,0.08); color: #f3f1f7; padding: 5px 10px; border-radius: 999px; cursor: pointer; font: inherit; }
+      button:hover { background: rgba(155, 108, 255, 0.28); }
+      .lbl { color: #c3a6ff; }
+    `;
+    const bar = document.createElement('div');
+    bar.className = 'bar';
+    const lbl = document.createElement('span');
+    lbl.className = 'lbl';
+    lbl.textContent = 'Translating page…';
+    const revertBtn = document.createElement('button');
+    revertBtn.textContent = 'Show Original';
+    bar.append(lbl, revertBtn);
+    root.append(style, bar);
+    document.documentElement.append(translateHost);
+
+    revertBtn.addEventListener('click', () => {
+      for (const [node, orig] of originalNodes) node.nodeValue = orig;
+      originalNodes.clear();
+      translateHost?.remove();
+      translateHost = null;
+    });
+
+    try {
+      for (let i = 0; i < nodes.length; i += 30) {
+        if (!translateHost) break;
+        const batch = nodes.slice(i, i + 30);
+        const texts = batch.map((n) => n.nodeValue.trim());
+        const out = await ipcRenderer.invoke('translate:batch', { texts, to: targetLang });
+        if (Array.isArray(out)) {
+          batch.forEach((n, idx) => {
+            if (out[idx] && typeof out[idx] === 'string') {
+              if (!originalNodes.has(n)) originalNodes.set(n, n.nodeValue);
+              n.nodeValue = n.nodeValue.replace(n.nodeValue.trim(), out[idx]);
+            }
+          });
+        }
+      }
+      if (lbl) lbl.textContent = `Translated to ${targetLang.toUpperCase()}`;
+    } catch {
+      if (lbl) lbl.textContent = 'Translation unavailable';
+    }
+  });
+}
+

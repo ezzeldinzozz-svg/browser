@@ -39,6 +39,7 @@
       "pages/**",
       "history-db.js",
       "quick-answers.js",
+      "qr.js",
       "i18n.js",
       "locales/**",
       "package.json"

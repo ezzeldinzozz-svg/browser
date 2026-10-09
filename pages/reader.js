@@ -53,6 +53,52 @@ const SIZES = [14, 16, 18, 20, 22, 24, 26, 28];
 document.getElementById('smaller').addEventListener('click', () => save({ size: SIZES[Math.max(0, SIZES.indexOf(prefs.size) - 1)] }));
 document.getElementById('bigger').addEventListener('click', () => save({ size: SIZES[Math.min(SIZES.length - 1, SIZES.indexOf(prefs.size) + 1)] }));
 for (const id of ['font', 'width', 'theme']) document.getElementById(id).addEventListener('change', (e) => save({ [id]: e.target.value }));
-document.getElementById('exit').addEventListener('click', () => browserAPI.exitReader());
+document.getElementById('exit').addEventListener('click', () => {
+  speechSynthesis.cancel();
+  browserAPI.exitReader();
+});
 document.getElementById('open-original').addEventListener('click', () => browserAPI.exitReader());
 matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => data && data.article && prefs.theme === 'auto' && render());
+
+// Read aloud in Reader Mode
+const listenBtn = document.getElementById('listen');
+const rateSelect = document.getElementById('rate');
+let speaking = false;
+
+function startSpeech() {
+  if (!data || !data.article) return;
+  speechSynthesis.cancel();
+  const doc = new DOMParser().parseFromString(data.article.content || '', 'text/html');
+  const text = `${data.article.title || ''}.\n\n${doc.body.textContent || ''}`.trim();
+  if (!text) return;
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = Number(rateSelect.value) || 1;
+  if (data.article.lang) u.lang = data.article.lang;
+  u.onend = u.onerror = () => {
+    speaking = false;
+    listenBtn.textContent = 'Listen';
+    rateSelect.hidden = true;
+  };
+  speaking = true;
+  listenBtn.textContent = 'Stop';
+  rateSelect.hidden = false;
+  speechSynthesis.speak(u);
+}
+
+function toggleReaderSpeech() {
+  if (speaking || speechSynthesis.speaking) {
+    speechSynthesis.cancel();
+    speaking = false;
+    listenBtn.textContent = 'Listen';
+    rateSelect.hidden = true;
+  } else {
+    startSpeech();
+  }
+}
+
+window.__toggleReaderSpeech = toggleReaderSpeech;
+listenBtn.addEventListener('click', toggleReaderSpeech);
+rateSelect.addEventListener('change', () => {
+  if (speaking) startSpeech();
+});
+window.addEventListener('beforeunload', () => speechSynthesis.cancel());

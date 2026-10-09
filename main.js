@@ -3,6 +3,7 @@
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const crypto = require('crypto');
 const { pathToFileURL, domainToUnicode } = require('url');
 const {
   app,
@@ -47,10 +48,15 @@ const i18n = require('./i18n');
 const historyDb = require('./history-db');
 const bookmarks = require('./bookmarks');
 const quickAnswers = require('./quick-answers');
+const qr = require('./qr');
 const { ElectronChromeExtensions } = require('electron-chrome-extensions');
 const { installChromeWebStore, uninstallExtension } = require('electron-chrome-web-store');
 
 const CHROME_H = 80; // tab strip (38, also the title bar) + toolbar (42)
+const COMPACT_CHROME_H = 68; // compact tab strip (32) + compact toolbar (36)
+const TOOLBAR_ONLY_H = 42;
+const COMPACT_TOOLBAR_ONLY_H = 36;
+const SIDEBAR_W = 200; // vertical tabs sidebar width
 // Pages sit in a rounded card inset from the window edge (matches the brand's card look).
 const PAGE_INSET = 8;
 const PAGE_RADIUS = 12;
@@ -107,16 +113,19 @@ const PERM_LABELS = {
   midiSysex: 'fully control your MIDI devices',
   openExternal: 'open an app on your computer',
   'automatic-downloads': 'download multiple files',
+  autoplay: 'play media with sound automatically',
   // An embedded site (sign-in widget, video player…) asking for its cookies while third-party
   // cookies are blocked (Storage Access API).
   'storage-access': 'use its cookies and site data while embedded on other sites',
   'top-level-storage-access': 'use its cookies and site data while embedded on other sites',
 };
 // Permission types that can be set to Ask or Block for every site in Settings.
-const PERMISSION_DEFAULT_KEYS = ['camera', 'microphone', 'geolocation', 'notifications', 'clipboard-read', 'openExternal', 'automatic-downloads'];
+const PERMISSION_DEFAULT_KEYS = ['camera', 'microphone', 'geolocation', 'notifications', 'clipboard-read', 'openExternal', 'automatic-downloads', 'autoplay'];
 const PROMPTABLE = new Set(['media', ...Object.keys(PERM_LABELS)]);
 
 const isMac = process.platform === 'darwin';
+const ACCENT_COLORS = ['violet', 'blue', 'emerald', 'amber', 'rose', 'cyan'];
+const GROUP_COLORS = { violet: '#9b6cff', blue: '#4f8cff', emerald: '#2fb67c', amber: '#f2994a', rose: '#eb5757', cyan: '#12a4b8' };
 
 // ---------------------------------------------------------------- storage
 
@@ -165,6 +174,14 @@ function defaultSettings() {
     privacyStats: true, // show ads and trackers blocked on the new tab page
     stripTracking: true, // remove utm_ / fbclid / gclid… from addresses you open
     theme: 'system', // 'system' | 'light' | 'dark' (browser UI, internal pages, and sites that follow it)
+    rejectCookies: true, // auto-reject common cookie consent banners
+    fingerprintingProtection: true, // canvas/WebGL/audio noise + hardwareConcurrency clamping
+    accentColor: 'violet', // 'violet' | 'blue' | 'emerald' | 'amber' | 'rose' | 'cyan'
+    compactMode: false, // compact toolbar & tab strip
+    verticalTabs: false, // show tabs in a left sidebar
+    protocolHandlers: {}, // scheme -> { url, host }
+    installedApps: [], // [{ url, title, icon }]
+    shortcuts: {}, // actionId -> accelerator override
   };
 }
 
@@ -477,12 +494,25 @@ function readableHost(u) {
   }
 }
 
+function resolveProtocolUrl(targetUrl) {
+  if (!store || !targetUrl) return null;
+  const m = String(targetUrl).trim().match(/^([a-z][a-z0-9+.-]*):/i);
+  if (!m) return null;
+  const scheme = m[1].toLowerCase();
+  if (['http', 'https', 'file', 'browser', 'javascript', 'data', 'blob', 'about', 'view-source', 'chrome-extension'].includes(scheme)) return null;
+  const h = (store.data.settings.protocolHandlers || {})[scheme];
+  if (!h || !h.url || !h.url.includes('%s')) return null;
+  return h.url.replace('%s', encodeURIComponent(String(targetUrl).trim()));
+}
+
 function resolveInput(raw) {
   const text = String(raw || '').trim();
   if (!text) return null;
   const internal = text.match(/^browser:\/\/(\w+)\/?$/i);
   if (internal) return INTERNAL.has(internal[1].toLowerCase()) ? internalURL(internal[1].toLowerCase()) : null;
   if (/^(https?|file):\/\//i.test(text)) return text;
+  const proto = resolveProtocolUrl(text);
+  if (proto) return proto;
   const keyword = keywordSearch(text);
   if (keyword) return keyword.engine.url.replace('%s', encodeURIComponent(keyword.query));
   if (!/\s/.test(text)) {
@@ -553,6 +583,10 @@ const tabOfWc = (wc) => (wc ? allTabs().find((t) => t.wc === wc) : null);
 const getTab = (w, id) => w.tabs.find((t) => t.id === id);
 const activeTab = (w) => (w ? getTab(w, w.activeId) : null);
 const liveWindow = (w) => w && !w.win.isDestroyed();
+const visibleTabs = (w) => {
+  const ws = (w && w.activeWorkspace) || 'Default';
+  return w.tabs.filter((t) => t.pinned || (t.workspace || 'Default') === ws);
+};
 
 // The window menu commands and shortcuts act on.
 function focusedWindow() {
@@ -595,8 +629,10 @@ function sendTabs(w) {
   const prompt = current && current.prompts[0];
   const auth = current && current.auth[0];
   const site = siteOf(currentUrl);
+  const shownTabs = visibleTabs(w);
   w.chromeView.webContents.send('tabs:update', {
     activeId: w.activeId,
+    splitId: w.splitId || null,
     activeWebContentsId: current && !w.private ? current.wc.id : null,
     private: w.private,
     bookmarked: !!bookmarks.findByUrl(currentUrl),
@@ -610,6 +646,8 @@ function sendTabs(w) {
           blockLabel: prompt.kind === 'save-address' ? 'Not now' : 'Block',
           text: prompt.kind === 'save-address'
             ? `Save this address for filling in forms? ${[prompt.address.name, prompt.address.street || prompt.address.email].filter(Boolean).join(', ')}`
+            : prompt.kind === 'protocol-handler'
+            ? `${new URL(prompt.origin).host} wants to open \u201c${prompt.scheme}:\u201d links`
             : prompt.scheme
             ? `${new URL(prompt.origin).host} wants to open \u201c${prompt.scheme}:\u201d links in another app`
             : `${new URL(prompt.origin).host} wants to ${promptText(prompt.keys)}`,
@@ -643,7 +681,20 @@ function sendTabs(w) {
       on: !!site && blockingOnFor(w, site),
       blocked: current ? current.blocked : 0,
     },
-    tabs: w.tabs.map((t) => {
+    groups: w.groups || [],
+    workspace: {
+      current: w.activeWorkspace || 'Default',
+      list: (w.workspaces || ['Default']).map((ws) => ({
+        name: ws,
+        count: w.tabs.filter((t) => !t.pinned && (t.workspace || 'Default') === ws).length,
+      })),
+    },
+    uiPrefs: {
+      accentColor: store.data.settings.accentColor || 'violet',
+      compactMode: !!store.data.settings.compactMode,
+      verticalTabs: !!store.data.settings.verticalTabs,
+    },
+    tabs: shownTabs.map((t) => {
       const pendingEntry = t.pending && t.pending.entries[t.pending.index];
       const url = pendingEntry ? pendingEntry.url : t.wc.getURL();
       return {
@@ -655,6 +706,8 @@ function sendTabs(w) {
         canGoBack: canGo(t.wc, 'back'),
         canGoForward: canGo(t.wc, 'forward'),
         pinned: t.pinned,
+        groupId: t.groupId || null,
+        split: t.id === w.splitId && t.id !== w.activeId,
         multi: w.multi.size > 1 && w.multi.has(t.id),
         sleeping: !!t.pending,
         capture: captureState(t),
@@ -716,14 +769,44 @@ async function toggleMedia(tab) {
   }
 }
 
+const PIP_TOGGLE = `(() => {
+  if (document.pictureInPictureElement) { document.exitPictureInPicture().catch(() => {}); return 1; }
+  const vids = [...document.querySelectorAll('video')].filter((v) => v.readyState >= 1 && !v.disablePictureInPicture);
+  const target = vids.find((v) => !v.paused) || vids[0];
+  if (target) { target.requestPictureInPicture().catch(() => {}); return 1; }
+  return 0;
+})()`;
+
+async function togglePip(tab) {
+  if (!tab || tab.wc.isDestroyed()) return;
+  for (const frame of tab.wc.mainFrame.framesInSubtree) {
+    try {
+      const n = await frame.executeJavaScript(PIP_TOGGLE, true);
+      if (n) break;
+    } catch {
+      // frame went away
+    }
+  }
+}
+
 const sendAll = () => windows.forEach(sendTabs);
 
 function chromeHeight(w) {
+  const compact = !!(store && store.data.settings.compactMode);
+  const vertical = !!(store && store.data.settings.verticalTabs);
+  const baseH = vertical ? (compact ? COMPACT_TOOLBAR_ONLY_H : TOOLBAR_ONLY_H) : (compact ? COMPACT_CHROME_H : CHROME_H);
+  const bmH = store && store.data.settings.showBookmarksBar ? BOOKMARKS_BAR_H : 0;
   const tab = activeTab(w);
-  if (!tab) return CHROME_H + (store.data.settings.showBookmarksBar ? BOOKMARKS_BAR_H : 0);
+  if (!tab) return baseH + bmH;
   if (tab.fullscreen) return 0;
   const bars = [w.restoreOffer, w.downloadWarnings.length, tab.prompts.length, tab.auth.length, tab.find.open].filter(Boolean).length;
-  return CHROME_H + (store.data.settings.showBookmarksBar ? BOOKMARKS_BAR_H : 0) + bars * BAR_H;
+  return baseH + bmH + bars * BAR_H;
+}
+
+function sidebarWidth(w) {
+  const tab = activeTab(w);
+  if (tab && tab.fullscreen) return 0;
+  return store && store.data.settings.verticalTabs ? SIDEBAR_W : 0;
 }
 
 const STATUS_H = 24;
@@ -739,8 +822,9 @@ function showStatus(w, url) {
 
 function layoutStatus(w) {
   const [width, height] = w.win.getContentSize();
-  const textWidth = Math.min(Math.round(width * 0.6), 7 * w.statusText.length + 28);
-  w.statusView.setBounds({ x: PAGE_INSET, y: height - STATUS_H - PAGE_INSET, width: Math.max(80, textWidth), height: STATUS_H });
+  const left = sidebarWidth(w);
+  const textWidth = Math.min(Math.round((width - left) * 0.6), 7 * w.statusText.length + 28);
+  w.statusView.setBounds({ x: (left || PAGE_INSET), y: height - STATUS_H - PAGE_INSET, width: Math.max(80, textWidth), height: STATUS_H });
   w.statusView.setVisible(!!w.statusText);
 }
 
@@ -773,13 +857,35 @@ function layout(w) {
   if (!liveWindow(w)) return;
   const [width, height] = w.win.getContentSize();
   const top = chromeHeight(w);
+  const left = sidebarWidth(w);
   w.chromeView.setVisible(top > 0);
-  // While a dropdown or popup is open the (transparent) toolbar view covers the whole window.
-  w.chromeView.setBounds({ x: 0, y: 0, width, height: w.overlay && top ? height : top || CHROME_H });
+  // While a dropdown/popup is open, or when vertical tabs are on, the toolbar view covers the whole window.
+  w.chromeView.setBounds({ x: 0, y: 0, width, height: (w.overlay || left > 0) && top ? height : top || CHROME_H });
   const inset = top > 0 ? PAGE_INSET : 0; // a page in fullscreen fills the window
+  const x0 = left > 0 ? left : inset;
+  const availW = Math.max(0, width - x0 - inset);
+  const availH = Math.max(0, height - top - inset);
+  const splitTab = w.splitId && w.splitId !== w.activeId && !(activeTab(w) && activeTab(w).fullscreen) ? getTab(w, w.splitId) : null;
+  const pair = splitTab ? (w.splitOrder && w.splitOrder.includes(w.activeId) && w.splitOrder.includes(w.splitId) ? w.splitOrder : [w.activeId, w.splitId]) : null;
+  const halfW = splitTab ? Math.max(0, Math.floor((availW - PAGE_INSET) / 2)) : availW;
   for (const t of w.tabs) {
-    t.view.setBounds({ x: inset, y: top, width: Math.max(0, width - 2 * inset), height: Math.max(0, height - top - inset) });
+    const visible = t.id === w.activeId || (splitTab && t.id === splitTab.id);
+    t.view.setVisible(!!visible);
+    if (pair && t.id === pair[0]) {
+      t.view.setBounds({ x: x0, y: top, width: halfW, height: availH });
+    } else if (pair && t.id === pair[1]) {
+      t.view.setBounds({ x: x0 + halfW + PAGE_INSET, y: top, width: Math.max(0, availW - halfW - PAGE_INSET), height: availH });
+    } else {
+      t.view.setBounds({ x: x0, y: top, width: availW, height: availH });
+    }
     t.view.setBorderRadius(inset ? PAGE_RADIUS : 0);
+  }
+  if (!w.overlay && top > 0) {
+    for (const t of w.tabs) {
+      if (t.id === w.activeId || (splitTab && t.id === splitTab.id)) w.win.contentView.addChildView(t.view);
+    }
+    if (w.statusView && w.statusText) w.win.contentView.addChildView(w.statusView);
+    if (w.autofillView && w.autofillView.getVisible()) w.win.contentView.addChildView(w.autofillView);
   }
   if (w.statusView) layoutStatus(w);
 }
@@ -823,6 +929,11 @@ function createWindow({ private: isPrivate = false, session: saved = null, ses: 
     chromeView,
     tabs: [],
     activeId: null,
+    splitId: null,
+    splitOrder: null,
+    groups: saved && Array.isArray(saved.groups) ? saved.groups : [],
+    workspaces: saved && Array.isArray(saved.workspaces) && saved.workspaces.length ? saved.workspaces : ['Default', 'Work', 'Personal'],
+    activeWorkspace: (saved && saved.activeWorkspace) || 'Default',
     private: isPrivate,
     ses,
     closedTabs: [], // most recent last
@@ -1073,7 +1184,7 @@ function applyProxy(ses) {
 // WebHID / Web Serial / WebUSB / Web Bluetooth: the page asks, the user picks a device in the
 // toolbar's chooser (or cancels). Picked devices stay allowed for that site until Operecs quits.
 const DEVICE_KINDS = new Set(['hid', 'serial', 'usb']);
-const DEVICE_NAMES = { hid: 'a HID device', serial: 'a serial port', usb: 'a USB device', bluetooth: 'a Bluetooth device' };
+const DEVICE_NAMES = { hid: 'a HID device', serial: 'a serial port', usb: 'a USB device', bluetooth: 'a Bluetooth device', certificate: 'a client certificate' };
 const grantedDevices = new Map(); // origin -> Set of device keys
 let nextDevicePickId = 1;
 
@@ -1093,7 +1204,7 @@ function showDeviceChooser(wc, kind, devices, callback) {
   if (tab.id !== w.activeId) selectTab(w, tab.id);
   w.chromeView.webContents.send('device-picker', {
     id: pick.id,
-    title: `${new URL(origin).host} wants to connect to ${DEVICE_NAMES[kind]}`,
+    title: `${origin ? new URL(origin).host : 'This site'} wants to connect to ${DEVICE_NAMES[kind]}`,
     scanning: kind === 'bluetooth',
     devices: devices.map((d) => ({ id: d.id, name: d.name })),
   });
@@ -1154,10 +1265,22 @@ function configureSession(ses) {
     if (details.resourceType === 'mainFrame' && details.method === 'POST') rememberPostType(details);
     callback({ requestHeaders: details.requestHeaders });
   });
-  // macOS 15+ shows its own screen/window picker; elsewhere our picker in the toolbar view.
-  ses.setDisplayMediaRequestHandler(onDisplayMediaRequest, { useSystemPicker: true });
+  // Our picker in the toolbar view lets the user share a single Operecs tab, a window, or a screen.
+  ses.setDisplayMediaRequestHandler(onDisplayMediaRequest, { useSystemPicker: false });
   ses.registerPreloadScript({ type: 'frame', filePath: path.join(__dirname, 'capture-preload.js') });
   adblock.attach(ses);
+}
+
+async function captureTabPreview(tab) {
+  if (!tab || tab.pending || tab.wc.isDestroyed() || !tab.view.getVisible() || !isWeb(tab.wc.getURL())) return;
+  try {
+    const img = await tab.wc.capturePage();
+    if (!img.isEmpty() && !tab.wc.isDestroyed()) {
+      tab.preview = img.resize({ width: 240, quality: 'good' }).toDataURL();
+    }
+  } catch {
+    // ignore capture error
+  }
 }
 
 // options.background: open without switching to it
@@ -1184,6 +1307,7 @@ function createTab(w, url, { background = false, after = null, history = null, l
     wc,
     favicon: '', // data: URL shown in the tab strip
     faviconSrc: '', // the page's icon URL being fetched
+    preview: '', // thumbnail data: URL for tab hover preview
     prompts: [], // pending permission requests
     blockedHosts: new Map(), // host -> requests blocked on this page (shield popup)
     pageDownloads: 0, // downloads started since the user last clicked or typed in the page
@@ -1195,6 +1319,8 @@ function createTab(w, url, { background = false, after = null, history = null, l
     lastShown: Date.now(), // when the tab was last the active one (memory saver)
     capture: new Map(), // frame key -> { camera, microphone, screen } reported by capture-preload.js
     pinned: !!(history && history.pinned),
+    groupId: (history && history.groupId) || (after && after.groupId) || null,
+    workspace: (history && history.workspace) || (after && after.workspace) || w.activeWorkspace || 'Default',
     openerId: after ? after.id : null,
   };
   const afterIdx = after ? w.tabs.indexOf(after) : -1;
@@ -1221,6 +1347,12 @@ function createTab(w, url, { background = false, after = null, history = null, l
     // A file dropped onto the page navigates without an initiating frame; pages can't open files.
     if (/^file:/i.test(e.url) && !e.initiator && e.isMainFrame) return;
     if (isBlockedNavigation(wc.getURL(), e.url)) e.preventDefault();
+    const custom = resolveProtocolUrl(e.url);
+    if (custom) {
+      e.preventDefault();
+      if (e.isMainFrame) wc.loadURL(custom).catch(() => {});
+      else createTab(tab.w, custom, { after: tab });
+    }
   };
   wc.on('will-frame-navigate', guard);
   wc.on('will-redirect', guard);
@@ -1232,7 +1364,7 @@ function createTab(w, url, { background = false, after = null, history = null, l
   wc.on('page-favicon-updated', (_e, favicons) => loadFavicon(tab, favicons[0]));
   wc.on('audio-state-changed', () => sendTabs(tab.w));
   wc.on('update-target-url', (_e, url) => {
-    if (tab.id === tab.w.activeId) showStatus(tab.w, url);
+    if (tab.id === tab.w.activeId || tab.id === tab.w.splitId) showStatus(tab.w, url);
   });
   wc.on('did-start-loading', () => sendTabs(tab.w));
   wc.on('select-bluetooth-device', (event, deviceList, callback) => {
@@ -1245,6 +1377,7 @@ function createTab(w, url, { background = false, after = null, history = null, l
   wc.on('did-stop-loading', () => {
     sendTabs(tab.w);
     checkReaderable(tab);
+    setTimeout(() => captureTabPreview(tab), 350);
   });
   wc.on('did-start-navigation', (details) => {
     if (details.isMainFrame && !details.isSameDocument) {
@@ -1261,6 +1394,9 @@ function createTab(w, url, { background = false, after = null, history = null, l
     if (input.type === 'mouseDown' || input.type === 'rawKeyDown' || input.type === 'keyDown' || input.type === 'touchStart') {
       tab.pageDownloads = 0;
       tab.lastInput = Date.now();
+    }
+    if (input.type === 'mouseDown' && tab.w.splitId === tab.id && tab.w.activeId !== tab.id) {
+      selectTab(tab.w, tab.id);
     }
   });
   wc.on('did-navigate', (_e, u) => {
@@ -1480,12 +1616,31 @@ function selectTab(w, id, keepSelection = false) {
     w.multi.clear();
     w.multiAnchor = null;
   }
+  if (!tab.pinned && tab.workspace && tab.workspace !== w.activeWorkspace) {
+    w.activeWorkspace = tab.workspace;
+    w.splitId = null;
+    w.splitOrder = null;
+  }
+  if (tab.groupId) {
+    const grp = (w.groups || []).find((g) => g.id === tab.groupId);
+    if (grp && grp.collapsed) grp.collapsed = false;
+  }
   hideAutofill(w);
   if (w.activeId !== id) {
     const previous = activeTab(w);
-    if (previous) previous.lastShown = Date.now();
+    if (previous) {
+      previous.lastShown = Date.now();
+      captureTabPreview(previous);
+    }
     exitFullscreen(previous);
     w.statusText = '';
+    if (w.splitId) {
+      if (id === w.splitId) {
+        w.splitId = w.activeId;
+      } else if (w.splitOrder) {
+        w.splitOrder = w.splitOrder.map((x) => (x === w.activeId ? id : x));
+      }
+    }
   }
   w.activeId = id;
   if (tab.pending) {
@@ -1493,7 +1648,6 @@ function selectTab(w, id, keepSelection = false) {
     tab.pending = null;
     tab.wc.navigationHistory.restore(history).catch(() => tab.wc.loadURL(history.entries[history.index].url).catch(() => {}));
   }
-  for (const t of w.tabs) t.view.setVisible(t.id === id);
   layout(w);
   tab.wc.focus();
   if (extensions && !w.private) extensions.selectTab(tab.wc);
@@ -1563,6 +1717,19 @@ function finishCloseTab(tab, history) {
   if (idx === -1) return;
   w.multi.delete(tab.id);
   w.tabs.splice(idx, 1);
+  if (w.splitId === tab.id) {
+    w.splitId = null;
+    w.splitOrder = null;
+  } else if (tab.id === w.activeId && w.splitId) {
+    const promote = w.splitId;
+    w.splitId = null;
+    w.splitOrder = null;
+    w.activeId = promote;
+  }
+  // Drop empty tab groups
+  if (tab.groupId && !w.tabs.some((t) => t.groupId === tab.groupId)) {
+    w.groups = (w.groups || []).filter((g) => g.id !== tab.groupId);
+  }
   rememberClosedTab(w, tab, idx, history);
   dismissPrompts(tab);
   cancelAuth(tab);
@@ -1573,8 +1740,17 @@ function finishCloseTab(tab, history) {
     if (liveWindow(w)) w.win.close();
     return;
   }
-  if (tab.id === w.activeId) selectTab(w, w.tabs[Math.min(idx, w.tabs.length - 1)].id);
-  else sendTabs(w);
+  const vis = visibleTabs(w);
+  if (vis.length === 0) {
+    createTab(w, internalURL('newtab'));
+    return;
+  }
+  if (!getTab(w, w.activeId) || !vis.some((t) => t.id === w.activeId)) {
+    selectTab(w, vis[Math.min(idx, vis.length - 1)].id);
+  } else {
+    layout(w);
+    sendTabs(w);
+  }
   saveSession();
 }
 
@@ -1589,6 +1765,7 @@ function setPinned(tab, pinned) {
   const { w } = tab;
   if (tab.pinned === pinned) return;
   tab.pinned = pinned;
+  if (pinned) tab.groupId = null;
   w.tabs.splice(w.tabs.indexOf(tab), 1);
   const firstUnpinned = w.tabs.filter((t) => t.pinned).length;
   w.tabs.splice(firstUnpinned, 0, tab); // end of the pinned group, or start of the rest
@@ -1642,6 +1819,10 @@ function detachTab(tab) {
   const idx = w.tabs.indexOf(tab);
   w.tabs.splice(idx, 1);
   w.multi.delete(tab.id);
+  if (w.splitId === tab.id) {
+    w.splitId = null;
+    w.splitOrder = null;
+  }
   dismissPrompts(tab);
   cancelAuth(tab);
   exitFullscreen(tab);
@@ -1664,6 +1845,8 @@ function moveTabsToNewWindow(tabs) {
     detachTab(tab);
     tab.w = target;
     tab.openerId = null;
+    tab.groupId = null;
+    tab.workspace = target.activeWorkspace || 'Default';
     target.tabs.push(tab);
     target.win.contentView.addChildView(tab.view);
     if (extensions && !target.private) extensions.addTab(tab.wc, target.win);
@@ -1700,6 +1883,8 @@ function adoptTab(w, id, index) {
   detachTab(tab);
   tab.w = w;
   tab.openerId = null;
+  tab.groupId = null;
+  tab.workspace = w.activeWorkspace || 'Default';
   w.tabs.splice(Math.max(0, Math.min(index, w.tabs.length)), 0, tab);
   w.win.contentView.addChildView(tab.view);
   if (extensions && !w.private) extensions.addTab(tab.wc, w.win);
@@ -1708,6 +1893,179 @@ function adoptTab(w, id, index) {
   selectTab(w, tab.id);
   w.win.focus();
   saveSession();
+}
+
+// ---------------------------------------------------------------- tab groups, split view & workspaces
+
+let nextGroupId = 1;
+function createTabGroup(w, tabs, name) {
+  w.groups ||= [];
+  const colorKeys = Object.keys(GROUP_COLORS);
+  const color = colorKeys[w.groups.length % colorKeys.length];
+  const id = `g-${Date.now().toString(36)}-${nextGroupId++}`;
+  const group = { id, name: name || `Group ${w.groups.length + 1}`, color, collapsed: false };
+  w.groups.push(group);
+  for (const t of tabs) {
+    if (!t.pinned) t.groupId = id;
+  }
+  sendTabs(w);
+  saveSession();
+  return group;
+}
+
+function setTabGroup(w, tabs, groupId) {
+  for (const t of tabs) {
+    if (!t.pinned) t.groupId = groupId || null;
+  }
+  w.groups = (w.groups || []).filter((g) => w.tabs.some((t) => t.groupId === g.id));
+  sendTabs(w);
+  saveSession();
+}
+
+function toggleTabGroup(w, groupId) {
+  const grp = (w.groups || []).find((g) => g.id === groupId);
+  if (!grp) return;
+  grp.collapsed = !grp.collapsed;
+  // If collapsing the group containing the active tab, switch to a non-collapsed tab if available
+  const active = activeTab(w);
+  if (grp.collapsed && active && active.groupId === groupId) {
+    const other = visibleTabs(w).find((t) => t.groupId !== groupId);
+    if (other) return selectTab(w, other.id);
+  }
+  sendTabs(w);
+  saveSession();
+}
+
+function updateTabGroup(w, groupId, changes = {}) {
+  const grp = (w.groups || []).find((g) => g.id === groupId);
+  if (!grp) return;
+  if (typeof changes.name === 'string' && changes.name.trim()) grp.name = changes.name.trim().slice(0, 32);
+  if (changes.color && GROUP_COLORS[changes.color]) grp.color = changes.color;
+  if (typeof changes.collapsed === 'boolean') grp.collapsed = changes.collapsed;
+  sendTabs(w);
+  saveSession();
+}
+
+function showGroupMenu(w, groupId) {
+  const grp = (w.groups || []).find((g) => g.id === groupId);
+  if (!grp) return;
+  const colorNames = { violet: 'Violet', blue: 'Blue', emerald: 'Emerald', amber: 'Amber', rose: 'Rose', cyan: 'Cyan' };
+  Menu.buildFromTemplate([
+    {
+      label: 'Rename Group…',
+      click: () => w.chromeView.webContents.send('group:rename', { id: grp.id, name: grp.name }),
+    },
+    {
+      label: grp.collapsed ? 'Expand Group' : 'Collapse Group',
+      click: () => toggleTabGroup(w, grp.id),
+    },
+    {
+      label: 'Color',
+      submenu: Object.entries(colorNames).map(([key, label]) => ({
+        label,
+        type: 'checkbox',
+        checked: grp.color === key,
+        click: () => updateTabGroup(w, grp.id, { color: key }),
+      })),
+    },
+    { type: 'separator' },
+    {
+      label: 'New Tab in Group',
+      click: () => {
+        const groupTabs = w.tabs.filter((t) => t.groupId === grp.id);
+        const last = groupTabs[groupTabs.length - 1];
+        const t = createTab(w, internalURL('newtab'), { after: last });
+        t.groupId = grp.id;
+        grp.collapsed = false;
+        sendTabs(w);
+        saveSession();
+      },
+    },
+    {
+      label: 'Ungroup Tabs',
+      click: () => setTabGroup(w, w.tabs.filter((t) => t.groupId === grp.id), null),
+    },
+    {
+      label: 'Close Group',
+      click: () => closeTabs(w, (t) => t.groupId !== grp.id),
+    },
+  ]).popup({ window: w.win });
+}
+
+function toggleSplitView(w, partnerId = null) {
+  if (!w) return;
+  if (w.splitId && (!partnerId || partnerId === w.splitId || partnerId === w.activeId)) {
+    w.splitId = null;
+    w.splitOrder = null;
+    layout(w);
+    sendTabs(w);
+    return;
+  }
+  const partner = partnerId
+    ? getTab(w, partnerId)
+    : visibleTabs(w).find((t) => t.id !== w.activeId) || createTab(w, internalURL('newtab'), { background: true });
+  if (!partner || partner.id === w.activeId) return;
+  w.splitId = partner.id;
+  w.splitOrder = [w.activeId, partner.id];
+  if (partner.pending) {
+    const h = partner.pending;
+    partner.pending = null;
+    partner.wc.navigationHistory.restore(h).catch(() => partner.wc.loadURL(h.entries[h.index].url).catch(() => {}));
+  }
+  layout(w);
+  sendTabs(w);
+}
+
+function switchWorkspace(w, name) {
+  if (!w || !name) return;
+  if (!w.workspaces.includes(name)) w.workspaces.push(name);
+  w.activeWorkspace = name;
+  w.splitId = null;
+  w.splitOrder = null;
+  const vis = visibleTabs(w);
+  const nonPinned = vis.filter((t) => !t.pinned);
+  if (nonPinned.length) {
+    selectTab(w, nonPinned[nonPinned.length - 1].id);
+  } else {
+    createTab(w, internalURL('newtab'));
+  }
+  sendTabs(w);
+  saveSession();
+}
+
+function showWorkspaceMenu(w) {
+  w.workspaces ||= ['Default', 'Work', 'Personal'];
+  const presets = ['Default', 'Work', 'Personal', 'Research', 'School', 'Shopping'];
+  const nextName = presets.find((p) => !w.workspaces.includes(p)) || `Workspace ${w.workspaces.length + 1}`;
+  Menu.buildFromTemplate([
+    ...w.workspaces.map((ws) => {
+      const count = w.tabs.filter((t) => !t.pinned && (t.workspace || 'Default') === ws).length;
+      return {
+        label: `${ws} (${count} tab${count === 1 ? '' : 's'})`,
+        type: 'checkbox',
+        checked: (w.activeWorkspace || 'Default') === ws,
+        click: () => switchWorkspace(w, ws),
+      };
+    }),
+    { type: 'separator' },
+    {
+      label: `New Workspace (“${nextName}”)`,
+      click: () => switchWorkspace(w, nextName),
+    },
+    ...(w.workspaces.length > 1 && w.activeWorkspace !== 'Default'
+      ? [
+          {
+            label: `Close Workspace “${w.activeWorkspace}”`,
+            click: () => {
+              const old = w.activeWorkspace;
+              for (const t of w.tabs) if (t.workspace === old) t.workspace = 'Default';
+              w.workspaces = w.workspaces.filter((x) => x !== old);
+              switchWorkspace(w, 'Default');
+            },
+          },
+        ]
+      : []),
+  ]).popup({ window: w.win });
 }
 
 // Tabs whose page would warn about unsaved changes (capture-preload.js answers for each frame).
@@ -1755,6 +2113,27 @@ function closeTabs(w, keep) {
   for (const t of w.tabs.filter((x) => !keep(x))) closeTab(w, t.id);
 }
 
+function groupSubmenuForTabs(w, tabs) {
+  const unpinned = tabs.filter((t) => !t.pinned);
+  if (!unpinned.length) return [];
+  const existing = (w.groups || []).map((g) => ({
+    label: g.name,
+    type: 'checkbox',
+    checked: unpinned.every((t) => t.groupId === g.id),
+    click: () => setTabGroup(w, unpinned, g.id),
+  }));
+  return [
+    {
+      label: 'Tab Group',
+      submenu: [
+        { label: 'New Group', click: () => createTabGroup(w, unpinned) },
+        ...(existing.length ? [{ type: 'separator' }, ...existing] : []),
+        ...(unpinned.some((t) => t.groupId) ? [{ type: 'separator' }, { label: 'Remove from Group', click: () => setTabGroup(w, unpinned, null) }] : []),
+      ],
+    },
+  ];
+}
+
 function showSelectedTabsMenu(w, tabs) {
   const n = tabs.length;
   const allPinned = tabs.every((t) => t.pinned);
@@ -1763,6 +2142,7 @@ function showSelectedTabsMenu(w, tabs) {
     { label: `Reload ${n} Tabs`, click: () => tabs.forEach((t) => reloadTab(t)) },
     { label: `Duplicate ${n} Tabs`, click: () => tabs.forEach((t) => duplicateTab(t)) },
     { label: allPinned ? `Unpin ${n} Tabs` : `Pin ${n} Tabs`, click: () => tabs.forEach((t) => setPinned(t, !allPinned)) },
+    ...groupSubmenuForTabs(w, tabs),
     {
       label: allMuted ? `Unmute ${n} Tabs` : `Mute ${n} Tabs`,
       click: () => tabs.forEach((t) => t.wc.isAudioMuted() === allMuted && toggleMute(t)),
@@ -1779,7 +2159,8 @@ function showTabMenu(w, id) {
   if (!tab) return;
   const many = selectedTabs(w);
   if (many.includes(tab)) return showSelectedTabsMenu(w, many);
-  const idx = w.tabs.indexOf(tab);
+  const vis = visibleTabs(w);
+  const idx = vis.indexOf(tab);
   const muted = tab.wc.isAudioMuted();
   Menu.buildFromTemplate([
     {
@@ -1793,17 +2174,49 @@ function showTabMenu(w, id) {
     { label: 'Reload', click: () => reloadTab(tab) },
     { label: 'Duplicate', click: () => duplicateTab(tab) },
     { label: tab.pinned ? 'Unpin' : 'Pin', click: () => setPinned(tab, !tab.pinned) },
+    ...groupSubmenuForTabs(w, [tab]),
+    {
+      label: w.splitId === tab.id || (w.splitId && tab.id === w.activeId)
+        ? 'Exit Split View'
+        : tab.id === w.activeId
+        ? 'Open Split View'
+        : 'Split View with Active Tab',
+      click: () => toggleSplitView(w, tab.id === w.activeId ? null : tab.id),
+    },
+    ...(w.workspaces && w.workspaces.length > 1 && !tab.pinned
+      ? [
+          {
+            label: 'Move to Workspace',
+            submenu: w.workspaces.map((ws) => ({
+              label: ws,
+              type: 'checkbox',
+              checked: (tab.workspace || 'Default') === ws,
+              click: () => {
+                tab.workspace = ws;
+                if (tab.id === w.activeId && ws !== w.activeWorkspace) {
+                  const rem = visibleTabs(w);
+                  if (rem.length) selectTab(w, rem[0].id);
+                  else createTab(w, internalURL('newtab'));
+                } else {
+                  sendTabs(w);
+                }
+                saveSession();
+              },
+            })),
+          },
+        ]
+      : []),
     { label: muted ? 'Unmute Tab' : 'Mute Tab', click: () => toggleMute(tab) },
     ...(siteOf(tab.wc.getURL()) ? [{ label: siteMuted(tab.wc.getURL()) ? `Unmute ${siteOf(tab.wc.getURL())}` : `Mute ${siteOf(tab.wc.getURL())}`, click: () => toggleSiteMute(tab) }] : []),
     { type: 'separator' },
     { label: 'Move to New Window', enabled: w.tabs.length > 1, click: () => moveTabToNewWindow(tab) },
     { type: 'separator' },
     { label: 'Close', click: () => closeTab(w, tab.id) },
-    { label: 'Close Other Tabs', enabled: w.tabs.length > 1, click: () => closeTabs(w, (t) => t === tab || t.pinned) },
+    { label: 'Close Other Tabs', enabled: vis.length > 1, click: () => closeTabs(w, (t) => t === tab || t.pinned || !vis.includes(t)) },
     {
       label: 'Close Tabs to the Right',
-      enabled: idx < w.tabs.length - 1,
-      click: () => closeTabs(w, (t) => w.tabs.indexOf(t) <= w.tabs.indexOf(tab) || t.pinned),
+      enabled: idx !== -1 && idx < vis.length - 1,
+      click: () => closeTabs(w, (t) => !vis.includes(t) || vis.indexOf(t) <= vis.indexOf(tab) || t.pinned),
     },
     { type: 'separator' },
     { label: 'Reopen Closed Tab', enabled: w.closedTabs.length > 0, click: () => reopenClosedTab(w) },
@@ -1811,9 +2224,10 @@ function showTabMenu(w, id) {
 }
 
 function cycleTab(w, step) {
-  const idx = w.tabs.findIndex((t) => t.id === w.activeId);
-  if (idx === -1) return;
-  selectTab(w, w.tabs[(idx + step + w.tabs.length) % w.tabs.length].id);
+  const vis = visibleTabs(w);
+  const idx = vis.findIndex((t) => t.id === w.activeId);
+  if (idx === -1 || !vis.length) return;
+  selectTab(w, vis[(idx + step + vis.length) % vis.length].id);
 }
 
 // Star / Cmd+D: bookmarks the page (into the bookmarks bar) if needed, then the toolbar shows the
@@ -2142,7 +2556,7 @@ function updateHistoryTitle(tab) {
 
 // A tab's back/forward history, trimmed for storage. Error pages restore as their original URL.
 function tabHistory(tab) {
-  if (tab.pending) return { ...tab.pending, pinned: tab.pinned }; // restored but never opened
+  if (tab.pending) return { ...tab.pending, pinned: tab.pinned, groupId: tab.groupId || null, workspace: tab.workspace || 'Default' }; // restored but never opened
   if (tab.wc.isDestroyed()) return null;
   const nav = tab.wc.navigationHistory;
   let entries = nav.getAllEntries().map((e) => {
@@ -2158,7 +2572,7 @@ function tabHistory(tab) {
   if (!keep[index]) return null;
   index -= keep.slice(0, index).filter((k) => !k).length;
   entries = entries.filter((_e, i) => keep[i]);
-  return entries.length ? { entries, index, pinned: tab.pinned } : null;
+  return entries.length ? { entries, index, pinned: tab.pinned, groupId: tab.groupId || null, workspace: tab.workspace || 'Default' } : null;
 }
 
 // Saves every open normal window (private windows are never saved).
@@ -2177,7 +2591,15 @@ function saveSession(exclude = null) {
     }
     if (tabs.length) {
       const bounds = w.win.isMaximized() || w.win.isFullScreen() ? w.win.getNormalBounds() : w.win.getBounds();
-      saved.push({ tabs, active, bounds, maximized: w.win.isMaximized() });
+      saved.push({
+        tabs,
+        active,
+        bounds,
+        maximized: w.win.isMaximized(),
+        groups: w.groups || [],
+        workspaces: w.workspaces || ['Default'],
+        activeWorkspace: w.activeWorkspace || 'Default',
+      });
     }
   }
   store.data.session = { windows: saved };
@@ -2335,6 +2757,15 @@ function resolvePrompt(w, promptId, decision) {
       sendTabs(w);
       return;
     }
+    if (p.kind === 'protocol-handler') {
+      if (decision === 'allow' && !w.private) {
+        (store.data.settings.protocolHandlers ||= {})[p.scheme] = { url: p.handlerUrl, host: new URL(p.origin).host };
+        store.save();
+      }
+      layout(w);
+      sendTabs(w);
+      return;
+    }
     if (decision === 'allow' || decision === 'block') {
       const perms = permissionStore(w);
       const site = (perms[p.origin] ||= {});
@@ -2377,17 +2808,35 @@ async function onDisplayMediaRequest(request, callback) {
   const w = tab.w;
   if (!liveWindow(w)) return callback(null);
   if (w.screenPick) resolveScreenPick(w, w.screenPick.id, null); // one request at a time
-  w.screenPick = { id: nextPickId++, tab, callback, sources: new Map(sources.map((s) => [s.id, s])) };
+  const tabSources = allTabs()
+    .filter((t) => !t.pending && !t.wc.isDestroyed() && isWeb(t.wc.getURL()))
+    .map((t) => ({
+      id: `tab:${t.id}`,
+      name: t.wc.getTitle() || displayUrl(t.wc.getURL()) || 'Tab',
+      kind: 'tab',
+      thumbnail: t.preview || t.favicon || '',
+      isTab: true,
+      wc: t.wc,
+    }));
+  w.screenPick = {
+    id: nextPickId++,
+    tab,
+    callback,
+    sources: new Map([...tabSources.map((s) => [s.id, s]), ...sources.map((s) => [s.id, s])]),
+  };
   selectTab(w, tab.id);
   w.chromeView.webContents.send('screen-picker', {
     id: w.screenPick.id,
     site: siteOf(request.securityOrigin) || request.securityOrigin,
-    sources: sources.map((s) => ({
-      id: s.id,
-      name: s.name,
-      kind: s.id.startsWith('screen:') ? 'screen' : 'window',
-      thumbnail: s.thumbnail.isEmpty() ? '' : s.thumbnail.toDataURL(),
-    })),
+    sources: [
+      ...tabSources.map((s) => ({ id: s.id, name: s.name, kind: s.kind, thumbnail: s.thumbnail })),
+      ...sources.map((s) => ({
+        id: s.id,
+        name: s.name,
+        kind: s.id.startsWith('screen:') ? 'screen' : 'window',
+        thumbnail: s.thumbnail.isEmpty() ? '' : s.thumbnail.toDataURL(),
+      })),
+    ],
   });
   w.win.focus();
 }
@@ -2399,7 +2848,11 @@ function resolveScreenPick(w, pickId, sourceId) {
   w.screenPick = null;
   const source = sourceId ? pick.sources.get(sourceId) : null;
   try {
-    pick.callback(source ? { video: source } : null);
+    if (source && source.isTab) {
+      pick.callback(!source.wc.isDestroyed() ? { video: source.wc.mainFrame } : null);
+    } else {
+      pick.callback(source ? { video: source } : null);
+    }
   } catch {
     // the requesting frame went away
   }
@@ -2513,6 +2966,7 @@ function canSleep(tab) {
   const w = tab.w;
   return (
     tab.id !== w.activeId &&
+    tab.id !== w.splitId &&
     !tab.pending &&
     !tab.pinned &&
     !tab.wc.isDestroyed() &&
@@ -2947,7 +3401,19 @@ function showPageMenu(tab, params) {
       { label: 'Print…', click: () => printTab(tab) },
       ...(isMac && isWeb(wc.getURL()) ? [{ label: 'Share…', click: () => sharePage(w, tab) }] : []),
       ...(isWeb(wc.getURL())
-        ? [{ label: 'View Page Source', click: () => createTab(w, `view-source:${wc.getURL()}`, { after: tab }) }]
+        ? [
+            {
+              label: 'Take Screenshot',
+              submenu: [
+                { label: 'Capture Visible Page', click: () => takeScreenshot(w, 'visible') },
+                { label: 'Capture Selection…', click: () => takeScreenshot(w, 'selection') },
+                { label: 'Capture Full Page', click: () => takeScreenshot(w, 'full') },
+              ],
+            },
+            { label: 'Read Page Aloud', click: () => toggleReadAloud(w) },
+            { label: 'Translate Page', click: () => toggleTranslatePage(w) },
+            { label: 'View Page Source', click: () => createTab(w, `view-source:${wc.getURL()}`, { after: tab }) },
+          ]
         : []),
     ]);
   }
@@ -2988,6 +3454,175 @@ function openInNewWindow(url, isPrivate) {
 
 function printTab(tab) {
   if (tab && !tab.wc.isDestroyed()) tab.wc.print({}, () => {});
+}
+
+// ---------------------------------------------------------------- screenshots, speech, translate & web apps
+
+async function saveScreenshotImage(w, img) {
+  if (!img || img.isEmpty()) return;
+  try {
+    clipboard.writeImage(img);
+  } catch {
+    // ignore clipboard failure
+  }
+  const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+  const outPath = uniqueDownloadPath(`Screenshot-${stamp}.png`);
+  await fs.promises.writeFile(outPath, img.toPNG());
+  if (liveWindow(w)) {
+    showStatus(w, 'Screenshot saved to Downloads & copied');
+    setTimeout(() => {
+      if (w.statusText === 'Screenshot saved to Downloads & copied') showStatus(w, '');
+    }, 3000);
+  }
+}
+
+async function captureFullPage(tab) {
+  const wc = tab.wc;
+  let attached = false;
+  try {
+    if (!wc.debugger.isAttached()) {
+      wc.debugger.attach('1.3');
+      attached = true;
+    }
+    const { data } = await wc.debugger.sendCommand('Page.captureScreenshot', {
+      format: 'png',
+      captureBeyondViewport: true,
+      fromSurface: true,
+    });
+    if (!data) return null;
+    return nativeImage.createFromBuffer(Buffer.from(data, 'base64'));
+  } catch {
+    return wc.capturePage();
+  } finally {
+    if (attached && !wc.isDestroyed() && wc.debugger.isAttached()) {
+      try {
+        wc.debugger.detach();
+      } catch {
+        // ignore
+      }
+    }
+  }
+}
+
+async function takeScreenshot(w, mode = 'visible') {
+  const tab = activeTab(w);
+  if (!tab || tab.pending || tab.wc.isDestroyed()) return;
+  if (mode === 'selection') {
+    if (isWeb(tab.wc.getURL())) tab.wc.mainFrame.send('screenshot:select-start');
+    else {
+      const img = await tab.wc.capturePage();
+      await saveScreenshotImage(w, img);
+    }
+    return;
+  }
+  if (mode === 'full') {
+    const img = await captureFullPage(tab);
+    await saveScreenshotImage(w, img);
+    return;
+  }
+  const img = await tab.wc.capturePage();
+  await saveScreenshotImage(w, img);
+}
+
+function toggleReadAloud(w) {
+  const tab = activeTab(w);
+  if (!tab || tab.pending || tab.wc.isDestroyed()) return;
+  const url = tab.wc.getURL();
+  if (internalName(url) === 'reader') {
+    tab.wc.executeJavaScript('window.__toggleReaderSpeech && window.__toggleReaderSpeech()', true).catch(() => {});
+    return;
+  }
+  if (isWeb(url)) tab.wc.mainFrame.send('speech:toggle');
+}
+
+function toggleTranslatePage(w) {
+  const tab = activeTab(w);
+  if (!tab || tab.pending || tab.wc.isDestroyed() || !isWeb(tab.wc.getURL())) return;
+  const lang = store.data.settings.languages && store.data.settings.languages[0] ? store.data.settings.languages[0].split('-')[0] : 'en';
+  tab.wc.mainFrame.send('translate:toggle', lang || 'en');
+}
+
+let translateSession = null;
+async function translateTexts(texts, targetLang = 'en') {
+  if (!Array.isArray(texts) || !texts.length) return [];
+  translateSession ||= session.fromPartition('operecs-translate');
+  const tl = String(targetLang || 'en').replace(/[^a-zA-Z-]/g, '') || 'en';
+  const sep = '\n[[[OPSEP]]]\n';
+  const joined = texts.map((x) => String(x || '').slice(0, 500)).join(sep);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 8000);
+  try {
+    const u = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=${encodeURIComponent(tl)}&dt=t&q=${encodeURIComponent(joined)}`;
+    const res = await translateSession.fetch(u, { credentials: 'omit', signal: controller.signal });
+    if (!res.ok) return texts;
+    const data = await res.json();
+    const full = Array.isArray(data?.[0]) ? data[0].map((part) => (Array.isArray(part) ? part[0] || '' : '')).join('') : '';
+    if (!full) return texts;
+    const parts = full.split(/\s*\[\[\[OPSEP\]\]\]\s*/);
+    return texts.map((orig, i) => (parts[i] !== undefined && parts[i].trim() ? parts[i] : orig));
+  } catch {
+    return texts;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+function createAppWindow(url, title) {
+  if (!isWeb(url)) return null;
+  const appWin = new BaseWindow({
+    width: 1120,
+    height: 780,
+    minWidth: 420,
+    minHeight: 320,
+    title: title || displayUrl(url) || DISPLAY_NAME,
+    backgroundColor: '#121217',
+    icon: WIN_ICON,
+  });
+  const view = new WebContentsView({
+    webPreferences: {
+      preload: CAPTURE_PRELOAD,
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false,
+      session: session.defaultSession,
+    },
+  });
+  appWin.contentView.addChildView(view);
+  const resize = () => {
+    if (appWin.isDestroyed()) return;
+    const [width, height] = appWin.getContentSize();
+    view.setBounds({ x: 0, y: 0, width, height });
+  };
+  resize();
+  appWin.on('resize', resize);
+  appWin.on('closed', () => {
+    if (!view.webContents.isDestroyed()) view.webContents.close();
+  });
+  view.webContents.on('page-title-updated', (_e, t) => {
+    if (!appWin.isDestroyed() && t) appWin.setTitle(t);
+  });
+  view.webContents.setWindowOpenHandler(({ url: target }) => {
+    if (isWeb(target)) openFromOutside(target);
+    return { action: 'deny' };
+  });
+  view.webContents.loadURL(url).catch(() => {});
+  return appWin;
+}
+
+function installSiteAsApp(w) {
+  const tab = activeTab(w);
+  if (!tab || tab.pending || tab.wc.isDestroyed()) return;
+  const url = tab.wc.getURL();
+  if (!isWeb(url)) return;
+  const origin = originOf(url);
+  const title = (tab.wc.getTitle() || siteOf(url) || 'Web App').trim().slice(0, 60);
+  const list = (store.data.settings.installedApps ||= []);
+  if (!list.some((a) => a.url === url || (origin && a.origin === origin))) {
+    list.push({ id: `app-${Date.now().toString(36)}`, title, url, origin: origin || url, icon: tab.favicon || '' });
+    store.save();
+    sendAll();
+  }
+  createAppWindow(url, title);
 }
 
 // ---------------------------------------------------------------- find in page
@@ -3600,6 +4235,20 @@ function switchToTab(w, tabId) {
 
 function runAddressCommand(w, id) {
   if (id === 'private') return createWindow({ private: true });
+  if (id === 'screenshot') return takeScreenshot(w, 'visible');
+  if (id === 'read-aloud') return toggleReadAloud(w);
+  if (id === 'translate') return toggleTranslatePage(w);
+  if (id === 'vertical') {
+    store.data.settings.verticalTabs = !store.data.settings.verticalTabs;
+    store.save();
+    windows.forEach((win) => {
+      layout(win);
+      sendTabs(win);
+    });
+    buildMenu();
+    return;
+  }
+  if (id === 'split') return toggleSplitView(w);
   if (id === 'clear') {
     const url = internalURL('settings') + '#clear';
     const existing = w.tabs.find((t) => t.wc.getURL().startsWith(internalURL('settings')));
@@ -3684,7 +4333,7 @@ async function savePageAs(w) {
 
 // ---------------------------------------------------------------- site info
 
-const SITE_PERMISSIONS = ['camera', 'microphone', 'geolocation', 'notifications', 'clipboard-read', 'openExternal', 'automatic-downloads'];
+const SITE_PERMISSIONS = ['camera', 'microphone', 'geolocation', 'notifications', 'clipboard-read', 'openExternal', 'automatic-downloads', 'autoplay'];
 const PERMISSION_NAMES = {
   'storage-access': 'Cookies while embedded',
   'top-level-storage-access': 'Cookies while embedded',
@@ -3695,6 +4344,7 @@ const PERMISSION_NAMES = {
   'clipboard-read': 'Clipboard',
   openExternal: 'Open apps',
   'automatic-downloads': 'Automatic downloads',
+  autoplay: 'Autoplay audio',
 };
 
 function siteInfo(w) {
@@ -3723,6 +4373,8 @@ function siteInfo(w) {
     kind: 'web',
     origin,
     host: parsed.host,
+    url,
+    qr: qr.svg(url),
     secure: parsed.protocol === 'https:',
     mixedContent: !!tab.mixedContent,
     certificate: cert,
@@ -3750,6 +4402,8 @@ function handle(channel, guard, fn) {
 }
 
 function setupIpc() {
+  const sessionFpSecret = crypto.randomBytes(16).toString('hex');
+
   // preload.js on browser:// pages asks which interface language to show
   ipcMain.on('i18n:get', (e) => {
     const internal = e.senderFrame && /^browser:/.test(e.senderFrame.url);
@@ -3757,6 +4411,86 @@ function setupIpc() {
   });
   ipcMain.on('gpc:enabled', (e) => {
     e.returnValue = !!(store && store.data.settings.gpc);
+  });
+
+  // capture-preload.js: per-site privacy, fingerprinting, cookie banner & autoplay settings
+  ipcMain.on('site:features', (e, origin) => {
+    const tab = tabOfWc(e.sender);
+    if (!tab || !store) {
+      e.returnValue = { fpProtection: false, fpSeed: 0, rejectCookies: false, blockAutoplay: false };
+      return;
+    }
+    const cleanOrigin = originOf(origin || e.senderFrame?.url || tab.wc.getURL()) || String(origin || '');
+    const site = siteOf(cleanOrigin || tab.wc.getURL());
+    const allowlisted = site ? !blockingOnFor(tab.w, site) && store.data.settings.adblock : false;
+    const fpProtection = !!(store.data.settings.fingerprintingProtection && !allowlisted);
+    const fpSeed = fpProtection
+      ? crypto.createHash('sha256').update(`${sessionFpSecret}:${tab.w.private ? 'priv' : 'norm'}:${cleanOrigin}`).digest().readUInt32LE(0)
+      : 0;
+    const rejectCookies = !!(store.data.settings.rejectCookies && !allowlisted);
+    const siteAutoplay = cleanOrigin ? decisionFor(tab.w, cleanOrigin, 'autoplay') : undefined;
+    const defaultAutoplayBlock = permissionDefault('autoplay') === 'block' || store.data.settings.autoplay === 'block-audible';
+    const blockAutoplay = siteAutoplay === 'block' || (siteAutoplay !== 'allow' && defaultAutoplayBlock);
+    e.returnValue = { fpProtection, fpSeed, rejectCookies, blockAutoplay };
+  });
+
+  ipcMain.on('protocol:register', (e, info) => {
+    const tab = tabOfWc(e.sender);
+    if (!tab || !info || typeof info.scheme !== 'string' || typeof info.url !== 'string') return;
+    const origin = originOf(tab.wc.getURL());
+    if (!origin) return;
+    let parsed;
+    try {
+      parsed = new URL(info.url);
+    } catch {
+      return;
+    }
+    if (parsed.origin !== origin || !info.url.includes('%s')) return;
+    const scheme = info.scheme.toLowerCase();
+    const existing = (store.data.settings.protocolHandlers || {})[scheme];
+    if (existing && existing.url === info.url) return;
+    tab.prompts = tab.prompts.filter((p) => !(p.kind === 'protocol-handler' && p.scheme === scheme));
+    tab.prompts.push({
+      id: nextPromptId++,
+      origin,
+      keys: [],
+      kind: 'protocol-handler',
+      scheme,
+      handlerUrl: info.url,
+      callbacks: [],
+    });
+    if (tab.id === tab.w.activeId) {
+      layout(tab.w);
+      sendTabs(tab.w);
+    }
+  });
+
+  ipcMain.on('swipe:navigate', (e, dir) => {
+    const tab = tabOfWc(e.sender);
+    if (!tab || tab.wc.isDestroyed()) return;
+    if (dir === 'back' && canGo(tab.wc, 'back')) tab.wc.navigationHistory.goBack();
+    else if (dir === 'forward' && canGo(tab.wc, 'forward')) tab.wc.navigationHistory.goForward();
+  });
+
+  ipcMain.on('screenshot:rect', async (e, rect) => {
+    const tab = tabOfWc(e.sender);
+    if (!tab || tab.wc.isDestroyed() || !rect) return;
+    const x = Math.max(0, Math.round(Number(rect.x) || 0));
+    const y = Math.max(0, Math.round(Number(rect.y) || 0));
+    const width = Math.max(1, Math.round(Number(rect.width) || 0));
+    const height = Math.max(1, Math.round(Number(rect.height) || 0));
+    try {
+      const img = await tab.wc.capturePage({ x, y, width, height });
+      await saveScreenshotImage(tab.w, img);
+    } catch {
+      // ignore
+    }
+  });
+
+  ipcMain.handle('translate:batch', (e, texts, targetLang) => {
+    const tab = tabOfWc(e.sender);
+    if (!tab || !Array.isArray(texts)) return [];
+    return translateTexts(texts.slice(0, 50), String(targetLang || 'en'));
   });
 
   // capture-preload.js: has neither the site nor the per-type default decided on notifications?
@@ -3876,6 +4610,28 @@ function setupIpc() {
   handle('tab:close', fromChrome, (w, id) => closeTab(w, id));
   handle('tab:select', fromChrome, (w, id, mods) => clickTab(w, id, { toggle: !!(mods && mods.toggle), range: !!(mods && mods.range) }));
   handle('tab:menu', fromChrome, (w, id) => showTabMenu(w, id));
+  handle('tab:preview', fromChrome, async (w, id) => {
+    const tab = getTab(w, Number(id));
+    if (!tab) return null;
+    if (!tab.preview && tab.id === w.activeId) await captureTabPreview(tab);
+    const entry = tab.pending && tab.pending.entries[tab.pending.index];
+    const u = entry ? entry.url : tab.wc.getURL();
+    return {
+      id: tab.id,
+      title: (entry ? entry.title : tab.wc.getTitle()) || displayUrl(u) || 'New Tab',
+      domain: siteOf(u) || displayUrl(u) || '',
+      preview: tab.preview || '',
+    };
+  });
+  handle('group:toggle', fromChrome, (w, groupId) => toggleTabGroup(w, String(groupId || '')));
+  handle('group:menu', fromChrome, (w, groupId) => showGroupMenu(w, String(groupId || '')));
+  handle('group:update', fromChrome, (w, groupId, changes) => updateTabGroup(w, String(groupId || ''), changes || {}));
+  handle('workspace:menu', fromChrome, (w) => showWorkspaceMenu(w));
+  handle('split:toggle', fromChrome, (w, id) => toggleSplitView(w, id ? Number(id) : null));
+  handle('page:translate', fromChrome, (w) => toggleTranslatePage(w));
+  handle('page:read-aloud', fromChrome, (w) => toggleReadAloud(w));
+  handle('page:screenshot', fromChrome, (w, mode) => takeScreenshot(w, String(mode || 'visible')));
+  handle('page:install-app', fromChrome, (w) => installSiteAsApp(w));
   handle('ui:overlay', fromChrome, (w, open) => {
     w.overlay = !!open;
     if (w.overlay) w.win.contentView.addChildView(w.chromeView); // bring the toolbar view to the front
@@ -3996,6 +4752,10 @@ function setupIpc() {
   handle('media:toggle', fromChrome, (w, id) => {
     const tab = allTabs().find((t) => t.id === id && t.w.private === w.private);
     if (tab) return toggleMedia(tab);
+  });
+  handle('media:pip', fromChrome, (w, id) => {
+    const tab = id ? allTabs().find((t) => t.id === id && t.w.private === w.private) : activeTab(w);
+    if (tab) return togglePip(tab);
   });
   handle('tab:adopt', fromChrome, (w, id, index) => adoptTab(w, Number(id), Number(index)));
   handle('tab:mute', fromChrome, (w, id) => {
@@ -4121,6 +4881,7 @@ function setupIpc() {
 
   handle('data:settings', fromInternal, () => ({
     ...store.data.settings,
+    accentColors: Object.entries(ACCENT_COLORS).map(([id, c]) => ({ id, ...c })),
     adblockAllowlist: store.data.adblockAllowlist,
     searchEngines: allEngines().map((e) => ({ id: e.id, name: e.name, keyword: e.keyword, url: e.url, custom: !!e.custom })),
     searchEngineName: searchEngine().name,
@@ -4131,6 +4892,22 @@ function setupIpc() {
     uiLanguages: Object.entries(UI_LANGUAGES).map(([id, name]) => ({ id, name })),
     uiLanguageNow: uiLang,
   }));
+  handle('protocol:remove', fromInternal, (_tab, scheme) => {
+    if (store.data.settings.protocolHandlers) {
+      delete store.data.settings.protocolHandlers[String(scheme || '')];
+      store.save();
+    }
+    return store.data.settings.protocolHandlers || {};
+  });
+  handle('apps:remove', fromInternal, (_tab, id) => {
+    store.data.settings.installedApps = (store.data.settings.installedApps || []).filter((a) => a.id !== id);
+    store.save();
+    return store.data.settings.installedApps;
+  });
+  handle('apps:open', fromInternal, (_tab, id) => {
+    const a = (store.data.settings.installedApps || []).find((x) => x.id === id);
+    if (a) createAppWindow(a.url, a.title);
+  });
   handle('downloads:choose-folder', fromInternal, async (tab) => {
     const { canceled, filePaths } = await dialog.showOpenDialog(tab.w.win, {
       defaultPath: downloadDir(),
@@ -4147,8 +4924,29 @@ function setupIpc() {
   });
   handle('data:settings-set', fromInternal, (_tab, key, value) => {
     const valid =
-      (['restoreSession', 'adblock', 'askDownloadLocation', 'blockThirdPartyCookies', 'showHomeButton', 'confirmClose', 'gpc', 'httpsOnly', 'memorySaver', 'spellcheck', 'searchSuggestions', 'stripTracking', 'energySaver', 'privacyStats'].includes(key) &&
+      ([
+        'restoreSession',
+        'adblock',
+        'askDownloadLocation',
+        'blockThirdPartyCookies',
+        'showHomeButton',
+        'confirmClose',
+        'gpc',
+        'httpsOnly',
+        'memorySaver',
+        'spellcheck',
+        'searchSuggestions',
+        'stripTracking',
+        'energySaver',
+        'privacyStats',
+        'rejectCookies',
+        'fingerprintingProtection',
+        'compactMode',
+        'verticalTabs',
+      ].includes(key) &&
         typeof value === 'boolean') ||
+      (key === 'accentColor' && Object.hasOwn(ACCENT_COLORS, value)) ||
+      (key === 'shortcuts' && value && typeof value === 'object' && Object.entries(value).every(([k, v]) => typeof k === 'string' && typeof v === 'string' && v.length <= 50)) ||
       (key === 'startup' && ['continue', 'newtab', 'pages'].includes(value)) ||
       (key === 'autoplay' && ['block-audible', 'allow'].includes(value)) ||
       (key === 'theme' && ['system', 'light', 'dark'].includes(value)) ||
@@ -4175,6 +4973,14 @@ function setupIpc() {
     if (key === 'dns' || key === 'dnsCustom') applyDns();
     if (key === 'theme') nativeTheme.themeSource = value;
     if (key === 'historyKeepDays') pruneOldHistory();
+    if (key === 'compactMode' || key === 'verticalTabs') {
+      windows.forEach((w) => {
+        layout(w);
+        sendTabs(w);
+      });
+      buildMenu();
+    }
+    if (key === 'shortcuts') buildMenu();
     if (key.startsWith('proxy')) {
       applyProxy(session.defaultSession);
       windows.filter((w) => w.private).forEach((w) => applyProxy(w.ses));
@@ -4418,6 +5224,7 @@ function buildMenu() {
     fn(w);
   };
   const open = (name) => inWindow((w) => openInternalPage(w, name));
+  const acc = (id, fallback) => (store && store.data.settings.shortcuts && store.data.settings.shortcuts[id]) || fallback;
 
   const template = [
     ...(isMac
@@ -4442,19 +5249,20 @@ function buildMenu() {
     {
       label: 'File',
       submenu: [
-        { label: 'New Tab', accelerator: 'CmdOrCtrl+T', click: inWindow((w) => createTab(w, internalURL('newtab'))) },
-        { label: 'New Window', accelerator: 'CmdOrCtrl+N', click: () => createWindow() },
-        { label: 'New Private Window', accelerator: 'CmdOrCtrl+Shift+N', click: () => createWindow({ private: true }) },
+        { label: 'New Tab', accelerator: acc('new-tab', 'CmdOrCtrl+T'), click: inWindow((w) => createTab(w, internalURL('newtab'))) },
+        { label: 'New Window', accelerator: acc('new-window', 'CmdOrCtrl+N'), click: () => createWindow() },
+        { label: 'New Private Window', accelerator: acc('private-window', 'CmdOrCtrl+Shift+N'), click: () => createWindow({ private: true }) },
         { type: 'separator' },
-        { label: 'Close Tab', accelerator: 'CmdOrCtrl+W', click: inWindow((w) => closeActiveTabs(w)) },
+        { label: 'Close Tab', accelerator: acc('close-tab', 'CmdOrCtrl+W'), click: inWindow((w) => closeActiveTabs(w)) },
         { label: 'Close Window', accelerator: 'CmdOrCtrl+Shift+W', click: inWindow((w) => w.win.close()) },
-        { label: 'Reopen Closed Tab', accelerator: 'CmdOrCtrl+Shift+T', click: inWindow(reopenClosedTab) },
-        { label: 'Open Location', accelerator: 'CmdOrCtrl+L', click: inWindow(focusAddress) },
+        { label: 'Reopen Closed Tab', accelerator: acc('reopen-tab', 'CmdOrCtrl+Shift+T'), click: inWindow(reopenClosedTab) },
+        { label: 'Open Location', accelerator: acc('focus-address', 'CmdOrCtrl+L'), click: inWindow(focusAddress) },
         { label: 'Switch Between Toolbar and Page', accelerator: 'F6', click: inWindow(cycleFocus) },
         { type: 'separator' },
         { label: 'Save Page As…', accelerator: 'CmdOrCtrl+S', click: inWindow(savePageAs) },
         { label: 'Print…', accelerator: 'CmdOrCtrl+P', click: inWindow((w) => printTab(activeTab(w))) },
         ...(isMac ? [{ label: 'Share…', click: inWindow((w) => sharePage(w, activeTab(w))) }] : []),
+        { label: 'Install Site as App…', click: inWindow(installSiteAsApp) },
         { type: 'separator' },
         { label: 'Settings', accelerator: 'CmdOrCtrl+,', click: open('settings') },
         { label: 'Extensions', click: open('extensions') },
@@ -4473,7 +5281,7 @@ function buildMenu() {
         { role: 'pasteAndMatchStyle', label: 'Paste as Plain Text', accelerator: 'CmdOrCtrl+Shift+V' },
         { role: 'selectAll' },
         { type: 'separator' },
-        { label: 'Find…', accelerator: 'CmdOrCtrl+F', click: inWindow(openFind) },
+        { label: 'Find…', accelerator: acc('find', 'CmdOrCtrl+F'), click: inWindow(openFind) },
         { label: 'Find Next', accelerator: 'CmdOrCtrl+G', click: inWindow((w) => findStep(w, true)) },
         { label: 'Find Previous', accelerator: 'CmdOrCtrl+Shift+G', click: inWindow((w) => findStep(w, false)) },
       ],
@@ -4481,14 +5289,42 @@ function buildMenu() {
     {
       label: 'View',
       submenu: [
-        { label: 'Reload', accelerator: 'CmdOrCtrl+R', click: inWindow((w) => reloadTab(activeTab(w))) },
+        { label: 'Reload', accelerator: acc('reload', 'CmdOrCtrl+R'), click: inWindow((w) => reloadTab(activeTab(w))) },
         {
           label: 'Hard Reload',
           accelerator: 'CmdOrCtrl+Shift+R',
           click: inWindow((w) => reloadTab(activeTab(w), { ignoreCache: true })),
         },
         { type: 'separator' },
-        { label: 'Reader Mode', accelerator: 'Alt+CmdOrCtrl+R', click: inWindow(toggleReader) },
+        { label: 'Reader Mode', accelerator: acc('reader', 'Alt+CmdOrCtrl+R'), click: inWindow(toggleReader) },
+        {
+          label: 'Vertical Tabs',
+          type: 'checkbox',
+          checked: !!(store && store.data.settings.verticalTabs),
+          accelerator: acc('vertical-tabs', 'Alt+CmdOrCtrl+V'),
+          click: (item) => {
+            store.data.settings.verticalTabs = item.checked;
+            store.save();
+            windows.forEach((w) => {
+              layout(w);
+              sendTabs(w);
+            });
+            buildMenu();
+          },
+        },
+        { label: 'Split View', accelerator: acc('split-view', 'Alt+CmdOrCtrl+S'), click: inWindow((w) => toggleSplitView(w)) },
+        { label: 'Picture in Picture', click: inWindow((w) => togglePip(activeTab(w))) },
+        { type: 'separator' },
+        { label: 'Read Page Aloud', click: inWindow(toggleReadAloud) },
+        { label: 'Translate Page', click: inWindow(toggleTranslatePage) },
+        {
+          label: 'Take Screenshot',
+          submenu: [
+            { label: 'Capture Visible Page', accelerator: acc('screenshot', 'CmdOrCtrl+Shift+S'), click: inWindow((w) => takeScreenshot(w, 'visible')) },
+            { label: 'Capture Selection…', click: inWindow((w) => takeScreenshot(w, 'selection')) },
+            { label: 'Capture Full Page', click: inWindow((w) => takeScreenshot(w, 'full')) },
+          ],
+        },
         { type: 'separator' },
         { label: 'Zoom In', accelerator: 'CmdOrCtrl+Plus', click: inWindow((w) => zoom(w, 0.5)) },
         { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', click: inWindow((w) => zoom(w, -0.5)) },
@@ -4497,7 +5333,7 @@ function buildMenu() {
         { label: 'Task Manager', accelerator: isMac ? undefined : 'Shift+Esc', click: open('tasks') },
         {
           label: 'Developer Tools',
-          accelerator: isMac ? 'Alt+Cmd+I' : 'F12',
+          accelerator: acc('devtools', isMac ? 'Alt+Cmd+I' : 'F12'),
           click: inWindow((w) => activeTab(w)?.wc.toggleDevTools()),
         },
         { role: 'togglefullscreen' },
@@ -4519,8 +5355,8 @@ function buildMenu() {
         { type: 'separator' },
         { label: 'Home', accelerator: isMac ? 'Cmd+Shift+H' : 'Alt+Home', click: inWindow(goHome) },
         { type: 'separator' },
-        { label: 'Show History', accelerator: isMac ? 'Cmd+Y' : 'Ctrl+H', click: open('history') },
-        { label: 'Show Downloads', accelerator: isMac ? 'Alt+Cmd+L' : 'Ctrl+J', click: open('downloads') },
+        { label: 'Show History', accelerator: acc('history', isMac ? 'Cmd+Y' : 'Ctrl+H'), click: open('history') },
+        { label: 'Show Downloads', accelerator: acc('downloads', isMac ? 'Alt+Cmd+L' : 'Ctrl+J'), click: open('downloads') },
         ...recentMenuItems(inWindow),
         { type: 'separator' },
         {
@@ -4547,7 +5383,7 @@ function buildMenu() {
           label: 'Show Bookmarks Bar',
           type: 'checkbox',
           checked: !!(store && store.data.settings.showBookmarksBar),
-          accelerator: 'CmdOrCtrl+Shift+B',
+          accelerator: acc('bookmarks-bar', 'CmdOrCtrl+Shift+B'),
           click: (item) => setBookmarksBar(item.checked),
         },
         { label: 'Bookmark All Tabs…', accelerator: 'CmdOrCtrl+Shift+D', click: inWindow(bookmarkAllTabs) },
@@ -4734,6 +5570,8 @@ app.on('will-quit', () => {
 
 app.on('second-instance', (_e, argv) => {
   // Windows Jump List / Linux desktop actions
+  const appArg = argv.find((a) => a.startsWith('--app='));
+  if (appArg && launched) return void createAppWindow(appArg.slice('--app='.length));
   if (argv.includes('--private-window')) return void createWindow({ private: true });
   if (argv.includes('--new-window')) return void createWindow();
   const urls = argv.slice(1).map(urlFromArg).filter(Boolean);
@@ -4742,10 +5580,25 @@ app.on('second-instance', (_e, argv) => {
   if (!w) return void createWindow();
   if (w.win.isMinimized()) w.win.restore();
   w.win.focus();
+  if (isMac) app.focus({ steal: true });
 });
 
 app.on('web-contents-created', (_e, contents) => {
   contents.on('will-attach-webview', (e) => e.preventDefault());
+});
+
+app.on('select-client-certificate', (event, wc, _url, certificateList, callback) => {
+  event.preventDefault();
+  if (!certificateList || !certificateList.length) return callback(null);
+  const devices = certificateList.map((c, i) => ({
+    id: String(i),
+    name: `${c.subjectName || 'Certificate'}${c.issuerName ? ` (issued by ${c.issuerName})` : ''}`,
+    key: c.fingerprint || String(i),
+  }));
+  showDeviceChooser(wc, 'certificate', devices, (chosenId) => {
+    const idx = chosenId === '' ? -1 : Number(chosenId);
+    callback(idx >= 0 && certificateList[idx] ? certificateList[idx] : null);
+  });
 });
 
 app.whenReady().then(() => {
@@ -4815,9 +5668,12 @@ app.whenReady().then(() => {
   store.flush();
   const previous = savedWindows(); // snapshot before new windows overwrite the saved session
 
+  const appArg = process.argv.find((a) => a.startsWith('--app='));
   const mode = startupMode();
   const pages = store.data.settings.startupPages.filter((u) => /^(https?|file):/i.test(u));
-  if (mode === 'continue' && previous.length) {
+  if (appArg && isWeb(appArg.slice('--app='.length))) {
+    createAppWindow(appArg.slice('--app='.length));
+  } else if (mode === 'continue' && previous.length) {
     for (const s of previous) createWindow({ session: s });
   } else if (mode === 'pages' && pages.length) {
     const w = createWindow({ empty: true });

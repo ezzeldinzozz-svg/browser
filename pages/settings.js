@@ -10,7 +10,17 @@ const NAMES = {
   midiSysex: 'MIDI full control',
   openExternal: 'Open apps',
   'automatic-downloads': 'Automatic downloads',
+  autoplay: 'Autoplay',
 };
+
+const ACCENT_SWATCHES = [
+  ['violet', 'Violet', '#9b6cff'],
+  ['blue', 'Blue', '#4f8cff'],
+  ['emerald', 'Emerald', '#2ecc8f'],
+  ['amber', 'Amber', '#f5a524'],
+  ['rose', 'Rose', '#f76a8a'],
+  ['cyan', 'Cyan', '#36c2d6'],
+];
 
 const list = document.getElementById('list');
 const adblock = document.getElementById('adblock');
@@ -19,11 +29,19 @@ const engine = document.getElementById('engine');
 
 async function loadSettings() {
   const s = await browserAPI.getSettings();
+  document.documentElement.dataset.accent = s.accentColor || 'violet';
   for (const r of document.querySelectorAll('input[name="startup"]')) r.checked = r.value === s.startupMode;
   document.getElementById('startup-pages-box').hidden = s.startupMode !== 'pages';
   document.getElementById('startup-pages').value = (s.startupPages || []).join('\n');
   document.getElementById('show-home').checked = s.showHomeButton;
   document.getElementById('theme').value = s.theme || 'system';
+  document.getElementById('compact-mode').checked = !!s.compactMode;
+  document.getElementById('vertical-tabs').checked = !!s.verticalTabs;
+  document.getElementById('reject-cookies').checked = s.rejectCookies !== false;
+  document.getElementById('fingerprinting-protection').checked = s.fingerprintingProtection !== false;
+  renderAccentSwatches(s.accentColor || 'violet');
+  renderProtocolHandlers(s.protocolHandlers || {});
+  renderInstalledApps(s.installedApps || []);
   document.getElementById('strip-tracking').checked = s.stripTracking !== false;
   document.getElementById('energy-saver').checked = s.energySaver !== false;
   document.getElementById('history-keep').value = String(s.historyKeepDays || 0);
@@ -86,6 +104,94 @@ async function loadSettings() {
     });
     row.append(main, remove);
     allowlist.append(row);
+  }
+}
+
+function renderAccentSwatches(current) {
+  const box = document.getElementById('accent-swatches');
+  box.textContent = '';
+  for (const [id, label, hex] of ACCENT_SWATCHES) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'accent-swatch' + (id === current ? ' sel' : '');
+    btn.style.background = hex;
+    btn.title = label;
+    btn.setAttribute('role', 'radio');
+    btn.setAttribute('aria-label', label);
+    btn.setAttribute('aria-checked', String(id === current));
+    btn.addEventListener('click', async () => {
+      document.documentElement.dataset.accent = id;
+      await browserAPI.setSetting('accentColor', id);
+      renderAccentSwatches(id);
+    });
+    box.append(btn);
+  }
+}
+
+function renderProtocolHandlers(handlers) {
+  const box = document.getElementById('protocol-handlers');
+  box.textContent = '';
+  const entries = Object.entries(handlers);
+  if (!entries.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.textContent = 'No protocol handlers registered.';
+    box.append(empty);
+    return;
+  }
+  for (const [scheme, h] of entries) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    const main = document.createElement('div');
+    main.className = 'main';
+    const t = document.createElement('div');
+    t.className = 't';
+    const code = document.createElement('code');
+    code.textContent = `${scheme}:`;
+    t.append(code, ` → ${h.site || h.url}`);
+    main.append(t);
+    const remove = document.createElement('button');
+    remove.textContent = 'Remove';
+    remove.addEventListener('click', async () => {
+      renderProtocolHandlers(await browserAPI.removeProtocolHandler(scheme));
+    });
+    row.append(main, remove);
+    box.append(row);
+  }
+}
+
+function renderInstalledApps(apps) {
+  const box = document.getElementById('installed-apps');
+  box.textContent = '';
+  if (!apps.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.textContent = 'No installed web apps.';
+    box.append(empty);
+    return;
+  }
+  for (const a of apps) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    const main = document.createElement('div');
+    main.className = 'main';
+    const t = document.createElement('div');
+    t.className = 't';
+    t.textContent = a.name;
+    const u = document.createElement('div');
+    u.className = 'u';
+    u.textContent = a.url;
+    main.append(t, u);
+    const open = document.createElement('button');
+    open.textContent = 'Open';
+    open.addEventListener('click', () => browserAPI.openInstalledApp(a.id));
+    const remove = document.createElement('button');
+    remove.textContent = 'Uninstall';
+    remove.addEventListener('click', async () => {
+      renderInstalledApps(await browserAPI.removeInstalledApp(a.id));
+    });
+    row.append(main, open, remove);
+    box.append(row);
   }
 }
 
@@ -691,3 +797,7 @@ browserAPI.getProfiles().then(renderProfiles);
 
 document.getElementById('strip-tracking').addEventListener('change', (e) => browserAPI.setSetting('stripTracking', e.target.checked));
 document.getElementById('energy-saver').addEventListener('change', (e) => browserAPI.setSetting('energySaver', e.target.checked));
+document.getElementById('compact-mode').addEventListener('change', (e) => browserAPI.setSetting('compactMode', e.target.checked));
+document.getElementById('vertical-tabs').addEventListener('change', (e) => browserAPI.setSetting('verticalTabs', e.target.checked));
+document.getElementById('reject-cookies').addEventListener('change', (e) => browserAPI.setSetting('rejectCookies', e.target.checked));
+document.getElementById('fingerprinting-protection').addEventListener('change', (e) => browserAPI.setSetting('fingerprintingProtection', e.target.checked));

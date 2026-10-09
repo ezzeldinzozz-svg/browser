@@ -37,33 +37,33 @@ Edit freely: move lines between sections, delete what you don't want, add your o
 
 ## To do — nice to have
 
-- [ ] Tab groups (named, colored, collapsible, saved)
-- [ ] Vertical tabs / sidebar layout
-- [ ] Split view (two tabs side by side)
-- [ ] Tab hover preview cards
+- [x] Tab groups (named, colored, collapsible, saved)
+- [x] Vertical tabs / sidebar layout
+- [x] Split view (two tabs side by side)
+- [x] Tab hover preview cards
 - [x] "Mute site" (all tabs of a site, remembered; tab right-click menu)
-- [ ] Two-finger swipe back/forward with an arrow
+- [x] Two-finger swipe back/forward with an arrow
 - [x] Command bar actions in the address bar ("clear history", "settings")
 - [x] Calculator / unit conversion in suggestions
 - [x] Tracker stripping from links (utm_, fbclid, gclid…; Settings → Privacy)
-- [ ] Cookie banner auto-reject
-- [ ] Fingerprinting protection
+- [x] Cookie banner auto-reject
+- [x] Fingerprinting protection
 - [x] Privacy stats on the new tab page (trackers blocked; Customize → Privacy stats)
-- [ ] Screenshot tool (visible area / full page / selection)
-- [ ] Read aloud
-- [ ] Translate page (privacy-friendly service)
-- [ ] Picture-in-picture toolbar button
-- [ ] Per-site autoplay exceptions
+- [x] Screenshot tool (visible area / full page / selection)
+- [x] Read aloud
+- [x] Translate page (privacy-friendly service)
+- [x] Picture-in-picture toolbar button
+- [x] Per-site autoplay exceptions
 - [x] Energy saver on battery (idle tabs sleep after 10 minutes; Settings → Performance)
-- [ ] Accent color choice; compact mode
-- [ ] Keyboard shortcut customization
-- [ ] Install a site as an app (PWA windows)
-- [ ] Websites registering as handlers for link types (`navigator.registerProtocolHandler`)
-- [ ] Share a single tab when screen sharing
-- [ ] Client certificate selection
-- [ ] Workspaces / spaces
+- [x] Accent color choice; compact mode
+- [x] Keyboard shortcut customization
+- [x] Install a site as an app (PWA windows)
+- [x] Websites registering as handlers for link types (`navigator.registerProtocolHandler`)
+- [x] Share a single tab when screen sharing
+- [x] Client certificate selection
+- [x] Workspaces / spaces
 - [ ] Built-in AI features (summaries, chat) — product decision
-- [ ] QR code for the current page
+- [x] QR code for the current page
 - [ ] Encrypted sync / send tab to another device
 
 ## Blocked — needs a paid account or a provider

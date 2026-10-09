@@ -7,6 +7,7 @@
 </head>
 <body>
   <div id="tabstrip">
+    <button id="workspace" title="Workspaces" aria-label="Workspaces" hidden><span id="workspace-name"></span></button>
     <div id="tablist" role="tablist" aria-label="Tabs"></div>
     <button id="newtab" title="New tab" aria-label="New tab"><svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></button>
   </div>
@@ -102,6 +103,13 @@
         <button id="sp-cancel">Cancel</button>
         <button id="sp-share" class="primary" disabled>Share</button>
       </div>
+    </div>
+  </div>
+  <div id="tabpreview" role="tooltip" hidden>
+    <img id="tp-img" alt="" hidden>
+    <div class="tp-meta">
+      <div id="tp-title"></div>
+      <div id="tp-domain"></div>
     </div>
   </div>
   <script src="ui.js"></script>

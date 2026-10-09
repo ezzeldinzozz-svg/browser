@@ -336,3 +336,63 @@ body.bg-color.bg-light { --fg: #17141f; --dim: #4a4656; --card: rgba(255, 255, 2
 .profile-row .profile-name { height: 32px; max-width: 280px; font-size: 14px; }
 
 .stats { margin: 16px 0 0; font-family: var(--mono); font-size: 10.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--accent-text); }
+
+/* accent color themes */
+:root[data-accent="blue"] {
+  --accent: #2563eb; --accent-text: #2563eb; --accent-soft: rgba(37, 99, 235, 0.10);
+  --accent-line: rgba(37, 99, 235, 0.28); --glow: rgba(79, 140, 255, 0.18);
+  --gradient: linear-gradient(135deg, #4f8cff 0%, #2563eb 100%); accent-color: #2563eb;
+}
+:root[data-accent="emerald"] {
+  --accent: #059669; --accent-text: #059669; --accent-soft: rgba(5, 150, 105, 0.10);
+  --accent-line: rgba(5, 150, 105, 0.28); --glow: rgba(46, 204, 143, 0.18);
+  --gradient: linear-gradient(135deg, #2ecc8f 0%, #059669 100%); accent-color: #059669;
+}
+:root[data-accent="amber"] {
+  --accent: #d97706; --accent-text: #b45309; --accent-soft: rgba(217, 119, 6, 0.12);
+  --accent-line: rgba(217, 119, 6, 0.30); --glow: rgba(245, 165, 36, 0.18);
+  --gradient: linear-gradient(135deg, #f5a524 0%, #d97706 100%); accent-color: #d97706;
+}
+:root[data-accent="rose"] {
+  --accent: #e11d48; --accent-text: #e11d48; --accent-soft: rgba(225, 29, 72, 0.10);
+  --accent-line: rgba(225, 29, 72, 0.28); --glow: rgba(247, 106, 138, 0.18);
+  --gradient: linear-gradient(135deg, #f76a8a 0%, #e11d48 100%); accent-color: #e11d48;
+}
+:root[data-accent="cyan"] {
+  --accent: #0891b2; --accent-text: #0e7490; --accent-soft: rgba(8, 145, 178, 0.10);
+  --accent-line: rgba(8, 145, 178, 0.28); --glow: rgba(54, 194, 214, 0.18);
+  --gradient: linear-gradient(135deg, #36c2d6 0%, #0891b2 100%); accent-color: #0891b2;
+}
+@media (prefers-color-scheme: dark) {
+  :root[data-accent="blue"] {
+    --accent: #4f8cff; --accent-text: #93bbfd; --accent-soft: rgba(79, 140, 255, 0.16);
+    --accent-line: rgba(79, 140, 255, 0.32); --glow: rgba(79, 140, 255, 0.24); accent-color: #4f8cff;
+  }
+  :root[data-accent="emerald"] {
+    --accent: #2ecc8f; --accent-text: #6ee7b7; --accent-soft: rgba(46, 204, 143, 0.16);
+    --accent-line: rgba(46, 204, 143, 0.32); --glow: rgba(46, 204, 143, 0.24); accent-color: #2ecc8f;
+  }
+  :root[data-accent="amber"] {
+    --accent: #f5a524; --accent-text: #fcd34d; --accent-soft: rgba(245, 165, 36, 0.16);
+    --accent-line: rgba(245, 165, 36, 0.32); --glow: rgba(245, 165, 36, 0.24); accent-color: #f5a524;
+  }
+  :root[data-accent="rose"] {
+    --accent: #f76a8a; --accent-text: #fda4af; --accent-soft: rgba(247, 106, 138, 0.16);
+    --accent-line: rgba(247, 106, 138, 0.32); --glow: rgba(247, 106, 138, 0.24); accent-color: #f76a8a;
+  }
+  :root[data-accent="cyan"] {
+    --accent: #36c2d6; --accent-text: #67e8f9; --accent-soft: rgba(54, 194, 214, 0.16);
+    --accent-line: rgba(54, 194, 214, 0.32); --glow: rgba(54, 194, 214, 0.24); accent-color: #36c2d6;
+  }
+}
+
+.accent-swatches { display: inline-flex; align-items: center; gap: 8px; }
+.accent-swatch {
+  width: 26px; height: 26px; padding: 0; border-radius: 50%;
+  border: 2px solid var(--card); box-shadow: 0 0 0 1px var(--border-strong);
+}
+.accent-swatch.sel { box-shadow: 0 0 0 2px var(--fg); transform: scale(1.08); }
+
+kbd.editable { cursor: pointer; transition: border-color 0.15s, background-color 0.15s; }
+kbd.editable:hover { border-color: var(--accent-line); background: var(--accent-soft); color: var(--accent-text); }
+kbd.recording { border-color: var(--accent); background: var(--accent-soft); color: var(--accent-text); box-shadow: 0 0 0 3px var(--accent-soft); }

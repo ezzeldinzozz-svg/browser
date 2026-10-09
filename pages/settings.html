@@ -53,6 +53,7 @@
 
     <h2>Tabs and windows</h2>
     <label class="check"><input id="confirm-close" type="checkbox"> Ask before closing a window or quitting with several tabs open</label>
+    <p class="hint"><a href="browser://shortcuts/">Customize keyboard shortcuts</a></p>
 
     <h2>Sites</h2>
     <label class="dns">Autoplay
@@ -98,6 +99,11 @@
         <option value="light">Light</option>
       </select>
     </label>
+    <div class="dns">Accent color
+      <div id="accent-swatches" class="accent-swatches" role="radiogroup" aria-label="Accent color"></div>
+    </div>
+    <label class="check"><input id="compact-mode" type="checkbox"> Compact mode (slim tab strip and toolbar)</label>
+    <label class="check"><input id="vertical-tabs" type="checkbox"> Vertical tabs (show tabs in a left sidebar)</label>
     <label class="check"><input id="show-home" type="checkbox"> Show Home button</label>
     <div class="homepage">
       <input id="home-page" aria-label="Home page" type="text" placeholder="Home page (empty = New Tab page)" spellcheck="false">
@@ -150,6 +156,8 @@
 
     <h2>Privacy</h2>
     <label class="check"><input id="adblock" type="checkbox"> Block ads and trackers</label>
+    <label class="check"><input id="reject-cookies" type="checkbox"> Automatically reject cookie banners on websites</label>
+    <label class="check"><input id="fingerprinting-protection" type="checkbox"> Protect against browser fingerprinting (adds subtle noise to canvas, WebGL and audio)</label>
     <label class="check"><input id="tpc" type="checkbox"> Block third-party cookies (sites can still ask to use theirs when embedded)</label>
     <label class="check"><input id="gpc" type="checkbox"> Ask sites not to sell or share my data (Global Privacy Control)</label>
     <label class="check"><input id="strip-tracking" type="checkbox"> Remove tracking parameters (utm_, fbclid, gclid…) from addresses I open</label>
@@ -206,6 +214,13 @@
       <select id="perm-add-value" aria-label="Allow or block"><option value="allow">Allow</option><option value="block">Block</option></select>
       <button type="submit">Add exception</button>
     </form>
+    <p class="hint">Protocol handlers (sites allowed to open links like mailto: or web+…):</p>
+    <div id="protocol-handlers"></div>
+
+    <h2>Installed web apps</h2>
+    <p class="hint">Sites installed to open in their own window (right-click a page or use the lock icon → Install as app).</p>
+    <div id="installed-apps"></div>
+
     <h2 id="profiles">Profiles</h2>
     <p class="hint">Each profile has its own history, bookmarks, extensions, cookies, settings and addresses — for example one for work and one for personal browsing. Profiles open in their own windows.</p>
     <div id="profile-list"></div>

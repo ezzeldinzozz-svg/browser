@@ -90,6 +90,11 @@ const COMMANDS = [
   { id: 'tasks', label: 'Open Task Manager', words: ['task manager', 'tasks'] },
   { id: 'whatsnew', label: "What's New in Operecs", words: ["what's new", 'whats new', 'release notes', 'changelog'] },
   { id: 'shortcuts', label: 'Keyboard Shortcuts', words: ['shortcuts', 'keyboard shortcuts'] },
+  { id: 'screenshot', label: 'Take Screenshot', words: ['screenshot', 'capture page', 'screen capture'] },
+  { id: 'read-aloud', label: 'Read Page Aloud', words: ['read aloud', 'speak page', 'text to speech'] },
+  { id: 'translate', label: 'Translate Page', words: ['translate', 'translate page'] },
+  { id: 'vertical', label: 'Toggle Vertical Tabs', words: ['vertical tabs', 'sidebar tabs'] },
+  { id: 'split', label: 'Toggle Split View', words: ['split view', 'side by side'] },
 ];
 
 function command(text) {

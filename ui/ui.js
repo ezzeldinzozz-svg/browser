@@ -29,10 +29,131 @@ const ICONS = {
   command: icon('<polyline points="7 8 11 12 7 16"/><path d="M13 16h4"/>'),
 };
 
-function renderTab(t, isActive) {
+let previewTimer = null;
+let renamingGroupId = null;
+
+function hideTabPreview() {
+  clearTimeout(previewTimer);
+  previewTimer = null;
+  const box = $('tabpreview');
+  if (box && !box.hidden) {
+    box.hidden = true;
+    setOverlay();
+  }
+}
+
+function scheduleTabPreview(tabEl, tabId) {
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(async () => {
+    if (!tabEl.isConnected) return;
+    const info = await api.tabPreview(tabId);
+    if (!info || !tabEl.matches(':hover')) return;
+    const box = $('tabpreview');
+    const img = $('tp-img');
+    if (info.image) {
+      img.src = info.image;
+      img.hidden = false;
+    } else {
+      img.hidden = true;
+    }
+    $('tp-title').textContent = info.title || 'New Tab';
+    let domain = info.url || '';
+    try {
+      if (/^https?:\/\//i.test(domain)) domain = new URL(domain).hostname.replace(/^www\./, '');
+    } catch {}
+    $('tp-domain').textContent = domain + (info.sleeping ? ' · Sleeping' : '');
+    const r = tabEl.getBoundingClientRect();
+    if (document.body.classList.contains('vertical')) {
+      box.style.left = `${Math.round(r.right + 8)}px`;
+      box.style.top = `${Math.max(8, Math.min(innerHeight - 190, Math.round(r.top)))}px`;
+    } else {
+      box.style.top = `${Math.round(r.bottom + 6)}px`;
+      box.style.left = `${Math.max(8, Math.min(innerWidth - 232, Math.round(r.left)))}px`;
+    }
+    box.hidden = false;
+    setOverlay();
+  }, 350);
+}
+
+document.addEventListener('mousemove', (e) => {
+  if (!$('tabpreview').hidden && !e.target.closest('.tab')) hideTabPreview();
+});
+
+function renderGroupHeader(g) {
+  const chip = document.createElement('div');
+  chip.className = 'tab-group' + (g.collapsed ? ' collapsed' : '');
+  chip.style.setProperty('--group-color', g.color || '#9b6cff');
+  chip.dataset.groupId = g.id;
+  const dot = document.createElement('span');
+  dot.className = 'dot';
+  chip.append(dot);
+  if (renamingGroupId === g.id) {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = g.name || '';
+    input.placeholder = 'Group name';
+    const commit = () => {
+      if (renamingGroupId !== g.id) return;
+      renamingGroupId = null;
+      api.updateGroup(g.id, { name: input.value.trim() || 'Group' });
+    };
+    input.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') commit();
+      else if (e.key === 'Escape') {
+        renamingGroupId = null;
+        api.updateGroup(g.id, {});
+      }
+    });
+    input.addEventListener('blur', commit);
+    chip.append(input);
+    setTimeout(() => {
+      input.focus();
+      input.select();
+    }, 0);
+  } else {
+    const label = document.createElement('span');
+    label.textContent = g.name || 'Group';
+    chip.append(label);
+  }
+  chip.addEventListener('click', (e) => {
+    if (e.target.tagName === 'INPUT') return;
+    api.toggleGroup(g.id);
+  });
+  chip.addEventListener('contextmenu', (e) => {
+    e.preventDefault();
+    api.groupMenu(g.id);
+  });
+  return chip;
+}
+
+api.onGroupRename((groupId) => {
+  renamingGroupId = groupId;
+  const chip = tablist.querySelector(`.tab-group[data-group-id="${groupId}"]`);
+  if (!chip) return;
+  const currentName = chip.querySelector('span:not(.dot)')?.textContent || '';
+  const merged = renderGroupHeader({
+    id: groupId,
+    name: currentName,
+    color: chip.style.getPropertyValue('--group-color') || '#9b6cff',
+    collapsed: chip.classList.contains('collapsed'),
+  });
+  chip.replaceWith(merged);
+});
+
+$('workspace').addEventListener('click', () => api.workspaceMenu());
+
+function renderTab(t, isActive, groupColor) {
   const el = document.createElement('div');
-  el.className = 'tab' + (isActive ? ' active' : '') + (t.pinned ? ' pinned' : '') + (t.sleeping ? ' sleeping' : '') + (t.multi ? ' multi' : '');
-  el.title = t.url && t.url !== t.title ? `${t.title}\n${t.url}` : t.title;
+  el.className =
+    'tab' +
+    (isActive ? ' active' : '') +
+    (t.pinned ? ' pinned' : '') +
+    (t.sleeping ? ' sleeping' : '') +
+    (t.multi ? ' multi' : '') +
+    (t.split ? ' split' : '') +
+    (t.groupId ? ' grouped' : '');
+  if (groupColor) el.style.setProperty('--group-color', groupColor);
   el.setAttribute('role', 'tab');
   el.setAttribute('aria-selected', String(isActive || !!t.multi));
   el.tabIndex = isActive ? 0 : -1;
@@ -60,6 +181,14 @@ function renderTab(t, isActive) {
     title.className = 'title';
     title.textContent = t.title;
     el.append(title);
+  }
+
+  if (t.split) {
+    const badge = document.createElement('span');
+    badge.className = 'split-badge';
+    badge.textContent = 'SPLIT';
+    badge.title = 'Side-by-side split view';
+    el.append(badge);
   }
 
   if (t.capture) {
@@ -92,7 +221,11 @@ function renderTab(t, isActive) {
     el.append(close);
   }
 
+  el.addEventListener('mouseenter', () => scheduleTabPreview(el, t.id));
+  el.addEventListener('mouseleave', () => hideTabPreview());
+
   el.addEventListener('mousedown', (e) => {
+    hideTabPreview();
     if (e.button === 1) {
       e.preventDefault();
       api.closeTab(t.id);
@@ -102,12 +235,14 @@ function renderTab(t, isActive) {
     }
   });
   el.addEventListener('contextmenu', (e) => {
+    hideTabPreview();
     e.preventDefault();
     api.tabMenu(t.id);
   });
 
   // Drag to reorder: drop before or after a tab depending on which half the cursor is over.
   el.addEventListener('dragstart', (e) => {
+    hideTabPreview();
     dragId = t.id;
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData(TAB_DRAG_TYPE, String(t.id)); // lets another Operecs window take it
@@ -139,14 +274,15 @@ function renderTab(t, isActive) {
   el.addEventListener('dragleave', () => el.classList.remove('drop-before', 'drop-after'));
   el.addEventListener('drop', (e) => {
     e.preventDefault();
+    const tabEls = [...tablist.querySelectorAll('.tab')];
     if (dragId === null && [...e.dataTransfer.types].includes(TAB_DRAG_TYPE)) {
-      const index = [...tablist.children].indexOf(el) + (el.classList.contains('drop-after') ? 1 : 0);
+      const index = tabEls.indexOf(el) + (el.classList.contains('drop-after') ? 1 : 0);
       el.classList.remove('drop-before', 'drop-after');
       api.adoptTab(e.dataTransfer.getData(TAB_DRAG_TYPE), index);
       return;
     }
     if (dragId === null || dragId === t.id) return;
-    const ids = [...tablist.children].map((x) => Number(x.dataset.id));
+    const ids = tabEls.map((x) => Number(x.dataset.id));
     const from = ids.indexOf(dragId);
     let to = ids.indexOf(t.id) + (el.classList.contains('drop-after') ? 1 : 0);
     if (from < to) to -= 1; // the dragged tab leaves its old slot first
@@ -159,6 +295,19 @@ function renderTab(t, isActive) {
 function render(state) {
   const active = state.tabs.find((t) => t.id === state.activeId);
   document.body.classList.toggle('private', state.private);
+  if (state.uiPrefs) {
+    document.documentElement.dataset.accent = state.uiPrefs.accentColor || 'violet';
+    document.body.classList.toggle('compact', !!state.uiPrefs.compactMode);
+    document.body.classList.toggle('vertical', !!state.uiPrefs.verticalTabs);
+  }
+  const ws = state.workspace;
+  const wsBtn = $('workspace');
+  if (ws && (ws.list.length > 1 || ws.current !== 'Default')) {
+    wsBtn.hidden = false;
+    $('workspace-name').textContent = ws.current;
+  } else {
+    wsBtn.hidden = true;
+  }
   // extension buttons follow the active tab; private windows have no extensions
   const ext = $('extensions');
   ext.hidden = state.private;
@@ -178,7 +327,17 @@ function render(state) {
 
   const focusedTab = tablist.contains(document.activeElement) ? document.activeElement.dataset.id : null;
   tablist.textContent = '';
-  for (const t of state.tabs) tablist.append(renderTab(t, t.id === state.activeId));
+  const groupsById = new Map((state.groups || []).map((g) => [g.id, g]));
+  const renderedGroups = new Set();
+  for (const t of state.tabs) {
+    const g = t.groupId ? groupsById.get(t.groupId) : null;
+    if (g && !renderedGroups.has(g.id)) {
+      renderedGroups.add(g.id);
+      tablist.append(renderGroupHeader(g));
+    }
+    if (g && g.collapsed && t.id !== state.activeId && t.id !== state.splitId) continue;
+    tablist.append(renderTab(t, t.id === state.activeId, g ? g.color : null));
+  }
   if (focusedTab) tablist.querySelector(`.tab[data-id="${focusedTab}"]`)?.focus(); // keep keyboard focus across re-renders
   const activeEl = tablist.querySelector('.tab.active');
   if (activeEl) activeEl.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -336,7 +495,7 @@ $('reader').addEventListener('click', () => api.toggleReader());
 
 let overlayOpen = false;
 function setOverlay() {
-  const open = ['suggest', 'sitepopup', 'screenpicker', 'devicepicker', 'dlpanel', 'bmpopup'].some((id) => !$(id).hidden);
+  const open = ['suggest', 'sitepopup', 'screenpicker', 'devicepicker', 'dlpanel', 'bmpopup', 'tabpreview'].some((id) => !$(id).hidden);
   if (open !== overlayOpen) {
     overlayOpen = open;
     api.setOverlay(open);
@@ -634,6 +793,36 @@ async function openSitePopup() {
       pop.append(ab);
     }
 
+    const tools = el('div', 'sec');
+    tools.append(el('div', 'sec-title', 'Page tools'));
+    const grid = el('div', 'actions-grid');
+    const addTool = (label, fn) => {
+      const b = el('button', 'btn', label);
+      b.addEventListener('click', () => {
+        closeSitePopup();
+        fn();
+      });
+      grid.append(b);
+    };
+    addTool('Translate', () => api.translatePage());
+    addTool('Read aloud', () => api.readAloud());
+    addTool('Screenshot', () => api.takeScreenshot('visible'));
+    addTool('Install as app', () => api.installSiteAsApp());
+    if (info.qr) {
+      const qrBtn = el('button', 'btn', 'QR code');
+      const qrBox = el('div', 'qr-box');
+      qrBox.hidden = true;
+      qrBox.innerHTML = info.qr;
+      qrBtn.addEventListener('click', () => {
+        qrBox.hidden = !qrBox.hidden;
+      });
+      grid.append(qrBtn);
+      tools.append(grid, qrBox);
+    } else {
+      tools.append(grid);
+    }
+    pop.append(tools);
+
     const data = el('div', 'sec');
     const clear = el('button', 'btn', 'Clear cookies and site data');
     clear.addEventListener('click', async () => {
@@ -728,6 +917,7 @@ function anchorPopup(pop, button) {
 let lastMedia = [];
 const PLAY = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></svg>';
 const PAUSE = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"/></svg>';
+const PIP = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2"/><rect x="12" y="11" width="7" height="6" rx="1" fill="currentColor"/></svg>';
 function renderMediaPopup() {
   const pop = $('sitepopup');
   pop.textContent = '';
@@ -742,11 +932,15 @@ function renderMediaPopup() {
       api.switchToTab(m.id);
       closeSitePopup();
     });
+    const pip = el('button', 'media-btn');
+    pip.innerHTML = PIP;
+    pip.title = 'Picture in Picture';
+    pip.addEventListener('click', () => api.togglePip(m.id));
     const btn = el('button', 'media-btn');
     btn.innerHTML = m.playing ? PAUSE : PLAY;
     btn.title = m.playing ? 'Pause' : 'Play';
     btn.addEventListener('click', () => api.toggleMedia(m.id));
-    row.append(info, btn);
+    row.append(info, pip, btn);
     pop.append(row);
   }
 }
@@ -839,7 +1033,7 @@ api.onScreenPicker((pick) => {
     } else {
       item.append(el('div', 'ph'));
     }
-    item.append(el('div', 'nm', s.kind === 'screen' ? `Screen: ${s.name}` : s.name));
+    item.append(el('div', 'nm', s.kind === 'screen' ? `Screen: ${s.name}` : s.kind === 'tab' ? `Tab: ${s.name}` : s.name));
     item.addEventListener('click', () => {
       screenChoice = s.id;
       for (const x of grid.children) x.classList.toggle('sel', x === item);
@@ -1180,7 +1374,7 @@ $('tabstrip').addEventListener('drop', (e) => {
   if (dragId !== null) return;
   if ([...e.dataTransfer.types].includes(TAB_DRAG_TYPE)) {
     e.preventDefault();
-    if (!e.target.closest('.tab')) api.adoptTab(e.dataTransfer.getData(TAB_DRAG_TYPE), tablist.children.length);
+    if (!e.target.closest('.tab')) api.adoptTab(e.dataTransfer.getData(TAB_DRAG_TYPE), tablist.querySelectorAll('.tab').length);
     return;
   }
   const text = (e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain') || '').split('\n')[0].trim();

@@ -156,6 +156,21 @@ if (location.protocol === 'browser:' && window === window.top) {
     chooseDevice: call('device:choose'),
     getDefaultBrowser: call('default:status'),
     setDefaultBrowser: call('default:set'),
+    tabPreview: call('tab:preview'),
+    toggleGroup: call('group:toggle'),
+    groupMenu: call('group:menu'),
+    updateGroup: call('group:update'),
+    onGroupRename: on('group:rename'),
+    workspaceMenu: call('workspace:menu'),
+    toggleSplit: call('split:toggle'),
+    togglePip: call('media:pip'),
+    translatePage: call('page:translate'),
+    readAloud: call('page:read-aloud'),
+    takeScreenshot: call('page:screenshot'),
+    installSiteAsApp: call('page:install-app'),
+    removeProtocolHandler: call('protocol:remove'),
+    removeInstalledApp: call('apps:remove'),
+    openInstalledApp: call('apps:open'),
   });
 }
 
