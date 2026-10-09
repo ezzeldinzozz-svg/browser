@@ -97,6 +97,8 @@ if (location.protocol === 'browser:' && window === window.top) {
     removeHistorySite: call('data:history-remove-site'),
     getLicenses: call('data:licenses'),
     getTopSites: call('data:top-sites'),
+    getNewtabImage: call('newtab:background'),
+    chooseNewtabImage: call('newtab:choose-image'),
     allowHttp: call('https:allow'),
     getTasks: call('data:tasks'),
     endTask: call('tasks:end'),

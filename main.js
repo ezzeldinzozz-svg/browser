@@ -157,6 +157,8 @@ function defaultSettings() {
     uiLanguage: 'auto', // 'auto' (the system's) | 'en' | 'ar'
     historyKeepDays: 0, // 0 = forever; else visits older than this are deleted
     clearOnQuit: { history: false, cookies: false, cache: false, downloads: false },
+    newtab: { background: 'none', color: '#2a1f4d', showTiles: true, showBookmarks: true }, // background: none | color | image
+    pinnedTiles: [], // [{ url, title }] shown first on the new tab page
     theme: 'system', // 'system' | 'light' | 'dark' (browser UI, internal pages, and sites that follow it)
   };
 }
@@ -1421,11 +1423,19 @@ function isBlockedNavigation(fromUrl, toUrl) {
 function rememberBookmarkIcon(tab) {
   if (tab.w.private || !tab.favicon) return;
   const url = tab.wc.getURL();
-  if (!bookmarks.findByUrl(url)) return;
   const img = nativeImage.createFromDataURL(tab.favicon);
-  if (img.isEmpty()) return;
-  bookmarks.setIcon(url, img.resize({ width: 32, height: 32, quality: 'best' }).toDataURL());
+  // formats Electron can't decode here (.ico) are kept as they are when small; <img> shows them
+  const small = !img.isEmpty() ? img.resize({ width: 32, height: 32, quality: 'best' }).toDataURL() : tab.favicon.length < 24000 ? tab.favicon : '';
+  if (!small) return;
+  // the site's icon for new tab tiles, once per site per run
+  const site = siteOf(url);
+  if (site && !siteIconsSaved.has(site)) {
+    siteIconsSaved.add(site);
+    historyDb.setSiteIcon(site, small);
+  }
+  if (bookmarks.findByUrl(url)) bookmarks.setIcon(url, small);
 }
+const siteIconsSaved = new Set();
 
 async function loadFavicon(tab, url) {
   tab.faviconSrc = url || '';
@@ -3265,10 +3275,45 @@ function topSites() {
     if (!entry.title && new URL(h.url).pathname === '/') entry.title = h.title;
     sites.set(site, entry);
   }
-  return [...sites.values()]
+  const pinned = (store.data.settings.pinnedTiles || []).map((p) => ({ ...p, site: siteOf(p.url) || p.url, pinned: true }));
+  const pinnedSites = new Set(pinned.map((p) => p.site));
+  const most = [...sites.values()]
+    .filter((s) => !pinnedSites.has(s.site))
     .sort((a, b) => b.visits - a.visits)
-    .slice(0, 8)
-    .map(({ site, url, title }) => ({ site, url, title: title || site }));
+    .slice(0, Math.max(0, 8 - pinned.length))
+    .map(({ site, url, title }) => ({ site, url, title: title || site, pinned: false }));
+  return [...pinned, ...most].map((t) => ({ ...t, icon: historyDb.siteIcon(t.site) }));
+}
+
+// New tab background image: the picked file, scaled down, kept in the profile folder.
+const NEWTAB_IMAGE = () => path.join(app.getPath('userData'), 'newtab-background.jpg');
+let newtabImageCache = null;
+async function chooseNewtabImage(w) {
+  const { canceled, filePaths } = await dialog.showOpenDialog(w.win, {
+    title: 'Choose a background image',
+    properties: ['openFile'],
+    filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'webp', 'heic', 'gif'] }],
+  });
+  if (canceled || !filePaths[0]) return false;
+  let img = nativeImage.createFromPath(filePaths[0]);
+  if (img.isEmpty()) return false;
+  const { width } = img.getSize();
+  if (width > 2560) img = img.resize({ width: 2560, quality: 'good' });
+  await fs.promises.writeFile(NEWTAB_IMAGE(), img.toJPEG(85));
+  newtabImageCache = null;
+  store.data.settings.newtab = { ...store.data.settings.newtab, background: 'image' };
+  store.save();
+  return true;
+}
+function newtabImage() {
+  if (newtabImageCache === null) {
+    try {
+      newtabImageCache = `data:image/jpeg;base64,${fs.readFileSync(NEWTAB_IMAGE()).toString('base64')}`;
+    } catch {
+      newtabImageCache = '';
+    }
+  }
+  return newtabImageCache;
 }
 
 // ---------------------------------------------------------------- address bar suggestions
@@ -3822,6 +3867,8 @@ function setupIpc() {
       (key === 'startup' && ['continue', 'newtab', 'pages'].includes(value)) ||
       (key === 'autoplay' && ['block-audible', 'allow'].includes(value)) ||
       (key === 'theme' && ['system', 'light', 'dark'].includes(value)) ||
+      (key === 'newtab' && value && typeof value === 'object' && ['none', 'color', 'image'].includes(value.background) && /^#[0-9a-f]{6}$/i.test(value.color) && typeof value.showTiles === 'boolean' && typeof value.showBookmarks === 'boolean') ||
+      (key === 'pinnedTiles' && Array.isArray(value) && value.length <= 8 && value.every((p) => p && /^https?:\/\//i.test(p.url) && typeof p.title === 'string' && p.title.length <= 80)) ||
       (key === 'historyKeepDays' && [0, 7, 30, 90, 365].includes(value)) ||
       (key === 'clearOnQuit' && value && typeof value === 'object' && ['history', 'cookies', 'cache', 'downloads'].every((k) => typeof value[k] === 'boolean')) ||
       (key === 'uiLanguage' && (value === 'auto' || Object.hasOwn(UI_LANGUAGES, value))) ||
@@ -3914,6 +3961,8 @@ function setupIpc() {
     buildMenu();
   });
   handle('data:top-sites', fromInternal, (tab) => (tab.w.private ? [] : topSites())); // private windows don't show history
+  handle('newtab:background', fromInternal, () => (store.data.settings.newtab.background === 'image' ? newtabImage() : ''));
+  handle('newtab:choose-image', fromInternal, (tab) => chooseNewtabImage(tab.w));
   handle('data:hide-tile', fromInternal, (_tab, site) => {
     if (!store.data.settings.hiddenTiles.includes(site)) store.data.settings.hiddenTiles.push(String(site));
     store.save();
@@ -4288,7 +4337,8 @@ async function serveInternal(request) {
   const type = MIME[path.extname(file)];
   if (!file.startsWith(dir + path.sep) || !type) return new Response('Not found', { status: 404 });
   try {
-    return new Response(await fs.promises.readFile(file), { headers: { 'content-type': type } });
+    // no-store: a page must never use files from an older version after an update
+    return new Response(await fs.promises.readFile(file), { headers: { 'content-type': type, 'cache-control': 'no-store' } });
   } catch {
     return new Response('Not found', { status: 404 });
   }

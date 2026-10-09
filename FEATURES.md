@@ -27,7 +27,7 @@ Edit freely: move lines between sections, delete what you don't want, add your o
 - [ ] Profiles: separate data, cookies, permissions and extensions per profile; profile switcher; window color per profile
 - [ ] Address & contact form autofill (not passwords)
 - [ ] Print preview with page range and layout
-- [ ] New tab: background image or color, show/hide shortcuts, favicons on tiles, pin/edit tiles
+- [x] New tab: background image or color, show/hide shortcuts and bookmarks, site icons on tiles, pin / edit / remove / add shortcuts (Customize button)
 - [x] Resume interrupted downloads where they stopped (also after quitting Operecs, when the server supports it)
 - [x] Auto-delete history older than 7/30/90/365 days; clear history, downloads, cookies or cache when Operecs quits
 - [x] Paste as plain text (Cmd+Shift+V, Edit menu and right-click in text fields)

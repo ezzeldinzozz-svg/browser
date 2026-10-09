@@ -13,7 +13,8 @@
     "Proxy settings, clearer pages when you're offline or a site can't be found, and help signing in to hotel and café Wi-Fi",
     "Sites can connect to USB, serial, HID and Bluetooth devices you pick",
     "Import history from Chrome, Brave, Edge, Vivaldi or Arc, and export all your data",
-    "Security: weekly checks for Electron security fixes, and urgent fixes install within minutes"
+    "Security: weekly checks for Electron security fixes, and urgent fixes install within minutes",
+    "Customize the new tab page: a background color or your own image, pinned and custom shortcuts with site icons, and hide shortcuts or bookmarks"
   ],
   "0.19.0": [
     "Theme setting: match the system, dark or light",

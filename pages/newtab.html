@@ -10,10 +10,31 @@
   <main class="newtab">
     <h1 class="wordmark">Operecs<span class="dot">.</span></h1>
     <form id="f"><input id="q" aria-label="Search or enter address" type="search" placeholder="Search or enter address" autofocus autocomplete="off"></form>
-    <div id="tiles" aria-label="Most visited"></div>
-    <h2 id="bookmarks-heading" hidden>Bookmarks</h2>
-    <div id="sites"></div>
+    <div id="tiles" aria-label="Shortcuts"></div>
+    <form id="tile-form" class="tile-form" hidden>
+      <div id="tile-form-title" class="tile-form-title"></div>
+      <input id="tile-name" type="text" aria-label="Shortcut name" placeholder="Name" autocomplete="off" spellcheck="false">
+      <input id="tile-url" type="text" aria-label="Shortcut address" placeholder="Address, e.g. example.com" autocomplete="off" spellcheck="false">
+      <div class="buttons"><button type="button" id="tile-cancel">Cancel</button><button type="submit" class="primary">Save</button></div>
+    </form>
+    <section id="bookmarks-section">
+      <h2 id="bookmarks-heading" hidden>Bookmarks</h2>
+      <div id="sites"></div>
+    </section>
   </main>
+  <button id="customize" class="customize" aria-label="Customize this page" title="Customize this page">Customize</button>
+  <div id="customize-panel" class="customize-panel" role="dialog" aria-label="Customize" hidden>
+    <div class="panel-head"><span>Customize</span><button id="customize-close" aria-label="Close">&times;</button></div>
+    <div class="panel-label">Background</div>
+    <div id="swatches" class="swatches"></div>
+    <div class="panel-row">
+      <label class="color-pick">Color <input id="custom-color" type="color" aria-label="Background color"></label>
+      <button id="choose-image">Image…</button>
+    </div>
+    <div class="panel-label">Show</div>
+    <label class="check"><input id="show-tiles" type="checkbox"> Shortcuts</label>
+    <label class="check"><input id="show-bookmarks" type="checkbox"> Bookmarks</label>
+  </div>
   <script src="newtab.js"></script>
 </body>
 </html>

@@ -35,6 +35,11 @@ function open(file) {
       last INTEGER NOT NULL DEFAULT 0
     );
     CREATE INDEX IF NOT EXISTS pages_last ON pages (last DESC);
+    CREATE TABLE IF NOT EXISTS icons (
+      site TEXT PRIMARY KEY,
+      icon TEXT NOT NULL,
+      updated INTEGER NOT NULL
+    );
     CREATE VIRTUAL TABLE IF NOT EXISTS visits_fts USING fts5(
       title, url, content = 'visits', content_rowid = 'id', tokenize = 'unicode61 remove_diacritics 2'
     );
@@ -73,6 +78,8 @@ function open(file) {
     count: db.prepare('SELECT COUNT(*) AS n FROM visits'),
     has: db.prepare('SELECT 1 FROM visits WHERE url = ? AND time = ? LIMIT 1'),
     all: db.prepare('SELECT url, title, time FROM visits ORDER BY time DESC'),
+    setIcon: db.prepare('INSERT INTO icons (site, icon, updated) VALUES (?, ?, ?) ON CONFLICT (site) DO UPDATE SET icon = excluded.icon, updated = excluded.updated'),
+    getIcon: db.prepare('SELECT icon FROM icons WHERE site = ?'),
   };
   if (q.count.get().n > MAX_VISITS * 1.1) prune();
 }
@@ -207,8 +214,12 @@ function prune() {
   });
 }
 
+// Site icons (small data: URLs) for new tab tiles.
+const setSiteIcon = (site, icon) => q.setIcon.run(site, icon, Date.now());
+const siteIcon = (site) => (q.getIcon.get(site) || {}).icon || '';
+
 const all = () => q.all.all();
 const count = () => q.count.get().n;
 const close = () => db && db.close();
 
-module.exports = { open, addVisit, updateTitle, list, pagesMatching, topPages, recentPages, removeUrl, removeWhere, removeBefore, removeSince, clear, importVisits, all, count, close };
+module.exports = { setSiteIcon, siteIcon, open, addVisit, updateTitle, list, pagesMatching, topPages, recentPages, removeUrl, removeWhere, removeBefore, removeSince, clear, importVisits, all, count, close };

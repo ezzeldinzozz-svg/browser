@@ -287,3 +287,39 @@ details pre { white-space: pre-wrap; font-family: var(--mono); font-size: 10.5px
 #sites a { display: inline-flex; align-items: center; gap: 8px; }
 #sites a img { width: 16px; height: 16px; border-radius: 4px; flex: none; }
 .bm-icon { width: 16px; height: 16px; border-radius: 4px; margin-inline-end: 8px; vertical-align: -3px; }
+
+/* ---- new tab customization */
+body.bg-color { background: var(--newtab-bg); }
+body.bg-image { background-size: cover; background-position: center; background-attachment: fixed; }
+body.bg-image, body.bg-color:not(.bg-light) { --fg: #f6f4fb; --dim: rgba(246, 244, 251, 0.75); --card: rgba(18, 14, 28, 0.55); --card-hover: rgba(18, 14, 28, 0.7); --border: rgba(255, 255, 255, 0.14); color: var(--fg); }
+body.bg-image .wordmark, body.bg-color:not(.bg-light) .wordmark { color: #fff; }
+body.bg-image .tile:hover, body.bg-color .tile:hover { backdrop-filter: blur(12px); }
+body.bg-color.bg-light { --fg: #17141f; --dim: #4a4656; --card: rgba(255, 255, 255, 0.7); color: var(--fg); }
+.tile .icon { width: 28px; height: 28px; padding: 10px; box-sizing: content-box; border-radius: 16px; background: var(--card); border: 1px solid var(--border); object-fit: contain; }
+.tile.add { height: auto; padding: 16px 8px 14px; border-radius: 20px; background: none; border: 1px dashed var(--border-strong); cursor: pointer; font: inherit; color: var(--dim); }
+.tile.add .letter { background: transparent; border-style: dashed; font-weight: 400; }
+.tile.add:hover { border-color: var(--accent-line); }
+.tile .tile-more { position: absolute; top: 6px; right: 6px; width: 24px; height: 24px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--dim); opacity: 0; font-size: 15px; line-height: 1; }
+.tile:hover .tile-more, .tile .tile-more:focus-visible { opacity: 1; }
+.tile .tile-more:hover { background: var(--card-hover); color: var(--fg); }
+.tile .pin-mark { position: absolute; top: 9px; left: 10px; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.tile-menu { position: absolute; top: 32px; right: 6px; z-index: 5; display: flex; flex-direction: column; min-width: 120px; padding: 4px; border: 1px solid var(--accent-line); border-radius: 12px; background: var(--card); box-shadow: var(--card-shadow); backdrop-filter: blur(16px); }
+.tile-menu button { height: 30px; border: 0; border-radius: 8px; text-align: left; background: transparent; }
+.tile-menu button:hover { background: var(--accent-soft); }
+.tile-form { max-width: 380px; margin: 24px auto 0; padding: 18px; display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--accent-line); border-radius: 20px; background: var(--card); text-align: left; }
+.tile-form[hidden] { display: none; }
+.tile-form-title { font-weight: 600; }
+.tile-form .buttons { justify-content: flex-end; }
+.customize { position: fixed; right: 20px; bottom: 20px; height: 34px; background: var(--card); backdrop-filter: blur(12px); }
+.customize-panel { position: fixed; right: 20px; bottom: 64px; width: 280px; padding: 16px; border: 1px solid var(--accent-line); border-radius: 22px; background: var(--card); box-shadow: var(--card-shadow); backdrop-filter: blur(20px); text-align: left; z-index: 10; }
+.customize-panel[hidden] { display: none; }
+.panel-head { display: flex; justify-content: space-between; align-items: center; font-weight: 600; margin-bottom: 8px; }
+.panel-head button { width: 28px; height: 28px; padding: 0; border: 0; }
+.panel-label { margin: 12px 0 8px; font-family: var(--mono); font-size: 9.5px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--accent-text); }
+.swatches { display: flex; flex-wrap: wrap; gap: 7px; }
+.swatch { width: 24px; height: 24px; padding: 0; border-radius: 50%; border: 1px solid var(--border-strong); }
+.swatch.none { background: linear-gradient(135deg, transparent 45%, var(--dim) 45%, var(--dim) 55%, transparent 55%), var(--card); }
+.panel-row { display: flex; align-items: center; justify-content: space-between; margin-top: 10px; }
+.color-pick { display: flex; align-items: center; gap: 8px; color: var(--dim); }
+.color-pick input { width: 34px; height: 26px; padding: 0; border: 0; border-radius: 6px; background: none; }
+.customize-panel .check { margin: 6px 0; }
