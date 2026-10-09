@@ -43,6 +43,7 @@ process.on('uncaughtException', (err) => {
 const updater = require('./updater');
 const adblock = require('./adblock');
 const i18n = require('./i18n');
+const historyDb = require('./history-db');
 const bookmarks = require('./bookmarks');
 const { ElectronChromeExtensions } = require('electron-chrome-extensions');
 const { installChromeWebStore, uninstallExtension } = require('electron-chrome-web-store');
@@ -88,7 +89,7 @@ const SEARCH_ENGINES = {
   kagi: { name: 'Kagi', url: 'https://kagi.com/search?q=%s' }, // its suggestions need a sign-in token
   startpage: { name: 'Startpage', url: 'https://www.startpage.com/do/search?q=%s', suggest: 'https://www.startpage.com/suggestions?q=%s&format=opensearch' },
 };
-const HISTORY_LIMIT = 5000;
+const HISTORY_IMPORT_LIMIT = 50000; // visits taken from another browser's history
 const DOWNLOADS_LIMIT = 200;
 
 // Granted silently; harmless or needed for basic page behaviour.
@@ -1892,24 +1893,14 @@ async function importHistory(source) {
       .prepare(
         // visit_time is too large for a JS number; convert to Unix milliseconds in SQL
         `SELECT u.url AS url, u.title AS title, (v.visit_time / 1000) - ${CHROME_EPOCH_OFFSET_MS} AS time FROM visits v JOIN urls u ON v.url = u.id
-         WHERE u.url LIKE 'http%' ORDER BY v.visit_time DESC LIMIT ${HISTORY_LIMIT}`,
+         WHERE u.url LIKE 'http%' ORDER BY v.visit_time DESC LIMIT ${HISTORY_IMPORT_LIMIT}`,
       )
       .all();
     db.close();
   } finally {
     fs.promises.rm(copy, { force: true }).catch(() => {});
   }
-  const seen = new Set(store.data.history.map((h) => `${h.time}|${h.url}`));
-  let count = 0;
-  for (const r of rows) {
-    const time = Number(r.time);
-    if (!isWeb(r.url) || !(time > 0) || seen.has(`${time}|${r.url}`)) continue;
-    store.data.history.push({ url: r.url, title: r.title || r.url, time });
-    count++;
-  }
-  store.data.history.sort((a, b) => b.time - a.time);
-  if (store.data.history.length > HISTORY_LIMIT) store.data.history.length = HISTORY_LIMIT;
-  store.save();
+  const count = historyDb.importVisits(rows.filter((r) => isWeb(r.url)).map((r) => ({ url: r.url, title: r.title || r.url, time: Number(r.time) })));
   rebuildMenuSoon();
   return { count, from: src.name };
 }
@@ -1932,7 +1923,7 @@ async function exportAllData(w) {
       {
         exported: new Date().toISOString(),
         version: app.getVersion(),
-        history: store.data.history,
+        history: historyDb.all(),
         settings: store.data.settings,
         permissions: store.data.permissions,
         adblockAllowlist: store.data.adblockAllowlist,
@@ -2013,26 +2004,16 @@ function exitFullscreen(tab) {
 
 function recordHistory(tab, url) {
   if (tab.w.private || !isWeb(url)) return;
-  const h = store.data.history;
-  if (h[0] && h[0].url === url) {
-    h[0].time = Date.now();
-  } else {
-    h.unshift({ url, title: tab.wc.getTitle() || url, time: Date.now() });
-    if (h.length > HISTORY_LIMIT) h.length = HISTORY_LIMIT;
-  }
-  store.save();
+  historyDb.addVisit(url, tab.wc.getTitle() || url);
   rebuildMenuSoon();
 }
 
 function updateHistoryTitle(tab) {
   if (tab.w.private) return;
   const url = tab.wc.getURL();
-  const entry = store.data.history.slice(0, 20).find((e) => e.url === url);
-  if (entry) {
-    entry.title = tab.wc.getTitle() || url;
-    store.save();
-    rebuildMenuSoon();
-  }
+  if (!isWeb(url)) return;
+  historyDb.updateTitle(url, tab.wc.getTitle() || url);
+  rebuildMenuSoon();
 }
 
 // ---------------------------------------------------------------- session
@@ -3025,7 +3006,8 @@ async function clearBrowsingData(w, { range = 'hour', history, downloads, cookie
   const since = span === Infinity ? 0 : Date.now() - span;
   const ses = w.private ? w.ses : session.defaultSession;
   if (history) {
-    store.data.history = store.data.history.filter((h) => h.time < since);
+    if (since === 0) historyDb.clear();
+    else historyDb.removeSince(since);
     for (const win of windows) win.closedTabs = [];
     rebuildMenuSoon();
   }
@@ -3047,11 +3029,11 @@ async function clearBrowsingData(w, { range = 'hour', history, downloads, cookie
 function topSites() {
   const hidden = new Set(store.data.settings.hiddenTiles);
   const sites = new Map();
-  for (const h of store.data.history) {
+  for (const h of historyDb.topPages(300)) {
     const site = siteOf(h.url);
     if (!site || hidden.has(site)) continue;
     const entry = sites.get(site) || { site, url: new URL(h.url).origin + '/', title: '', visits: 0 };
-    entry.visits++;
+    entry.visits += h.visits;
     if (!entry.title && new URL(h.url).pathname === '/') entry.title = h.title;
     sites.set(site, entry);
   }
@@ -3072,14 +3054,8 @@ function suggestions(text) {
   if (!query) return { items: [], inline: null };
 
   const pages = new Map(); // url -> { url, title, visits, last, bookmarked }
-  for (const h of store.data.history) {
-    const p = pages.get(h.url) || { url: h.url, title: h.title, visits: 0, last: 0, bookmarked: false };
-    p.visits++;
-    if (h.time > p.last) {
-      p.last = h.time;
-      p.title = h.title;
-    }
-    pages.set(h.url, p);
+  for (const h of historyDb.pagesMatching(query)) {
+    pages.set(h.url, { url: h.url, title: h.title, visits: h.visits, last: h.last, bookmarked: false });
   }
   for (const b of bookmarks.all()) {
     const p = pages.get(b.url) || { url: b.url, title: b.title, visits: 0, last: 0 };
@@ -3395,9 +3371,8 @@ function setupIpc() {
   });
   handle('suggest:search', fromChrome, (w, text) => searchSuggestions(w, String(text || '')));
   handle('suggest:remove', fromChrome, (_w, url) => {
-    store.data.history = store.data.history.filter((h) => h.url !== url);
+    historyDb.removeUrl(String(url));
     rebuildMenuSoon();
-    store.save();
   });
   handle('tab:switch', fromChrome, (w, tabId) => switchToTab(w, tabId));
   handle('tab:open-url', fromChrome, (w, text) => {
@@ -3606,9 +3581,8 @@ function setupIpc() {
     return filePaths[0];
   });
   handle('data:history-remove', fromInternal, (_tab, url) => {
-    store.data.history = store.data.history.filter((h) => h.url !== url);
+    historyDb.removeUrl(String(url));
     rebuildMenuSoon();
-    store.save();
   });
   handle('data:settings-set', fromInternal, (_tab, key, value) => {
     const valid =
@@ -3730,7 +3704,9 @@ function setupIpc() {
     return app.setAsDefaultProtocolClient('http') && app.setAsDefaultProtocolClient('https');
   });
   handle('data:clear-browsing', fromInternal, (tab, opts) => clearBrowsingData(tab.w, opts || {}));
-  handle('data:history', fromInternal, () => store.data.history);
+  handle('data:history', fromInternal, (_tab, opts = {}) =>
+    historyDb.list({ query: String(opts.query || ''), before: Number(opts.before) || Number.MAX_SAFE_INTEGER, limit: Math.min(Number(opts.limit) || 300, 1000) }),
+  );
   handle('data:tasks', fromInternal, () => taskList());
   handle('tasks:end', fromInternal, (_tab, pid) => {
     const target = allTabs().find((t) => !t.wc.isDestroyed() && t.wc.getOSProcessId() === pid);
@@ -3743,14 +3719,12 @@ function setupIpc() {
   });
   handle('data:licenses', fromInternal, async () => JSON.parse(await fs.promises.readFile(path.join(__dirname, 'gen', 'licenses.json'), 'utf8')));
   handle('data:history-remove-site', fromInternal, (_tab, site) => {
-    store.data.history = store.data.history.filter((h) => siteOf(h.url) !== site);
+    historyDb.removeWhere((url) => siteOf(url) === site);
     rebuildMenuSoon();
-    store.save();
   });
   handle('data:history-clear', fromInternal, () => {
-    store.data.history = [];
+    historyDb.clear();
     rebuildMenuSoon();
-    store.save();
   });
   handle('ext:list', fromInternal, () => extensionList());
   handle('ext:remove', fromInternal, async (_tab, id) => {
@@ -3833,14 +3807,7 @@ function recentMenuItems(inWindow) {
           return { label: trimLabel(entry.title || displayUrl(entry.url) || 'Tab', 60), click: () => liveWindow(w) && reopenClosedTab(w, position) };
         })
     : [];
-  const seen = new Set();
-  const visited = [];
-  for (const h of store.data.history) {
-    if (visited.length >= 10) break;
-    if (seen.has(h.url)) continue;
-    seen.add(h.url);
-    visited.push({ label: trimLabel(h.title || displayUrl(h.url), 60), click: inWindow((win) => createTab(win, h.url)) });
-  }
+  const visited = historyDb.recentPages(10).map((h) => ({ label: trimLabel(h.title || displayUrl(h.url), 60), click: inWindow((win) => createTab(win, h.url)) }));
   return [
     { type: 'separator' },
     { label: 'Recently Closed', enabled: closed.length > 0, submenu: closed.length ? closed : [{ label: 'Nothing yet', enabled: false }] },
@@ -4092,6 +4059,14 @@ protocol.registerSchemesAsPrivileged([{ scheme: SCHEME, privileges: { standard: 
 // One running copy: opening the app again focuses an existing window.
 const isPrimaryInstance = app.requestSingleInstanceLock();
 if (!isPrimaryInstance) app.quit();
+app.on('will-quit', () => {
+  try {
+    historyDb.close();
+  } catch {
+    // already closed
+  }
+});
+
 app.on('second-instance', (_e, argv) => {
   // Windows Jump List / Linux desktop actions
   if (argv.includes('--private-window')) return void createWindow({ private: true });
@@ -4114,6 +4089,13 @@ app.whenReady().then(() => {
   store = new Store(path.join(app.getPath('userData'), 'browser-data.json'));
   nativeTheme.themeSource = store.data.settings.theme || 'system';
   setupUiLanguage();
+  historyDb.open(path.join(app.getPath('userData'), 'History.sqlite'));
+  // v1 profiles kept history in browser-data.json; move it into the database once
+  if (store.data.history && store.data.history.length) {
+    historyDb.importVisits(store.data.history);
+    store.data.history = [];
+    store.save();
+  }
   app.setAboutPanelOptions({
     applicationName: DISPLAY_NAME,
     applicationVersion: app.getVersion(),

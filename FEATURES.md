@@ -16,8 +16,8 @@ Edit freely: move lines between sections, delete what you don't want, add your o
 - [ ] Check by hand: device chooser for Serial / Bluetooth in the installed app (macOS asks for Bluetooth permission)
 - [ ] Check by hand: dragging a file onto the window opens it
 - [ ] Check by hand: media keys / Now Playing control the playing tab
-- [ ] Storage: move history (and bookmarks) from the JSON file to SQLite, so it stays fast with lots of history
-- [ ] Full-text history search (after SQLite)
+- [x] Storage: history in SQLite (History.sqlite; bookmarks stay in JSON — small and written rarely)
+- [x] Full-text history search (FTS5; every word as a prefix)
 - [ ] Security routine: weekly Electron patch update; a way to force an update for critical fixes
 - [ ] Mixed content: show when a secure page loads insecure content; block insecure (http) form submissions from https pages
 - [ ] Ask before closing a window or quitting when a page has unsaved changes (tabs already ask)

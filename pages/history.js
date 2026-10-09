@@ -22,18 +22,17 @@ const siteOf = (url) => {
   }
 };
 
-let limit = 300;
+const PAGE = 300;
+let more = false; // the last page was full, so older visits may exist
 
 function render() {
-  const term = q.value.trim().toLowerCase();
-  const matches = items.filter((h) => !term || h.title.toLowerCase().includes(term) || h.url.toLowerCase().includes(term));
-  const shown = matches.slice(0, limit);
+  const shown = items;
 
   list.textContent = '';
   if (shown.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'empty';
-    empty.textContent = items.length ? 'No matches.' : 'No history yet.';
+    empty.textContent = q.value.trim() ? 'No matches.' : 'No history yet.';
     list.append(empty);
     return;
   }
@@ -84,24 +83,32 @@ function render() {
     row.append(main, time, remove, removeSite);
     list.append(row);
   }
-  if (matches.length > shown.length) {
-    const more = document.createElement('button');
-    more.className = 'more';
-    more.textContent = `Show more (${matches.length - shown.length} older)`;
-    more.addEventListener('click', () => {
-      limit += 300;
-      render();
-    });
-    list.append(more);
+  if (more) {
+    const button = document.createElement('button');
+    button.className = 'more';
+    button.textContent = 'Show older';
+    button.addEventListener('click', () => load(true));
+    list.append(button);
   }
 }
 
-async function load() {
-  items = await browserAPI.getHistory();
+// Full-text search and paging happen in the history database (main process).
+let loadSeq = 0;
+async function load(older = false) {
+  const seq = ++loadSeq;
+  const before = older && items.length ? items[items.length - 1].time : undefined;
+  const page = await browserAPI.getHistory({ query: q.value, before, limit: PAGE });
+  if (seq !== loadSeq) return; // a newer search started meanwhile
+  items = older ? [...items, ...page] : page;
+  more = page.length === PAGE;
   render();
 }
 
-q.addEventListener('input', render);
+let searchTimer = null;
+q.addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => load(), 150);
+});
 document.getElementById('clear').addEventListener('click', async () => {
   await browserAPI.clearHistory();
   load();
