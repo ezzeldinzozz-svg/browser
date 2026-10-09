@@ -24,6 +24,25 @@
     <h2>On startup</h2>
     <label class="check"><input id="restore" type="checkbox"> Reopen the tabs that were open last time</label>
 
+    <h2 id="clear">Clear browsing data</h2>
+    <div class="clear">
+      <label>Time range
+        <select id="clear-range">
+          <option value="hour">Last hour</option>
+          <option value="day">Last 24 hours</option>
+          <option value="week">Last 7 days</option>
+          <option value="month">Last 4 weeks</option>
+          <option value="all">All time</option>
+        </select>
+      </label>
+      <label class="check"><input id="clear-history" type="checkbox" checked> Browsing history</label>
+      <label class="check"><input id="clear-downloads" type="checkbox" checked> Download list (files stay on disk)</label>
+      <label class="check"><input id="clear-cookies" type="checkbox"> Cookies and site data (signs you out of most sites; all time)</label>
+      <label class="check"><input id="clear-cache" type="checkbox" checked> Cached images and files (all time)</label>
+      <button id="clear-go">Clear data</button>
+      <span id="clear-done" class="hint"></span>
+    </div>
+
     <h2>Privacy</h2>
     <label class="check"><input id="adblock" type="checkbox"> Block ads and trackers</label>
     <p class="hint">Sites where blocking is turned off (use the shield in the toolbar to change a site):</p>

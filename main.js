@@ -221,6 +221,10 @@ function sendTabs(w) {
           : 'none',
     downloads: downloadSummary(w),
     update: updater.getState(),
+    downloadWarning: (() => {
+      const rec = store.data.downloads.find((d) => d.id === w.downloadWarnings[0]);
+      return rec ? { id: rec.id, filename: rec.filename } : null;
+    })(),
     shield: {
       available: !!site && store.data.settings.adblock,
       site,
@@ -251,7 +255,7 @@ function chromeHeight(w) {
   const tab = activeTab(w);
   if (!tab) return CHROME_H;
   if (tab.fullscreen) return 0;
-  const bars = [tab.prompts.length, tab.auth.length, tab.find.open].filter(Boolean).length;
+  const bars = [w.downloadWarnings.length, tab.prompts.length, tab.auth.length, tab.find.open].filter(Boolean).length;
   return CHROME_H + bars * BAR_H;
 }
 
@@ -294,6 +298,7 @@ function createWindow({ private: isPrivate = false, session: saved = null, ses: 
     ses,
     closedTabs: [], // most recent last
     overlay: false, // toolbar dropdown/popup open
+    downloadWarnings: [], // ids of finished risky downloads awaiting Keep/Discard
     permissions: {}, // private windows only
     allowlist: new Set(), // private windows only: sites with ad blocking switched off
   };
@@ -1194,17 +1199,52 @@ function notifyDownloads(immediate) {
   }
 }
 
+// File types that can run code. They download under a temporary name and only get their real
+// name once the user chooses Keep (like other browsers' "this file can harm your computer").
+const RISKY_EXTENSIONS = new Set(
+  ('exe msi msix appx bat cmd com scr pif cpl msc hta ps1 psm1 vbs vbe js jse wsf wsh reg lnk jar ' +
+    'dmg pkg mpkg app command tool terminal workflow scpt sh bash zsh run bin appimage apk deb rpm')
+    .split(' '),
+);
+
+function isRiskyFile(name) {
+  return RISKY_EXTENSIONS.has(path.extname(name).slice(1).toLowerCase());
+}
+
+// Marks a finished download as coming from the internet, so the OS checks it before it runs
+// (macOS Gatekeeper via the quarantine attribute, Windows SmartScreen via Mark of the Web).
+// Electron doesn't do this on its own.
+function markAsDownloaded(filePath, url) {
+  try {
+    if (isMac) {
+      const stamp = Math.floor(Date.now() / 1000).toString(16);
+      const value = `0081;${stamp};${app.getName()};${require('crypto').randomUUID().toUpperCase()}`;
+      require('child_process').execFileSync('/usr/bin/xattr', ['-w', 'com.apple.quarantine', value, filePath]);
+    } else if (process.platform === 'win32') {
+      const host = isWeb(url) ? url : '';
+      fs.writeFileSync(`${filePath}:Zone.Identifier`, `[ZoneTransfer]\r\nZoneId=3\r\nHostUrl=${host}\r\n`);
+    }
+  } catch (err) {
+    console.warn('Could not mark download:', err.message);
+  }
+}
+
 function onWillDownload(_e, item, wc) {
-  const savePath = uniqueDownloadPath(item.getFilename() || 'download');
-  reservedPaths.add(savePath);
+  const finalPath = uniqueDownloadPath(item.getFilename() || 'download');
+  reservedPaths.add(finalPath);
+  const dangerous = isRiskyFile(finalPath);
+  const savePath = dangerous ? `${finalPath}.unconfirmed` : finalPath;
   item.setSavePath(savePath);
 
-  const w = windowOfSession(wc ? wc.session : null);
+  const sourceTab = tabOfWc(wc);
+  const w = sourceTab ? sourceTab.w : windowOfSession(wc ? wc.session : null);
   const rec = {
     id: nextDownloadId++,
     url: item.getURL(),
-    filename: path.basename(savePath),
-    path: savePath,
+    filename: path.basename(finalPath),
+    path: finalPath,
+    tempPath: dangerous ? savePath : null,
+    dangerous,
     state: 'progressing',
     paused: false,
     received: 0,
@@ -1225,11 +1265,17 @@ function onWillDownload(_e, item, wc) {
     notifyDownloads();
   });
   item.once('done', (_ev, state) => {
-    rec.state = state; // 'completed' | 'cancelled' | 'interrupted'
     rec.received = item.getReceivedBytes();
     rec.paused = false;
     liveDownloads.delete(rec.id);
-    reservedPaths.delete(savePath);
+    if (state === 'completed') markAsDownloaded(savePath, rec.url); // survives the Keep rename
+    if (state === 'completed' && dangerous) {
+      rec.state = 'dangerous'; // waiting for Keep / Discard; finalPath stays reserved
+      warnAboutDownload(w || focusedWindow(), rec);
+    } else {
+      rec.state = state; // 'completed' | 'cancelled' | 'interrupted'
+      reservedPaths.delete(finalPath);
+    }
     store.save();
     notifyDownloads(true);
   });
@@ -1238,11 +1284,79 @@ function onWillDownload(_e, item, wc) {
   notifyDownloads(true);
 }
 
+function warnAboutDownload(w, rec) {
+  if (!liveWindow(w)) return; // still decidable from the downloads page
+  w.downloadWarnings.push(rec.id);
+  layout(w);
+  sendTabs(w);
+}
+
+// decision: 'keep' moves the file to its real name; 'discard' deletes it.
+function resolveDangerousDownload(id, decision) {
+  const rec = store.data.downloads.find((d) => d.id === id);
+  if (rec && rec.state === 'dangerous') {
+    try {
+      if (decision === 'keep') {
+        reservedPaths.delete(rec.path);
+        if (fs.existsSync(rec.path)) rec.path = uniqueDownloadPath(rec.filename);
+        fs.renameSync(rec.tempPath, rec.path);
+        rec.filename = path.basename(rec.path);
+        rec.state = 'completed';
+      } else {
+        fs.rmSync(rec.tempPath, { force: true });
+        reservedPaths.delete(rec.path);
+        rec.state = 'cancelled';
+        rec.discarded = true;
+      }
+    } catch (err) {
+      console.error('Download decision failed:', err);
+      rec.state = 'interrupted';
+    }
+    rec.tempPath = null;
+    store.save();
+  }
+  for (const w of windows) {
+    const before = w.downloadWarnings.length;
+    w.downloadWarnings = w.downloadWarnings.filter((x) => x !== id);
+    if (w.downloadWarnings.length !== before) layout(w);
+  }
+  notifyDownloads(true);
+}
+
 function openInternalPage(w, name) {
   const url = internalURL(name);
   const existing = w.tabs.find((t) => t.wc.getURL() === url);
   if (existing) selectTab(w, existing.id);
   else createTab(w, url);
+}
+
+// ---------------------------------------------------------------- clear browsing data
+
+const CLEAR_RANGES = { hour: 3600e3, day: 86400e3, week: 7 * 86400e3, month: 28 * 86400e3, all: Infinity };
+
+// History and the downloads list honour the time range; Electron can only clear cookies,
+// site data and the cache for all time.
+async function clearBrowsingData(w, { range = 'hour', history, downloads, cookies, cache }) {
+  const span = CLEAR_RANGES[range];
+  if (!span) return;
+  const since = span === Infinity ? 0 : Date.now() - span;
+  const ses = w.private ? w.ses : session.defaultSession;
+  if (history) {
+    store.data.history = store.data.history.filter((h) => h.time < since);
+    for (const win of windows) win.closedTabs = [];
+  }
+  if (downloads) {
+    store.data.downloads = store.data.downloads.filter(
+      (d) => d.state === 'progressing' || d.state === 'dangerous' || d.time < since,
+    );
+  }
+  if (cookies) {
+    await ses.clearStorageData();
+    await ses.clearAuthCache();
+  }
+  if (cache) await ses.clearCache();
+  store.save();
+  sendAll();
 }
 
 // ---------------------------------------------------------------- address bar suggestions
@@ -1430,6 +1544,9 @@ function setupIpc() {
   handle('find:query', fromChrome, (w, text, opts) => findInTab(activeTab(w), String(text || ''), opts || {}));
   handle('find:close', fromChrome, (w) => closeFind(activeTab(w)));
   handle('downloads:open', fromChrome, (w) => openInternalPage(w, 'downloads'));
+  handle('download:warning-decide', fromChrome, (w, id, decision) => {
+    if (w.downloadWarnings.includes(id) && ['keep', 'discard'].includes(decision)) resolveDangerousDownload(id, decision);
+  });
   handle('update:install', fromChrome, () => restartToUpdate());
   handle('about:info', fromInternal, () => ({ version: app.getVersion(), update: updater.getState() }));
   handle('about:check', fromInternal, () => updater.check());
@@ -1453,9 +1570,12 @@ function setupIpc() {
     if (item.isPaused()) item.resume();
     else item.pause();
   });
+  handle('download:decide', fromInternal, (tab, id, decision) => {
+    if (ownDownload(tab, id) && ['keep', 'discard'].includes(decision)) resolveDangerousDownload(id, decision);
+  });
   handle('download:clear', fromInternal, (tab) => {
     store.data.downloads = store.data.downloads.filter(
-      (d) => d.state === 'progressing' || (d.private && !tab.w.private),
+      (d) => d.state === 'progressing' || d.state === 'dangerous' || (d.private && !tab.w.private),
     );
     store.save();
     notifyDownloads(true);
@@ -1488,6 +1608,7 @@ function setupIpc() {
     if (!tab.w.private) store.save();
   });
 
+  handle('data:clear-browsing', fromInternal, (tab, opts) => clearBrowsingData(tab.w, opts || {}));
   handle('data:history', fromInternal, () => store.data.history);
   handle('data:history-clear', fromInternal, () => {
     store.data.history = [];
@@ -1603,6 +1724,21 @@ function buildMenu() {
         { type: 'separator' },
         { label: 'Show History', accelerator: isMac ? 'Cmd+Y' : 'Ctrl+H', click: open('history') },
         { label: 'Show Downloads', accelerator: isMac ? 'Alt+Cmd+L' : 'Ctrl+J', click: open('downloads') },
+        { type: 'separator' },
+        {
+          label: 'Clear Browsing Data…',
+          accelerator: 'CmdOrCtrl+Shift+Backspace',
+          click: inWindow((w) => {
+            const url = internalURL('settings') + '#clear';
+            const existing = w.tabs.find((t) => t.wc.getURL().startsWith(internalURL('settings')));
+            if (existing) {
+              selectTab(w, existing.id);
+              existing.wc.loadURL(url).catch(() => {});
+            } else {
+              createTab(w, url);
+            }
+          }),
+        },
       ],
     },
     {

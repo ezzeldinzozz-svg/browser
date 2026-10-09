@@ -19,10 +19,10 @@ Ordered by priority, then by what unblocks what.
 5. ~~Address-bar autocomplete~~ done in v0.5.0
 6. ~~Search engine choice~~ done in v0.5.0 (custom engines still open)
 7. ~~Site info popup~~ done in v0.5.0
-8. **P0** Clear browsing data dialog (history, cookies/site data, cache, downloads; time ranges)
+8. ~~Clear browsing data~~ done in v0.5.0
 9. ~~Tab context menu~~ done in v0.5.0
 10. ~~Tab drag-to-reorder, audio indicator~~ done in v0.5.0
-11. **P0** Dangerous download warning (.exe, .dmg, .pkg, scripts) and a "Save as / always ask where" option
+11. ~~Dangerous download warning~~ done in v0.5.0 ("always ask where to save" still open)
 12. **P0** Open links from other apps / set as default browser (`open-url`, `second-instance` argv, protocol registration)
 13. **P0** Bookmarks bar, bookmark folders, edit bookmark dialog, import from Chrome/Safari/Firefox (bookmarks + history)
 14. **P0** Windows/Linux builds tested, with their own updaters; macOS Developer ID signing + notarization
@@ -114,7 +114,8 @@ Ordered by priority, then by what unblocks what.
 - [x] History page with text search (title + URL)
 - [x] Clear all history
 - [ ] **P0** Delete single entries (and "remove all from this site")
-- [ ] **P0** Clear browsing data dialog: time range (last hour/day/week/all) × history, cookies & site data, cache, downloads list, permissions (Cmd/Ctrl+Shift+Delete)
+- [x] Clear browsing data (Settings, Cmd/Ctrl+Shift+Backspace): time range × history, download list, cookies & site data, cache (cookies/cache always all time: Electron limit)
+- [ ] **P2** Clear site permissions from the same dialog
 - [ ] **P1** Group by day with date headers; infinite scroll beyond 500 items
 - [ ] **P1** History menu shows recently closed tabs and recently visited pages
 - [ ] **P1** Full-text indexed search (needs SQLite)
@@ -126,7 +127,8 @@ Ordered by priority, then by what unblocks what.
 - [x] Downloads page: progress, pause/resume, cancel, open, show in folder, clear list
 - [x] Toolbar download button with active count / percent badge; Dock/taskbar progress bar
 - [x] Interrupted-on-quit downloads marked as failed
-- [ ] **P0** Dangerous-file warning before saving/opening (.exe, .msi, .dmg, .pkg, .app, .command, .sh, .jar, Office macros…)
+- [x] Dangerous-file warning: risky types download as `.unconfirmed` until Keep/Discard (toolbar bar + downloads page)
+- [x] Downloads marked as from the internet (macOS quarantine attribute, Windows Mark of the Web) so Gatekeeper/SmartScreen check them
 - [ ] **P0** Option "Ask where to save each file" and a choose-download-folder setting
 - [ ] **P0** Download bubble/panel from the toolbar (not just a full page), with "download finished" feedback
 - [ ] **P1** Retry/resume interrupted downloads (`session.createInterruptedDownload`)

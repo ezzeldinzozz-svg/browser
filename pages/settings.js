@@ -143,3 +143,19 @@ aboutAction.addEventListener('click', async () => {
 
 refreshAbout();
 setInterval(refreshAbout, 1000);
+
+// ---- Clear browsing data
+
+document.getElementById('clear-go').addEventListener('click', async () => {
+  const done = document.getElementById('clear-done');
+  const checked = (id) => document.getElementById(id).checked;
+  done.textContent = 'Clearing…';
+  await browserAPI.clearBrowsingData({
+    range: document.getElementById('clear-range').value,
+    history: checked('clear-history'),
+    downloads: checked('clear-downloads'),
+    cookies: checked('clear-cookies'),
+    cache: checked('clear-cache'),
+  });
+  done.textContent = 'Done.';
+});

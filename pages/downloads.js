@@ -19,8 +19,10 @@ function status(d) {
     }
     case 'completed':
       return `Completed · ${size(d.received)}`;
+    case 'dangerous':
+      return "Unconfirmed: this type of file can harm your computer";
     case 'cancelled':
-      return 'Cancelled';
+      return d.discarded ? 'Discarded' : 'Cancelled';
     default:
       return 'Failed';
   }
@@ -68,6 +70,11 @@ async function refresh() {
       row.append(
         button(d.paused ? 'Resume' : 'Pause', () => browserAPI.pauseDownload(d.id)),
         button('Cancel', () => browserAPI.cancelDownload(d.id)),
+      );
+    } else if (d.state === 'dangerous') {
+      row.append(
+        button('Keep', () => browserAPI.decideDownload(d.id, 'keep')),
+        button('Discard', () => browserAPI.decideDownload(d.id, 'discard')),
       );
     } else if (d.state === 'completed') {
       row.append(

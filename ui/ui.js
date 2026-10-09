@@ -138,6 +138,12 @@ function render(state) {
   if (document.activeElement !== address) address.value = shownUrl;
   renderSiteButton(state.security);
 
+  currentWarning = state.downloadWarning;
+  $('dlwarn').hidden = !currentWarning;
+  $('dlwarn-text').textContent = currentWarning
+    ? `“${currentWarning.filename}” can harm your computer if it isn't from a source you trust. Keep it?`
+    : '';
+
   currentPrompt = state.prompt;
   $('prompt').hidden = !currentPrompt;
   $('prompt-text').textContent = currentPrompt ? currentPrompt.text : '';
@@ -215,6 +221,10 @@ $('auth-cancel').addEventListener('click', () => currentAuth && api.respondAuth(
 $('authbar').addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && currentAuth) api.respondAuth(currentAuth.id, null);
 });
+
+let currentWarning = null;
+$('dlwarn-keep').addEventListener('click', () => currentWarning && api.decideDownloadWarning(currentWarning.id, 'keep'));
+$('dlwarn-discard').addEventListener('click', () => currentWarning && api.decideDownloadWarning(currentWarning.id, 'discard'));
 
 let currentPrompt = null;
 const respond = (decision) => currentPrompt && api.respondPermission(currentPrompt.id, decision);

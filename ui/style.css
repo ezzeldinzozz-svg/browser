@@ -193,7 +193,7 @@ body.private #site.insecure { color: #ff8a80; }
 }
 #address:focus { outline: none; border-color: var(--accent); background: var(--bg-active); }
 
-#prompt {
+#prompt, #dlwarn {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -202,17 +202,17 @@ body.private #site.insecure { color: #ff8a80; }
   background: var(--bg-active);
   border-bottom: 1px solid var(--border);
 }
-#prompt[hidden] { display: none; }
-#prompt-text { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; }
-#prompt button {
+#prompt[hidden], #dlwarn[hidden] { display: none; }
+#prompt-text, #dlwarn-text { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 14px; }
+#prompt button, #dlwarn button {
   height: 28px;
   padding: 0 14px;
   border: 1px solid var(--border);
   border-radius: 14px;
 }
-#prompt button:hover { background: var(--bg-hover); }
-#prompt button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg-active); }
-#prompt button.primary:hover { filter: brightness(1.1); }
+#prompt button:hover, #dlwarn button:hover { background: var(--bg-hover); }
+#prompt button.primary, #dlwarn button.primary { background: var(--accent); border-color: var(--accent); color: var(--bg-active); }
+#prompt button.primary:hover, #dlwarn button.primary:hover { filter: brightness(1.1); }
 #prompt button.close { width: 28px; padding: 0; border: 0; font-size: 18px; color: var(--fg-dim); }
 
 #authbar {

@@ -16,6 +16,8 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 - Tabs, address bar (URL or search with the chosen engine: DuckDuckGo default, Google, Bing, Brave, Ecosia, Kagi, Startpage), back/forward/reload/stop, keyboard shortcuts
 - Tab strip: drag to reorder, pinned tabs (kept left, restored), audio indicator with click-to-mute, right-click menu (new tab to the right, reload, duplicate, pin, mute, move to new window, close / others / to the right, reopen closed)
 - Bookmarks, history, downloads page, find in page, new-tab page, settings page
+- Clear browsing data (Settings → Clear browsing data, Cmd/Ctrl+Shift+Backspace): time range for history and the download list; cookies/site data and cache clear for all time (Electron can't clear them by date)
+- Downloads: risky file types (.exe, .dmg, .pkg, .sh, …) download as `.unconfirmed` until the user picks Keep/Discard in a toolbar bar or the downloads page; every finished download gets the macOS quarantine attribute / Windows Mark of the Web, which Electron doesn't set by itself
 - Address bar: suggestions from history + bookmarks (frequency/recency ranking), inline completion, arrow keys / Enter / Esc; lock icon or "Not secure" opens a site info popup (connection, certificate issuer/expiry, per-site permissions, ad blocking switch, clear site data)
 - Toolbar dropdowns/popups: while one is open the transparent toolbar view is stretched over the whole window (`ui:overlay`), and clicks outside close it
 - Per-site permission prompts (camera, mic, location, notifications, clipboard, MIDI, external apps), remembered per site, resettable in Settings
@@ -33,7 +35,7 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 - Notification permission reads as "denied" (not "default") until a site is allowed/blocked, so some sites hide their "enable notifications" button
 - Proxy sign-in not supported (proxy auth requests are cancelled)
 - Restored tabs may show pages from cache (same as Chrome), including pages that needed a sign-in
-- No screen-sharing picker; no warning before opening risky downloads (.exe, .dmg…)
+- No screen-sharing picker
 - Popups that need `window.opener` (some OAuth logins) open as plain tabs
 - Google sign-in may block Electron despite the Chrome user agent
 - No DRM (Netflix/Spotify), no Chrome extensions (Electron limits, see research)
@@ -46,7 +48,7 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 
 The full prioritized checklist is in `FEATURES.md` (P0/P1/P2). Short version:
 
-1. Clear browsing data, dangerous-download warning, open links from other apps / default browser, screen-sharing picker
+1. Open links from other apps / default browser, screen-sharing picker
 2. Bookmarks bar and folders, import from other browsers
 3. Windows/Linux builds + their updaters (electron-updater works unsigned there)
 4. Name + icon
