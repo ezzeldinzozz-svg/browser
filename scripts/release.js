@@ -3,7 +3,8 @@
 // Builds, signs and publishes a release for macOS, Windows and Linux.
 //
 //   npm run release            -> bumps the patch version (0.2.0 -> 0.2.1)
-//   npm run release -- 0.3.0   -> releases that exact version
+//   npm run release -- 0.3.0   -> releases that exact version (Apple silicon Mac)
+//   npm run release -- 0.3.0 --all-platforms -> also Intel Mac, Windows (CI) and Linux (CI)
 //
 // 1. bumps the version, commits, tags and pushes; the tag makes GitHub Actions build the
 //    Windows installer and Linux AppImage/.deb (and smoke-test them)
@@ -69,7 +70,10 @@ function main() {
 
   const pkgPath = path.join(ROOT, 'package.json');
   const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-  const version = nextVersion(pkg.version, process.argv[2]);
+  const args = process.argv.slice(2);
+  // Focus is Apple silicon Mac (see CLAUDE.md); --all-platforms also ships Intel Mac, Windows and Linux.
+  const ALL = args.includes('--all-platforms');
+  const version = nextVersion(pkg.version, args.find((a) => !a.startsWith('--')));
   const tag = `v${version}`;
   const env = { ...process.env, GH_TOKEN: out('gh', ['auth', 'token', '--user', OWNER]) };
 
@@ -86,12 +90,14 @@ function main() {
   const dist = path.join(ROOT, 'dist');
   fs.rmSync(dist, { recursive: true, force: true });
   sh('npm', ['run', 'build']);
-  sh('npx', ['electron-builder', '--mac', '--publish', 'never']);
+  sh('npx', ['electron-builder', '--mac', ...(ALL ? [] : ['--arm64']), '--publish', 'never']);
 
-  // 3. Windows and Linux packages from CI
-  const runId = waitForCi(tag, sha, env);
+  // 3. Windows and Linux packages from CI (only with --all-platforms)
   const ciDir = path.join(dist, 'ci');
-  sh('gh', ['run', 'download', String(runId), '--repo', REPO, '--dir', ciDir], { env });
+  if (ALL) {
+    const runId = waitForCi(tag, sha, env);
+    sh('gh', ['run', 'download', String(runId), '--repo', REPO, '--dir', ciDir], { env });
+  }
 
   const find = (dir, test, what) => {
     const files = fs.existsSync(dir) ? fs.readdirSync(dir).filter(test) : [];
@@ -103,12 +109,12 @@ function main() {
   const mac = {
     zip: find(dist, (f) => f.endsWith(`${version}-arm64-mac.zip`), 'Apple silicon zip'),
     dmg: find(dist, (f) => f.endsWith(`${version}-arm64.dmg`), 'Apple silicon dmg'),
-    zipX64: find(dist, (f) => f.endsWith(`${version}-mac.zip`) && !f.includes('arm64'), 'Intel Mac zip'),
-    dmgX64: find(dist, (f) => f.endsWith(`${version}.dmg`) && !f.includes('arm64'), 'Intel Mac dmg'),
+    zipX64: ALL && find(dist, (f) => f.endsWith(`${version}-mac.zip`) && !f.includes('arm64'), 'Intel Mac zip'),
+    dmgX64: ALL && find(dist, (f) => f.endsWith(`${version}.dmg`) && !f.includes('arm64'), 'Intel Mac dmg'),
   };
-  const win = find(path.join(ciDir, 'browser-windows'), (f) => f.endsWith('.exe') && f.includes(version), 'Windows installer');
-  const appImage = find(path.join(ciDir, 'browser-linux'), (f) => f.endsWith('.AppImage') && f.includes(version), 'AppImage');
-  const deb = find(path.join(ciDir, 'browser-linux'), (f) => f.endsWith('.deb') && f.includes(version), '.deb');
+  const win = ALL && find(path.join(ciDir, 'browser-windows'), (f) => f.endsWith('.exe') && f.includes(version), 'Windows installer');
+  const appImage = ALL && find(path.join(ciDir, 'browser-linux'), (f) => f.endsWith('.AppImage') && f.includes(version), 'AppImage');
+  const deb = ALL && find(path.join(ciDir, 'browser-linux'), (f) => f.endsWith('.deb') && f.includes(version), '.deb');
 
   // 4. update manifests, signed here
   const manifests = [
@@ -116,7 +122,7 @@ function main() {
     ['latest-mac-x64.json', 'mac-x64', mac.zipX64, false],
     ['latest-win.json', 'win-x64', win, false],
     ['latest-linux.json', 'linux-x64', appImage, false],
-  ].map(([name, platformKey, file, legacySignature]) => {
+  ].filter(([, , file]) => file).map(([name, platformKey, file, legacySignature]) => {
     const manifest = signManifest({
       platformKey,
       version,
@@ -131,7 +137,7 @@ function main() {
   });
 
   // 5. publish
-  const assets = [mac.dmg, mac.zip, mac.dmgX64, mac.zipX64, win, appImage, deb, ...manifests];
+  const assets = [mac.dmg, mac.zip, mac.dmgX64, mac.zipX64, win, appImage, deb, ...manifests].filter(Boolean);
   console.log(`\nUploading ${assets.length} files (this can take a while)…`);
   try {
     sh('gh', ['release', 'create', tag, '--repo', REPO, '--title', tag, '--generate-notes', ...assets], { env });

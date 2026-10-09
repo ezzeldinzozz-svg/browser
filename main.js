@@ -377,7 +377,11 @@ let uiDict = null; // compiled, for menus and dialogs here
 function setupUiLanguage() {
   const pref = store.data.settings.uiLanguage || 'auto';
   const system = (app.getPreferredSystemLanguages()[0] || app.getLocale() || 'en').toLowerCase().split('-')[0];
-  uiLang = pref !== 'auto' && UI_LANGUAGES[pref] ? pref : UI_LANGUAGES[system] ? system : 'en';
+  // English only for now (see CLAUDE.md): 'auto' doesn't follow the system yet, and Settings hides
+  // the choice. To bring languages back: use `UI_LANGUAGES[system] ? system : 'en'` for 'auto'
+  // and unhide #ui-language-row in settings.html.
+  void system;
+  uiLang = pref !== 'auto' && UI_LANGUAGES[pref] ? pref : 'en';
   uiRaw = null;
   uiDict = null;
   if (uiLang !== 'en') {
