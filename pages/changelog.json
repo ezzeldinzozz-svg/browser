@@ -1,6 +1,7 @@
 {
   "_comment": "Shown on browser://whatsnew after an update. Add user-visible changes to \"next\" as they land; `npm run release` renames \"next\" to the version it releases (and refuses to release without notes).",
-  "next": [
+  "next": [],
+  "0.21.4": [
     "Unified outer container for top toolbar and vertical tab sidebar with no divider line, rounded border frame around the webpage viewport, and removed the Default workspace button"
   ],
   "0.21.3": [
