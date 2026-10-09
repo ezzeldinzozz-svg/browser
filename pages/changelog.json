@@ -16,7 +16,11 @@
     "Security: weekly checks for Electron security fixes, and urgent fixes install within minutes",
     "Customize the new tab page: a background color or your own image, pinned and custom shortcuts with site icons, and hide shortcuts or bookmarks",
     "Address autofill: save your addresses and fill name, email, phone and address fields with one click",
-    "Profiles: keep work and personal browsing completely separate, each with its own color"
+    "Profiles: keep work and personal browsing completely separate, each with its own color",
+    "Mute a whole site from the tab menu",
+    "Tracking parameters (utm_, fbclid, gclid…) are removed from addresses you open",
+    "The new tab page counts the ads and trackers Operecs blocked",
+    "Energy saver: on battery, tabs you haven't used for 10 minutes go to sleep"
   ],
   "0.19.0": [
     "Theme setting: match the system, dark or light",

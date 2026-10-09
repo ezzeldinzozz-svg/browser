@@ -104,6 +104,7 @@ if (location.protocol === 'browser:' && window === window.top) {
     getLicenses: call('data:licenses'),
     getTopSites: call('data:top-sites'),
     getNewtabImage: call('newtab:background'),
+    getPrivacyStats: call('newtab:stats'),
     chooseNewtabImage: call('newtab:choose-image'),
     allowHttp: call('https:allow'),
     getTasks: call('data:tasks'),

@@ -62,6 +62,7 @@ function buildCustomize() {
   $('custom-color').value = settings.newtab.color;
   $('show-tiles').checked = settings.newtab.showTiles;
   $('show-bookmarks').checked = settings.newtab.showBookmarks;
+  $('show-stats').checked = settings.privacyStats !== false;
   panel.hidden = false;
 }
 
@@ -76,6 +77,22 @@ $('choose-image').addEventListener('click', async () => {
 });
 $('show-tiles').addEventListener('change', (e) => saveLook({ showTiles: e.target.checked }));
 $('show-bookmarks').addEventListener('change', (e) => saveLook({ showBookmarks: e.target.checked }));
+$('show-stats').addEventListener('change', async (e) => {
+  settings.privacyStats = e.target.checked;
+  await browserAPI.setSetting('privacyStats', e.target.checked);
+  loadStats();
+});
+
+// Ads and trackers blocked (all normal windows), since the count started.
+async function loadStats() {
+  const stats = await browserAPI.getPrivacyStats();
+  const el = $('stats');
+  el.hidden = !stats || !stats.blocked;
+  if (!stats || !stats.blocked) return;
+  const since = new Date(stats.since).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  el.textContent = `${stats.blocked.toLocaleString()} ads and trackers blocked since ${since}`;
+}
+loadStats();
 
 // ---- shortcut tiles: most visited, pinned first; pin / edit / remove; add your own
 

@@ -41,20 +41,20 @@ Edit freely: move lines between sections, delete what you don't want, add your o
 - [ ] Vertical tabs / sidebar layout
 - [ ] Split view (two tabs side by side)
 - [ ] Tab hover preview cards
-- [ ] "Mute site" (all tabs of a site)
+- [x] "Mute site" (all tabs of a site, remembered; tab right-click menu)
 - [ ] Two-finger swipe back/forward with an arrow
 - [ ] Command bar actions in the address bar ("clear history", "settings")
 - [ ] Calculator / unit conversion in suggestions
-- [ ] Tracker stripping from links (utm_, fbclid, gclid)
+- [x] Tracker stripping from links (utm_, fbclid, gclid…; Settings → Privacy)
 - [ ] Cookie banner auto-reject
 - [ ] Fingerprinting protection
-- [ ] Privacy stats on the new tab page (trackers blocked)
+- [x] Privacy stats on the new tab page (trackers blocked; Customize → Privacy stats)
 - [ ] Screenshot tool (visible area / full page / selection)
 - [ ] Read aloud
 - [ ] Translate page (privacy-friendly service)
 - [ ] Picture-in-picture toolbar button
 - [ ] Per-site autoplay exceptions
-- [ ] Energy saver on battery
+- [x] Energy saver on battery (idle tabs sleep after 10 minutes; Settings → Performance)
 - [ ] Accent color choice; compact mode
 - [ ] Keyboard shortcut customization
 - [ ] Install a site as an app (PWA windows)

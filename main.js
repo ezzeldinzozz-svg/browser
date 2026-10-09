@@ -159,6 +159,10 @@ function defaultSettings() {
     clearOnQuit: { history: false, cookies: false, cache: false, downloads: false },
     newtab: { background: 'none', color: '#2a1f4d', showTiles: true, showBookmarks: true }, // background: none | color | image
     pinnedTiles: [], // [{ url, title }] shown first on the new tab page
+    mutedSites: [], // sites muted in every tab ("Mute Site")
+    energySaver: true, // on battery: idle tabs sleep sooner
+    privacyStats: true, // show ads and trackers blocked on the new tab page
+    stripTracking: true, // remove utm_ / fbclid / gclid… from addresses you open
     theme: 'system', // 'system' | 'light' | 'dark' (browser UI, internal pages, and sites that follow it)
   };
 }
@@ -1262,6 +1266,7 @@ function createTab(w, url, { background = false, after = null, history = null, l
     if (isWeb(u)) tab.httpsUpgrade = null;
     tab.capture.clear();
     applySiteZoom(tab);
+    if (siteMuted(u)) tab.wc.setAudioMuted(true);
     tab.favicon = tab.faviconSrc = '';
     dismissPrompts(tab); // a prompt must never carry over to a different page
     cancelAuth(tab);
@@ -1612,6 +1617,24 @@ function toggleMute(tab) {
   sendTabs(tab.w);
 }
 
+// "Mute Site": every tab of the site, now and whenever it's opened later.
+const siteMuted = (url) => {
+  const site = siteOf(url);
+  return !!site && (store.data.settings.mutedSites || []).includes(site);
+};
+function toggleSiteMute(tab) {
+  const site = siteOf(tab.wc.getURL());
+  if (!site) return;
+  const list = new Set(store.data.settings.mutedSites || []);
+  const mute = !list.has(site);
+  if (mute) list.add(site);
+  else list.delete(site);
+  store.data.settings.mutedSites = [...list];
+  store.save();
+  for (const t of allTabs()) if (!t.wc.isDestroyed() && siteOf(t.wc.getURL()) === site) t.wc.setAudioMuted(mute);
+  sendAll();
+}
+
 // Takes the tab out of its window without closing its page.
 function detachTab(tab) {
   const { w } = tab;
@@ -1770,6 +1793,7 @@ function showTabMenu(w, id) {
     { label: 'Duplicate', click: () => duplicateTab(tab) },
     { label: tab.pinned ? 'Unpin' : 'Pin', click: () => setPinned(tab, !tab.pinned) },
     { label: muted ? 'Unmute Tab' : 'Mute Tab', click: () => toggleMute(tab) },
+    ...(siteOf(tab.wc.getURL()) ? [{ label: siteMuted(tab.wc.getURL()) ? `Unmute ${siteOf(tab.wc.getURL())}` : `Mute ${siteOf(tab.wc.getURL())}`, click: () => toggleSiteMute(tab) }] : []),
     { type: 'separator' },
     { label: 'Move to New Window', enabled: w.tabs.length > 1, click: () => moveTabToNewWindow(tab) },
     { type: 'separator' },
@@ -2500,8 +2524,12 @@ function canSleep(tab) {
 }
 
 setInterval(() => {
-  if (!store || !store.data.settings.memorySaver) return;
-  const limit = (store.data.settings.memorySaverMinutes || 30) * 60000;
+  if (!store) return;
+  // Energy saver: on battery, idle tabs sleep after 10 minutes (even with memory saver off).
+  const onBattery = store.data.settings.energySaver && app.isReady() && require('electron').powerMonitor.isOnBatteryPower();
+  if (!store.data.settings.memorySaver && !onBattery) return;
+  let limit = store.data.settings.memorySaver ? (store.data.settings.memorySaverMinutes || 30) * 60000 : Infinity;
+  if (onBattery) limit = Math.min(limit, 10 * 60000);
   for (const tab of allTabs()) {
     if (canSleep(tab) && Date.now() - (tab.lastShown || tab.created || Date.now()) > limit) sleepTab(tab);
   }
@@ -2603,6 +2631,26 @@ function hideAutofill(w, delay = 0) {
   };
   if (delay) w.autofillHideTimer = setTimeout(hide, delay);
   else hide();
+}
+
+// ---------------------------------------------------------------- tracking parameters
+
+// Common click-tracking parameters, removed from addresses you open (Brave and Firefox do this).
+const TRACKING_PARAMS = new Set(['fbclid', 'gclid', 'gclsrc', 'dclid', 'gbraid', 'wbraid', 'msclkid', 'mc_eid', 'mc_cid', 'igshid', 'yclid', 'twclid', 'ttclid', 'li_fat_id', '_hsenc', '_hsmi', '__hssc', '__hstc', '__hsfp', 'mkt_tok', 'oly_anon_id', 'oly_enc_id', 'vero_id', 'vero_conv', 'wickedid', 'ref_src', 'srsltid', 'epik', 'rb_clickid', 's_cid', 'ss_campaign_id', '_openstat']);
+const isTrackingParam = (name) => TRACKING_PARAMS.has(name.toLowerCase()) || /^utm_/i.test(name);
+
+function stripTrackingParams(details) {
+  if (!store.data.settings.stripTracking || details.resourceType !== 'mainFrame' || details.method !== 'GET' || !isWeb(details.url)) return null;
+  let url;
+  try {
+    url = new URL(details.url);
+  } catch {
+    return null;
+  }
+  const names = [...url.searchParams.keys()].filter(isTrackingParam);
+  if (!names.length) return null;
+  for (const n of names) url.searchParams.delete(n);
+  return { redirectURL: url.href };
 }
 
 // ---------------------------------------------------------------- mixed content / insecure forms
@@ -2738,10 +2786,22 @@ function shouldBlock(webContentsId) {
 
 let blockedNotifyTimer = null;
 
+// Privacy stats for the new tab page: ads and trackers blocked since `since`.
+let statsSaveTimer = null;
+function countBlocked() {
+  const stats = (store.data.stats ||= { blocked: 0, since: Date.now() });
+  stats.blocked++;
+  if (!statsSaveTimer) statsSaveTimer = setTimeout(() => {
+    statsSaveTimer = null;
+    store.save();
+  }, 5000);
+}
+
 function onBlocked(webContentsId, url) {
   const tab = allTabs().find((t) => !t.wc.isDestroyed() && t.wc.id === webContentsId);
   if (!tab) return;
   tab.blocked++;
+  if (!tab.w.private) countBlocked();
   let host = '';
   try {
     host = new URL(url).hostname;
@@ -4065,7 +4125,7 @@ function setupIpc() {
   });
   handle('data:settings-set', fromInternal, (_tab, key, value) => {
     const valid =
-      (['restoreSession', 'adblock', 'askDownloadLocation', 'blockThirdPartyCookies', 'showHomeButton', 'confirmClose', 'gpc', 'httpsOnly', 'memorySaver', 'spellcheck', 'searchSuggestions'].includes(key) &&
+      (['restoreSession', 'adblock', 'askDownloadLocation', 'blockThirdPartyCookies', 'showHomeButton', 'confirmClose', 'gpc', 'httpsOnly', 'memorySaver', 'spellcheck', 'searchSuggestions', 'stripTracking', 'energySaver', 'privacyStats'].includes(key) &&
         typeof value === 'boolean') ||
       (key === 'startup' && ['continue', 'newtab', 'pages'].includes(value)) ||
       (key === 'autoplay' && ['block-audible', 'allow'].includes(value)) ||
@@ -4164,6 +4224,7 @@ function setupIpc() {
     buildMenu();
   });
   handle('data:top-sites', fromInternal, (tab) => (tab.w.private ? [] : topSites())); // private windows don't show history
+  handle('newtab:stats', fromInternal, () => (store.data.settings.privacyStats ? store.data.stats || { blocked: 0, since: Date.now() } : null));
   handle('newtab:background', fromInternal, () => (store.data.settings.newtab.background === 'image' ? newtabImage() : ''));
   handle('newtab:choose-image', fromInternal, (tab) => chooseNewtabImage(tab.w));
   handle('data:hide-tile', fromInternal, (_tab, site) => {
@@ -4702,7 +4763,7 @@ app.whenReady().then(() => {
     beforeRequest: (details) => {
       rememberMainFrameRequest(details);
       noteMixedContent(details);
-      return checkInsecureForm(details) || upgradeToHttps(details);
+      return checkInsecureForm(details) || upgradeToHttps(details) || stripTrackingParams(details);
     },
   });
   applyDns();

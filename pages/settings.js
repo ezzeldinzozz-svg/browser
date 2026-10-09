@@ -24,6 +24,8 @@ async function loadSettings() {
   document.getElementById('startup-pages').value = (s.startupPages || []).join('\n');
   document.getElementById('show-home').checked = s.showHomeButton;
   document.getElementById('theme').value = s.theme || 'system';
+  document.getElementById('strip-tracking').checked = s.stripTracking !== false;
+  document.getElementById('energy-saver').checked = s.energySaver !== false;
   document.getElementById('history-keep').value = String(s.historyKeepDays || 0);
   for (const k of ['history', 'downloads', 'cookies', 'cache']) document.getElementById(`quit-${k}`).checked = !!(s.clearOnQuit && s.clearOnQuit[k]);
   const uiSelect = document.getElementById('ui-language');
@@ -686,3 +688,6 @@ document.getElementById('profile-add').addEventListener('submit', async (e) => {
   input.value = '';
 });
 browserAPI.getProfiles().then(renderProfiles);
+
+document.getElementById('strip-tracking').addEventListener('change', (e) => browserAPI.setSetting('stripTracking', e.target.checked));
+document.getElementById('energy-saver').addEventListener('change', (e) => browserAPI.setSetting('energySaver', e.target.checked));

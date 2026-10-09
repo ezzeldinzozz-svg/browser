@@ -67,6 +67,7 @@
     <p class="hint">Changes apply to pages opened after you change them.</p>
 
     <h2>Performance</h2>
+    <label class="check"><input id="energy-saver" type="checkbox"> Energy saver: on battery, let tabs I haven't used for 10 minutes sleep</label>
     <label class="check"><input id="memory-saver" type="checkbox"> Memory saver: let tabs I haven't used for a while sleep</label>
     <label class="dns">Put tabs to sleep after
       <select id="memory-saver-minutes">
@@ -151,6 +152,7 @@
     <label class="check"><input id="adblock" type="checkbox"> Block ads and trackers</label>
     <label class="check"><input id="tpc" type="checkbox"> Block third-party cookies (sites can still ask to use theirs when embedded)</label>
     <label class="check"><input id="gpc" type="checkbox"> Ask sites not to sell or share my data (Global Privacy Control)</label>
+    <label class="check"><input id="strip-tracking" type="checkbox"> Remove tracking parameters (utm_, fbclid, gclid…) from addresses I open</label>
     <label class="check"><input id="https-only" type="checkbox"> Always use secure connections (HTTPS-Only: warn before opening sites that only support HTTP)</label>
     <label class="dns">Secure DNS
       <select id="dns">
