@@ -558,3 +558,13 @@ browser-action-list::part(badge) { font-size: 9px; }
 }
 #sitepopup .media-btn:hover { filter: brightness(1.08); }
 #sitepopup .media-btn .ico { width: 15px; height: 15px; }
+
+/* device chooser */
+#devicepicker { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; background: rgba(5, 2, 11, 0.55); backdrop-filter: blur(6px); }
+#devicepicker[hidden] { display: none; }
+.dp-box { width: min(460px, 92vw); }
+.dp-list { display: flex; flex-direction: column; gap: 4px; max-height: 50vh; overflow-y: auto; }
+.dp-item { height: 38px; padding: 0 14px; border: 1px solid var(--line); border-radius: 12px; text-align: left; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.dp-item:hover { background: var(--surface-hover); }
+.dp-item.sel { border-color: var(--violet); background: var(--violet-soft); box-shadow: 0 0 0 3px var(--violet-soft); }
+.dp-status { margin-top: 10px; color: var(--quiet); font-family: var(--mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; }

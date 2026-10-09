@@ -82,6 +82,17 @@
       <button id="bm-done" type="submit" class="primary">Done</button>
     </div>
   </form>
+  <div id="devicepicker" hidden>
+    <div class="sp-box dp-box" role="dialog" aria-labelledby="dp-title">
+      <div class="sp-title" id="dp-title"></div>
+      <div class="dp-list" id="dp-list" role="listbox"></div>
+      <div class="dp-status" id="dp-status"></div>
+      <div class="sp-actions">
+        <button id="dp-cancel">Cancel</button>
+        <button id="dp-connect" class="primary" disabled>Connect</button>
+      </div>
+    </div>
+  </div>
   <div id="screenpicker" hidden>
     <div class="sp-box">
       <div class="sp-title" id="sp-title"></div>

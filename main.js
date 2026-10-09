@@ -994,8 +994,79 @@ function applyProxy(ses) {
   ses.setProxy(proxyConfig()).then(() => ses.closeAllConnections()).catch((err) => console.warn('Proxy:', err.message));
 }
 
+// ---------------------------------------------------------------- device chooser
+
+// WebHID / Web Serial / WebUSB / Web Bluetooth: the page asks, the user picks a device in the
+// toolbar's chooser (or cancels). Picked devices stay allowed for that site until Operecs quits.
+const DEVICE_KINDS = new Set(['hid', 'serial', 'usb']);
+const DEVICE_NAMES = { hid: 'a HID device', serial: 'a serial port', usb: 'a USB device', bluetooth: 'a Bluetooth device' };
+const grantedDevices = new Map(); // origin -> Set of device keys
+let nextDevicePickId = 1;
+
+const deviceKey = (d) => [d.vendorId, d.productId, d.serialNumber, d.deviceId, d.portId].filter((x) => x !== undefined && x !== '').join(':');
+
+function showDeviceChooser(wc, kind, devices, callback) {
+  const tab = tabOfWc(wc);
+  if (!tab || !liveWindow(tab.w)) return callback('');
+  const w = tab.w;
+  const origin = originOf(wc.getURL());
+  const same = w.devicePick && w.devicePick.wc === wc && w.devicePick.kind === kind;
+  if (w.devicePick && !same) finishDeviceChooser(w, w.devicePick.id, null); // one at a time
+  const pick = same ? w.devicePick : { id: nextDevicePickId++, wc, kind, origin };
+  pick.callback = callback; // Bluetooth keeps re-asking with fresh lists while it scans
+  pick.devices = devices;
+  w.devicePick = pick;
+  if (tab.id !== w.activeId) selectTab(w, tab.id);
+  w.chromeView.webContents.send('device-picker', {
+    id: pick.id,
+    title: `${new URL(origin).host} wants to connect to ${DEVICE_NAMES[kind]}`,
+    scanning: kind === 'bluetooth',
+    devices: devices.map((d) => ({ id: d.id, name: d.name })),
+  });
+}
+
+function finishDeviceChooser(w, pickId, deviceId) {
+  const pick = w.devicePick;
+  if (!pick || pick.id !== pickId) return;
+  w.devicePick = null;
+  const device = pick.devices.find((d) => d.id === deviceId);
+  if (device && pick.origin) {
+    if (!grantedDevices.has(pick.origin)) grantedDevices.set(pick.origin, new Set());
+    grantedDevices.get(pick.origin).add(device.key);
+  }
+  try {
+    pick.callback(device ? device.id : '');
+  } catch {
+    // the page went away
+  }
+  if (!w.chromeView.webContents.isDestroyed()) w.chromeView.webContents.send('device-picker', null);
+}
+
+function watchDevices(ses) {
+  ses.on('select-hid-device', (event, details, callback) => {
+    event.preventDefault();
+    const devices = details.deviceList.map((d) => ({ id: d.deviceId, name: d.name || `Device ${d.vendorId}:${d.productId}`, key: deviceKey(d) }));
+    showDeviceChooser(details.frame ? webContents.fromFrame(details.frame) : null, 'hid', devices, callback);
+  });
+  ses.on('select-serial-port', (event, portList, wc, callback) => {
+    event.preventDefault();
+    const devices = portList.map((p) => ({ id: p.portId, name: p.displayName || p.portName, key: deviceKey(p) }));
+    showDeviceChooser(wc, 'serial', devices, callback);
+  });
+  ses.on('select-usb-device', (event, details, callback) => {
+    event.preventDefault();
+    const devices = details.deviceList.map((d) => ({ id: d.deviceId, name: [d.manufacturerName, d.productName].filter(Boolean).join(' ') || `USB device ${d.vendorId}:${d.productId}`, key: deviceKey(d) }));
+    showDeviceChooser(details.frame ? webContents.fromFrame(details.frame) : null, 'usb', devices, callback);
+  });
+  ses.setDevicePermissionHandler((details) => {
+    const keys = grantedDevices.get(originOf(details.origin));
+    return !!keys && keys.has(deviceKey(details.device));
+  });
+}
+
 function configureSession(ses) {
   ses.setCertificateVerifyProc(onVerifyCertificate);
+  watchDevices(ses);
   applyProxy(ses);
   // Present as plain Chrome (sites such as Google sign-in reject the Electron token), with the
   // user's languages.
@@ -1090,6 +1161,11 @@ function createTab(w, url, { background = false, after = null, history = null, l
     if (tab.id === tab.w.activeId) showStatus(tab.w, url);
   });
   wc.on('did-start-loading', () => sendTabs(tab.w));
+  wc.on('select-bluetooth-device', (event, deviceList, callback) => {
+    event.preventDefault();
+    const devices = deviceList.map((d) => ({ id: d.deviceId, name: d.deviceName || 'Unnamed device', key: d.deviceId }));
+    showDeviceChooser(wc, 'bluetooth', devices, callback);
+  });
   wc.on('media-started-playing', () => setMediaState(tab, 'playing'));
   wc.on('media-paused', () => setMediaState(tab, 'paused'));
   wc.on('did-stop-loading', () => {
@@ -2013,6 +2089,8 @@ function onPermissionRequest(wc, permission, callback, details) {
 
 function onPermissionCheck(wc, permission, requestingOrigin, details) {
   if (ALWAYS_ALLOWED.has(permission)) return true;
+  // Device APIs: allowed to ask; the device chooser is where the user decides.
+  if (DEVICE_KINDS.has(permission)) return !!tabOfWc(wc) && /^https:/i.test(String(requestingOrigin));
   if (!PROMPTABLE.has(permission)) return false;
   const origin = originOf(requestingOrigin);
   if (!origin) return false;
@@ -3256,6 +3334,7 @@ function setupIpc() {
   });
   handle('tab:move', fromChrome, (w, id, index) => moveTab(w, id, index));
   handle('tab:tear-off', fromChrome, (w, id) => tearOffTab(w, id));
+  handle('device:choose', fromChrome, (w, pickId, deviceId) => finishDeviceChooser(w, pickId, deviceId || null));
   handle('media:toggle', fromChrome, (w, id) => {
     const tab = allTabs().find((t) => t.id === id && t.w.private === w.private);
     if (tab) return toggleMedia(tab);

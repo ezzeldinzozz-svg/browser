@@ -414,7 +414,7 @@ Ordered by priority, then by what unblocks what.
 - [x] **P1** Captive portal help: error pages for timeouts, unknown hosts and certificate errors offer "Sign in to the network" (opens http://neverssl.com, exempt from HTTPS-Only)
 - [ ] **P2** Automatic captive portal detection (probe on network change)
 - [x] **P1** Offline page: "You're offline" that reloads by itself when the connection is back; clearer pages for unknown hosts, timeouts and proxy failures
-- [ ] **P1** Web Serial/USB/HID/Bluetooth device chooser (`select-bluetooth-device`, `select-hid-device` handlers) or deny with a message
+- [x] **P1** Web Serial/USB/HID/Bluetooth device chooser (toolbar dialog; picked devices stay allowed per site until quit). Verified HID/USB in a dev run; Serial/Bluetooth trigger macOS's Bluetooth permission prompt (packaged app has the usage text; the dev Electron binary crashes there)
 - [ ] **P1** Google sign-in smoke test (UA spoofing can break any time) *(Electron limit)*
 - [ ] **P2** QR code for the current page
 - [ ] **P2** Workspaces / spaces (Arc)

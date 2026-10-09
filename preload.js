@@ -109,6 +109,7 @@ if (location.protocol === 'browser:' && window === window.top) {
     onFocusAuth: on('focus-auth'),
     onWindowFullscreen: on('window:fullscreen'),
     onScreenPicker: on('screen-picker'),
+    onDevicePicker: on('device-picker'),
     onStatus: on('status'),
     listExtensions: call('ext:list'),
     removeExtension: call('ext:remove'),
@@ -133,6 +134,7 @@ if (location.protocol === 'browser:' && window === window.top) {
     recentDownloads: call('downloads:recent'),
     downloadAction: call('downloads:action'),
     chooseScreen: call('screen:choose'),
+    chooseDevice: call('device:choose'),
     getDefaultBrowser: call('default:status'),
     setDefaultBrowser: call('default:set'),
   });

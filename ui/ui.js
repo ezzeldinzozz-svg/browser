@@ -326,7 +326,7 @@ $('reader').addEventListener('click', () => api.toggleReader());
 
 let overlayOpen = false;
 function setOverlay() {
-  const open = ['suggest', 'sitepopup', 'screenpicker', 'dlpanel', 'bmpopup'].some((id) => !$(id).hidden);
+  const open = ['suggest', 'sitepopup', 'screenpicker', 'devicepicker', 'dlpanel', 'bmpopup'].some((id) => !$(id).hidden);
   if (open !== overlayOpen) {
     overlayOpen = open;
     api.setOverlay(open);
@@ -1123,4 +1123,48 @@ $('tabstrip').addEventListener('drop', (e) => {
   if (!text) return;
   e.preventDefault();
   api.openInNewTab(text);
+});
+
+// ---- device chooser (WebHID / Serial / USB / Bluetooth)
+
+let devicePick = null;
+let deviceChoice = null;
+function closeDevicePicker(deviceId) {
+  if (devicePick) api.chooseDevice(devicePick.id, deviceId);
+  devicePick = null;
+  $('devicepicker').hidden = true;
+  setOverlay();
+}
+api.onDevicePicker((pick) => {
+  if (!pick) {
+    devicePick = null;
+    $('devicepicker').hidden = true;
+    return setOverlay();
+  }
+  if (!devicePick || devicePick.id !== pick.id) deviceChoice = null;
+  devicePick = pick;
+  $('dp-title').textContent = pick.title;
+  const list = $('dp-list');
+  list.textContent = '';
+  for (const d of pick.devices) {
+    const item = el('button', 'dp-item' + (d.id === deviceChoice ? ' sel' : ''), d.name);
+    item.setAttribute('role', 'option');
+    item.addEventListener('click', () => {
+      deviceChoice = d.id;
+      for (const x of list.children) x.classList.toggle('sel', x === item);
+      $('dp-connect').disabled = false;
+    });
+    item.addEventListener('dblclick', () => closeDevicePicker(d.id));
+    list.append(item);
+  }
+  if (!pick.devices.some((d) => d.id === deviceChoice)) deviceChoice = null;
+  $('dp-connect').disabled = !deviceChoice;
+  $('dp-status').textContent = pick.devices.length ? (pick.scanning ? 'Still looking for devices\u2026' : '') : pick.scanning ? 'Looking for devices\u2026' : 'No compatible devices found.';
+  $('devicepicker').hidden = false;
+  setOverlay();
+});
+$('dp-cancel').addEventListener('click', () => closeDevicePicker(null));
+$('dp-connect').addEventListener('click', () => deviceChoice && closeDevicePicker(deviceChoice));
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && devicePick) closeDevicePicker(null);
 });
