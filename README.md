@@ -1,4 +1,6 @@
-# Browser
+# Operecs
+
+<img src="build/icon.png" width="96" alt="">
 
 A basic cross-platform web browser built on Electron.
 
@@ -19,7 +21,7 @@ npm start
 ## Build
 
 ```bash
-npm run dist:mac     # dist/Browser-<version>-arm64.dmg
+npm run dist:mac     # dist/Operecs-<version>-arm64.dmg
 npm run dist:win     # Windows installer
 npm run dist:linux   # AppImage and .deb
 ```

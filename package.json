@@ -1,8 +1,8 @@
 {
   "name": "browser",
-  "productName": "Browser",
+  "productName": "Operecs",
   "version": "0.13.0",
-  "description": "A basic cross-platform browser built on Electron",
+  "description": "Operecs: a fast, private, cross-platform web browser",
   "main": "main.js",
   "scripts": {
     "start": "npm run build && electron .",
@@ -23,8 +23,8 @@
   "author": "ezzeddinmagdy",
   "build": {
     "appId": "com.ezzeddinmagdy.browser",
-    "productName": "Browser",
-    "copyright": "Copyright © 2026 ezzeddinmagdy",
+    "productName": "Operecs",
+    "copyright": "Copyright \u00a9 2026 ezzeddinmagdy",
     "files": [
       "main.js",
       "gen/preload.js",
@@ -70,7 +70,7 @@
       "hardenedRuntime": false
     },
     "dmg": {
-      "title": "Browser ${version}"
+      "title": "Operecs ${version}"
     },
     "win": {
       "target": [

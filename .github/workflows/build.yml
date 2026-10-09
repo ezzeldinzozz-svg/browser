@@ -31,7 +31,7 @@ jobs:
       - name: Package (NSIS installer)
         run: npx electron-builder --win --x64 --publish never
       - name: Smoke test
-        run: node scripts/smoke-test.js dist/win-unpacked/Browser.exe
+        run: node scripts/smoke-test.js dist/win-unpacked/Operecs.exe
       - uses: actions/upload-artifact@v4
         with:
           name: browser-windows
@@ -88,13 +88,13 @@ jobs:
         shell: pwsh
         run: |
           $v = node -p "require('./package.json').version"
-          node scripts/ci-sign-test-update.js win-x64 latest-win.json "dist/Browser-Setup-$v.exe" update-server
+          node scripts/ci-sign-test-update.js win-x64 latest-win.json "dist/Operecs-Setup-$v.exe" update-server
           Start-Process python -ArgumentList '-m', 'http.server', '8780' -WorkingDirectory update-server -WindowStyle Hidden
       - name: Install 0.0.1
         shell: pwsh
         run: |
-          Start-Process dist-old/Browser-Setup-0.0.1.exe -ArgumentList '/S' -Wait
-          $exe = (Get-ChildItem "$env:LOCALAPPDATA\Programs" -Recurse -Filter Browser.exe | Select-Object -First 1).FullName
+          Start-Process dist-old/Operecs-Setup-0.0.1.exe -ArgumentList '/S' -Wait
+          $exe = (Get-ChildItem "$env:LOCALAPPDATA\Programs" -Recurse -Filter Operecs.exe | Select-Object -First 1).FullName
           Write-Host "installed at $exe, version $((Get-Item $exe).VersionInfo.ProductVersion)"
           "BROWSER_EXE=$exe" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Update from inside the app
@@ -130,9 +130,9 @@ jobs:
           npx electron-builder --linux AppImage --x64 --publish never
       - name: Sign the update with a test key and serve it
         run: |
-          node scripts/ci-sign-test-update.js linux-x64 latest-linux.json "dist/Browser-$(node -p "require('./package.json').version").AppImage" update-server
+          node scripts/ci-sign-test-update.js linux-x64 latest-linux.json "dist/Operecs-$(node -p "require('./package.json').version").AppImage" update-server
           (cd update-server && python3 -m http.server 8780 >/dev/null 2>&1 &)
       - name: Install 0.0.1
-        run: mkdir -p ~/Apps && cp dist-old/Browser-0.0.1.AppImage ~/Apps/Browser.AppImage && chmod +x ~/Apps/Browser.AppImage
+        run: mkdir -p ~/Apps && cp dist-old/Operecs-0.0.1.AppImage ~/Apps/Browser.AppImage && chmod +x ~/Apps/Browser.AppImage
       - name: Update from inside the app
         run: node scripts/update-test.js ~/Apps/Browser.AppImage update-server

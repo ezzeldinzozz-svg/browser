@@ -237,8 +237,8 @@ async function refreshDefault() {
   status.textContent = !supported
     ? 'Only the installed app can be the default browser.'
     : isDefault
-      ? 'Browser is your default browser.'
-      : 'Browser is not your default browser.';
+      ? 'Operecs is your default browser.'
+      : 'Operecs is not your default browser.';
   btn.hidden = !supported || isDefault;
 }
 

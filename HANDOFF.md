@@ -3,12 +3,12 @@
 Everything needed to pick this project up on any device. **Keep this file current:** update it
 in the same commit as any change to features, architecture, setup, or plans.
 
-_Last updated: 2026-10-09 · Current release: v0.11.0 (all platforms)_
+_Last updated: 2026-10-09 · Current release: v0.13.0 (all platforms)_
 
 ## What this is
 
-A basic cross-platform web browser (macOS, Windows, Linux) built on Electron. Goal right now: a
-solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-svg/browser
+**Operecs** (renamed from "Browser" after v0.13.0): a basic cross-platform web browser (macOS, Windows, Linux) built on Electron. Goal right now: a
+solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-svg/operecs-browser
 
 ## Status
 
@@ -65,7 +65,9 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 - Google sign-in may block Electron despite the Chrome user agent
 - No DRM (Netflix/Spotify), no Chrome extensions (Electron limits, see research)
 - Windows/Linux builds pass automated smoke and self-update tests in CI but haven't been used by a person yet; the Linux .deb doesn't auto-update (no apt repository), the AppImage does
-- Default Electron icon; product name "Browser" is a placeholder
+- Name: shown as **Operecs** everywhere (`productName`, `DISPLAY_NAME` in main.js, pages). Internally it stays "Browser" on purpose: `app.setName('Browser')` keeps the profile folder and the "Browser Safe Storage" keychain item, the bundle id stays `com.ezzeddinmagdy.browser`, the npm `name` stays `browser` (Windows install folder) and the Linux executable stays `browser`. The Mac updater renames `Browser.app` to `Operecs.app` when it installs. Don't change these without a migration.
+- Icon: `build/icon.png` (1024px, "O." in Outfit 600 on #0b0910, lavender #c5abfe dot); electron-builder makes the .icns/.ico from it. Wordmark and fonts in `brand/`
+- iCloud Passwords can't work: Apple's native helper (`PasswordManagerBrowserExtensionHelper`) has a kernel-enforced *parent launch constraint*. It only runs under a hard-coded list of browsers (bundle id + Team ID: Chrome, Edge, Brave, Arc, Vivaldi, Polypane (Electron), …) or apps signed with the restricted entitlement `com.apple.developer.web-browser.public-key-credential` (needs the paid Apple Developer Program plus Apple's approval; that is how Aside gets it). A self-signed app can't hold restricted entitlements. The extension's failed pipe write used to crash the app (EPIPE); main.js now ignores closed-pipe errors
 - macOS asks once for keychain access ("Browser Safe Storage", the cookie-encryption key) when moving to v0.4.0, the first build signed with our self-signed certificate. Choose "Always Allow"; later versions keep the same identity and shouldn't ask again
 - Ad blocking: prebuilt lists skip generic cosmetic rules (site-specific hiding works); no details popup yet
 
@@ -77,7 +79,6 @@ The full prioritized checklist is in `FEATURES.md` (P0/P1/P2). Short version:
 2. Verify password-manager extensions end to end (Bitwarden sign-in + autofill), pin/hide extension buttons
 3. Passkeys (need a Developer ID-signed app on macOS)
 3. Windows/Linux builds + their updaters (electron-updater works unsigned there)
-4. Name + icon
 5. Storage: JSON file → SQLite (before passwords and sync)
 6. Later: Apple Developer ID ($99/yr) to remove the first-launch warning; Windows signing (SignPath Foundation is free for open source)
 
@@ -113,7 +114,7 @@ Key decisions:
 ## Setting up on a new device
 
 ```bash
-git clone https://github.com/ezzeldinzozz-svg/browser.git
+git clone https://github.com/ezzeldinzozz-svg/operecs-browser.git
 cd browser
 npm install
 npm start
@@ -159,8 +160,8 @@ run it somewhere that won't time out. If the upload is interrupted, GitHub leave
 **draft** (invisible to installed apps, so nothing breaks). Finish it with:
 ```bash
 export GH_TOKEN=$(gh auth token --user ezzeldinzozz-svg)
-gh release upload vX.Y.Z dist/Browser-X.Y.Z-arm64-mac.zip dist/Browser-X.Y.Z-arm64.dmg dist/latest-mac.json --repo ezzeldinzozz-svg/browser --clobber
-gh release edit vX.Y.Z --repo ezzeldinzozz-svg/browser --draft=false --latest
+gh release upload vX.Y.Z dist/Operecs-X.Y.Z-arm64-mac.zip dist/Operecs-X.Y.Z-arm64.dmg dist/latest-mac.json --repo ezzeldinzozz-svg/operecs-browser --clobber
+gh release edit vX.Y.Z --repo ezzeldinzozz-svg/operecs-browser --draft=false --latest
 ```
  Electron is pinned (currently 44.7.0): bump patch versions
 regularly for security fixes, then release.

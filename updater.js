@@ -23,7 +23,7 @@ const { signedPayload } = require('./update-format');
 
 const run = promisify(execFile);
 
-const REPO = 'ezzeldinzozz-svg/browser';
+const REPO = 'ezzeldinzozz-svg/operecs-browser';
 const CHECK_EVERY_MS = 6 * 60 * 60 * 1000;
 
 // CI's end-to-end update test serves updates from a local server, signed with a throwaway key.
@@ -75,21 +75,22 @@ function unsupportedReason() {
   if (process.platform === 'darwin') {
     const bundle = bundlePath();
     if (!bundle.endsWith('.app') || bundle.startsWith('/Volumes/') || bundle.includes('/AppTranslocation/')) {
-      return 'Move Browser to your Applications folder to get updates.';
+      return 'Move Operecs to your Applications folder to get updates.';
     }
     if (!writable(path.dirname(bundle)) || !writable(bundle)) {
-      return "Browser can't update itself here because the folder isn't writable.";
+      return "Operecs can't update itself here because the folder isn't writable.";
     }
   } else if (process.platform === 'win32') {
     // Installed by our NSIS installer (it puts the uninstaller next to the app).
-    if (!fs.existsSync(path.join(path.dirname(process.execPath), `Uninstall ${app.getName()}.exe`))) {
-      return 'Install Browser with its installer to get automatic updates.';
+    const dir = path.dirname(process.execPath);
+    if (!fs.readdirSync(dir).some((f) => /^Uninstall .+\.exe$/i.test(f))) {
+      return 'Install Operecs with its installer to get automatic updates.';
     }
   } else if (process.platform === 'linux') {
     const appImage = process.env.APPIMAGE;
     if (!appImage) return 'This package updates by installing the new .deb from the releases page.';
     if (!writable(path.dirname(appImage)) || !writable(appImage)) {
-      return "Browser can't update itself here because the AppImage's folder isn't writable.";
+      return "Operecs can't update itself here because the AppImage's folder isn't writable.";
     }
   }
   return null;
@@ -255,11 +256,13 @@ function install(relaunch) {
       '  mv -f "$new" "$target" || rm -f "$new"', // an AppImage is one file: rename over it
       '  [ "$relaunch" = 1 ] && nohup "$target" >/dev/null 2>&1 &',
       'else',
+      // the new bundle's own name wins (Browser.app became Operecs.app)
+      '  final="$(dirname "$target")/$(basename "$new")"',
       '  backup="$target.previous-$$"',
       '  if mv "$target" "$backup"; then',
-      '    if mv "$new" "$target"; then rm -rf "$backup"; else mv "$backup" "$target"; fi',
-      '  fi',
-      '  [ "$relaunch" = 1 ] && open "$target"',
+      '    if mv "$new" "$final"; then rm -rf "$backup"; else mv "$backup" "$target"; final="$target"; fi',
+      '  else final="$target"; fi',
+      '  [ "$relaunch" = 1 ] && open "$final"',
       'fi',
     ].join('\n');
     detached('/bin/sh', ['-c', script, 'browser-updater', String(process.pid), next, target, relaunch ? '1' : '0', kind]);

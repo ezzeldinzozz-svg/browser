@@ -7,7 +7,7 @@ async function refreshDefault() {
   $('default-status').textContent = !supported
     ? 'Available in the installed app.'
     : isDefault
-      ? 'Browser is your default browser.'
+      ? 'Operecs is your default browser.'
       : 'Links you open in other apps will open here.';
   $('default-set').hidden = !supported || isDefault;
 }

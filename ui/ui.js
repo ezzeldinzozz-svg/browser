@@ -226,8 +226,8 @@ function render(state) {
     ? `Updating… ${update.progress >= 0 ? Math.floor(update.progress * 100) + '%' : ''}`.trim()
     : 'Restart to update';
   pill.title = downloading
-    ? `Downloading Browser ${update.version}`
-    : update.version ? `Browser ${update.version} is ready. Restart to finish updating.` : '';
+    ? `Downloading Operecs ${update.version}`
+    : update.version ? `Operecs ${update.version} is ready. Restart to finish updating.` : '';
 }
 
 const findInput = $('find-input');
@@ -472,7 +472,7 @@ function renderSiteButton(security) {
     btn.title = 'Connection is not secure. Click for site settings.';
   } else if (security === 'internal') {
     btn.innerHTML = INFO;
-    btn.title = 'Browser page';
+    btn.title = 'Operecs page';
   }
 }
 

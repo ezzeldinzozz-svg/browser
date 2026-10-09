@@ -23,7 +23,7 @@ const { signManifest } = require('../update-format');
 
 const ROOT = path.join(__dirname, '..');
 const OWNER = 'ezzeldinzozz-svg';
-const REPO = `${OWNER}/browser`;
+const REPO = `${OWNER}/operecs-browser`;
 const PRIVATE_KEY = path.join(os.homedir(), '.browser-release', 'update-private-key.pem');
 const CI_WAIT_MS = 45 * 60 * 1000;
 

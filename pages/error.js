@@ -8,7 +8,7 @@ if (desc === 'https-only') {
   document.title = 'Secure connection not available';
   document.getElementById('heading').textContent = "This site doesn't support a secure connection";
   document.getElementById('detail').textContent =
-    'Browser tried to open it over HTTPS, but the site only works over HTTP. Anyone on your network could see or ' +
+    'Operecs tried to open it over HTTPS, but the site only works over HTTP. Anyone on your network could see or ' +
     "change what you send and receive there, so don't enter passwords or card details.";
   document.getElementById('retry').textContent = 'Go back';
   document.getElementById('continue-http').hidden = false;

@@ -20,6 +20,24 @@ const {
   webContents,
   webFrameMain,
 } = require('electron');
+// The product is called Operecs, but internally the app keeps the name it shipped with
+// ("Browser"): the profile folder, the keychain item that encrypts cookies ("Browser Safe
+// Storage") and the bundle id stay the same, so renaming signs nobody out and loses no data.
+app.setName('Browser');
+const DISPLAY_NAME = 'Operecs';
+
+// An extension's native helper app (e.g. iCloud Passwords' Apple helper) can exit right away
+// when it refuses to talk to this browser; the extension library then writes to a closed pipe.
+// That must never take down the browser or show an error dialog.
+process.on('uncaughtException', (err) => {
+  if (err && (err.code === 'EPIPE' || err.code === 'ECONNRESET' || err.code === 'ERR_STREAM_DESTROYED')) {
+    console.warn('Ignored a closed connection:', err.message);
+    return;
+  }
+  console.error(err);
+  dialog.showErrorBox('Something went wrong in Operecs', err && err.stack ? err.stack : String(err));
+});
+
 const updater = require('./updater');
 const adblock = require('./adblock');
 const bookmarks = require('./bookmarks');
@@ -43,6 +61,7 @@ const MIME = {
   '.js': 'text/javascript; charset=utf-8',
   '.svg': 'image/svg+xml',
   '.png': 'image/png',
+  '.woff2': 'font/woff2',
 };
 const FAVICON_MAX_BYTES = 256 * 1024;
 const SESSION_ENTRY_LIMIT = 50; // back/forward entries kept per tab
@@ -402,7 +421,7 @@ function createWindow({ private: isPrivate = false, session: saved = null, ses: 
     ...restoredBounds(saved),
     minWidth: 480,
     minHeight: 320,
-    title: isPrivate ? 'Browser — Private' : 'Browser',
+    title: isPrivate ? 'Operecs — Private' : 'Operecs',
     backgroundColor: isPrivate ? '#25153f' : undefined,
   });
   const chromeView = new WebContentsView({
@@ -1618,7 +1637,7 @@ function taskList() {
       add(wc.getOSProcessId(), `Extension: ${ext ? ext.name : new URL(url).host}`, false);
     }
   }
-  const names = { Browser: 'Browser (main process)', Tab: 'Page process (shared or closing)', GPU: 'GPU', Utility: 'Utility', Zygote: 'Zygote', 'Pepper Plugin': 'Plugin' };
+  const names = { Browser: 'Operecs (main process)', Tab: 'Page process (shared or closing)', GPU: 'GPU', Utility: 'Utility', Zygote: 'Zygote', 'Pepper Plugin': 'Plugin' };
   return app
     .getAppMetrics()
     .map((m) => {
@@ -2758,16 +2777,16 @@ function buildMenu() {
           {
             role: 'appMenu',
             submenu: [
-              { role: 'about' },
+              { label: `About ${DISPLAY_NAME}`, click: () => app.showAboutPanel() },
               { label: 'Check for Updates…', click: checkForUpdatesManually },
               { type: 'separator' },
               { role: 'services' },
               { type: 'separator' },
-              { role: 'hide' },
+              { label: `Hide ${DISPLAY_NAME}`, role: 'hide' },
               { role: 'hideOthers' },
               { role: 'unhide' },
               { type: 'separator' },
-              { label: 'Quit Browser', accelerator: 'Cmd+Q', click: userQuit },
+              { label: 'Quit Operecs', accelerator: 'Cmd+Q', click: userQuit },
             ],
           },
         ]
@@ -2906,7 +2925,7 @@ function buildMenu() {
         { label: 'Keyboard Shortcuts', accelerator: 'CmdOrCtrl+/', click: open('shortcuts') },
         {
           label: 'Report a Problem…',
-          click: inWindow((w) => createTab(w, 'https://github.com/ezzeldinzozz-svg/browser/issues/new')),
+          click: inWindow((w) => createTab(w, 'https://github.com/ezzeldinzozz-svg/operecs-browser/issues/new')),
         },
         { label: 'Privacy', click: open('privacy') },
         { label: 'Open-Source Licenses', click: open('licenses') },
@@ -3000,6 +3019,11 @@ app.whenReady().then(() => {
   if (!isPrimaryInstance) return;
   protocol.handle(SCHEME, serveInternal);
   store = new Store(path.join(app.getPath('userData'), 'browser-data.json'));
+  app.setAboutPanelOptions({
+    applicationName: DISPLAY_NAME,
+    applicationVersion: app.getVersion(),
+    copyright: 'Free software under the GPL-3.0. github.com/ezzeldinzozz-svg/operecs-browser',
+  });
   bookmarks.init(store.data, () => {
     store.save();
     sendAll();
@@ -3197,14 +3221,14 @@ async function checkForUpdatesManually() {
   const version = app.getVersion();
   if (state.status === 'ready') {
     const { response } = await dialog.showMessageBox(parent, {
-      message: `Browser ${state.version} is ready to install.`,
-      detail: `You have ${version}. Browser will restart to finish updating.`,
+      message: `Operecs ${state.version} is ready to install.`,
+      detail: `You have ${version}. Operecs will restart to finish updating.`,
       buttons: ['Restart Now', 'Later'],
       defaultId: 0,
     });
     if (response === 0) restartToUpdate();
   } else if (state.status === 'none') {
-    dialog.showMessageBox(parent, { message: "You're up to date.", detail: `Browser ${version} is the latest version.` });
+    dialog.showMessageBox(parent, { message: "You're up to date.", detail: `Operecs ${version} is the latest version.` });
   } else if (state.status === 'checking' || state.status === 'downloading') {
     dialog.showMessageBox(parent, { message: 'An update is already being downloaded.' });
   } else {

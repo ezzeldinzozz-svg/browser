@@ -1,3 +1,4 @@
+@font-face { font-family: 'Outfit'; font-weight: 100 900; font-display: swap; src: url('fonts/outfit-latin-wght-normal.woff2') format('woff2-variations'); }
 :root {
   --bg: #ffffff;
   --fg: #1f1f1f;
@@ -140,3 +141,8 @@ details pre { white-space: pre-wrap; font-size: 11px; color: var(--dim); max-hei
 #tasks td { padding: 6px 8px; border-bottom: 1px solid var(--border); }
 #tasks td:first-child { max-width: 520px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #tasks td:nth-child(2), #tasks td:nth-child(3), #tasks td:nth-child(4) { font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* the Operecs wordmark: Outfit, with the lavender period */
+.wordmark { font-family: 'Outfit', -apple-system, sans-serif; font-weight: 600; letter-spacing: -0.02em; }
+.wordmark .dot { color: #c5abfe; }
+main.newtab h1.wordmark { font-size: 46px; font-weight: 600; }

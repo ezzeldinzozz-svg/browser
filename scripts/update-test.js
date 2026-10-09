@@ -63,7 +63,7 @@ async function verifyUpdated() {
       return v.startsWith(expectedVersion) ? v : null;
     }, 180);
     console.log(`installed version is now ${installed}`);
-    await poll('the new version to start', () => /Browser\.exe/i.test(execFileSync('tasklist', ['/FI', 'IMAGENAME eq Browser.exe'], { encoding: 'utf8' })), 60);
+    await poll('the new version to start', () => /Operecs\.exe/i.test(execFileSync('tasklist', ['/FI', 'IMAGENAME eq Operecs.exe'], { encoding: 'utf8' })), 60);
   } else {
     const sha = (f) => crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
     const update = fs.readdirSync(serveDir).find((f) => f.endsWith('.AppImage'));
