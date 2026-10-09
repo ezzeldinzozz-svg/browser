@@ -373,8 +373,10 @@ Ordered by priority, then by what unblocks what.
 - [x] Separate dev profile (`Browser Dev`) so testing never touches real data
 - [ ] **P0** macOS Developer ID signing + notarization + hardened runtime with entitlements (removes the "Open Anyway" step; needed for Keychain, passkeys)
 - [ ] **P0** Universal or x64 macOS build for Intel Macs
-- [ ] **P0** Windows NSIS build tested; code signing (SignPath for OSS, or Azure Artifact Signing / OV) to avoid SmartScreen blocks
-- [ ] **P0** Linux AppImage/deb tested; Chromium sandbox works (SUID/user namespaces); `.desktop` file with MIME types
+- [x] Windows NSIS build (per-user, one-click) built and smoke-tested on GitHub Actions for every push
+- [ ] **P1** Windows code signing (SignPath for OSS, or Azure Artifact Signing / OV) to avoid SmartScreen warnings
+- [x] Linux AppImage + .deb built and smoke-tested (sandbox on) on GitHub Actions for every push; `.desktop` file with http/https/HTML MIME types
+- [ ] **P1** AppImage on Ubuntu 24.04+ needs unprivileged user namespaces (AppArmor) or `--no-sandbox`; document or ship an AppArmor profile
 - [ ] **P1** Flatpak (zypak) / rpm; winget and Homebrew cask listings
 - [ ] **P1** CI builds for all three OSes with a smoke test (launch, open a page, Google sign-in check)
 - [ ] **P2** Microsoft Store listing (policy requires staying within 2 Chromium majors) *(Electron limit)*

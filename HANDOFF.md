@@ -51,7 +51,7 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 - Popups that need `window.opener` (some OAuth logins) open as plain tabs
 - Google sign-in may block Electron despite the Chrome user agent
 - No DRM (Netflix/Spotify), no Chrome extensions (Electron limits, see research)
-- Not yet tested on Windows or Linux; auto-update is macOS only
+- Windows/Linux builds pass automated smoke tests in CI but haven't been used by a person yet; auto-update is macOS only
 - Default Electron icon; product name "Browser" is a placeholder
 - macOS asks once for keychain access ("Browser Safe Storage", the cookie-encryption key) when moving to v0.4.0, the first build signed with our self-signed certificate. Choose "Always Allow"; later versions keep the same identity and shouldn't ask again
 - Ad blocking: prebuilt lists skip generic cosmetic rules (site-specific hiding works); no details popup yet
@@ -60,7 +60,7 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 
 The full prioritized checklist is in `FEATURES.md` (P0/P1/P2). Short version:
 
-1. Windows and Linux builds with their own updaters; Intel/universal Mac build
+1. Attach Windows/Linux packages to releases and auto-update them (CI builds them already); Intel/universal Mac build
 2. Verify password-manager extensions end to end (Bitwarden sign-in + autofill), pin/hide extension buttons
 3. Passkeys (need a Developer ID-signed app on macOS)
 3. Windows/Linux builds + their updaters (electron-updater works unsigned there)
@@ -150,6 +150,15 @@ gh release edit vX.Y.Z --repo ezzeldinzozz-svg/browser --draft=false --latest
 ```
  Electron is pinned (currently 44.7.0): bump patch versions
 regularly for security fixes, then release.
+
+## CI (GitHub Actions)
+
+`.github/workflows/build.yml` runs on every push to `main` and on pull requests: it builds the
+Windows installer (`Browser-Setup-<version>.exe`) and the Linux AppImage + `.deb` on real
+runners, starts each build with `scripts/smoke-test.js` (toolbar, new tab, extension element,
+navigation, API isolation, settings, ad-block lists), and uploads the packages as run artifacts.
+macOS is still built and released locally (`npm run release`) so the signing keys stay on the Mac.
+Windows/Linux packages aren't attached to releases or auto-updated yet.
 
 ## Testing notes
 
