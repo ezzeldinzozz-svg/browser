@@ -37,6 +37,44 @@ async function toolbar(expression) {
   });
 }
 
+const { execFileSync } = require('child_process');
+const crypto = require('crypto');
+const { version: expectedVersion } = require('../package.json');
+
+function poll(what, test, seconds) {
+  return (async () => {
+    for (let i = 0; i < seconds; i++) {
+      try {
+        const result = test();
+        if (result) return result;
+      } catch {
+        // not yet
+      }
+      await sleep(1000);
+    }
+    throw new Error(`timed out waiting for: ${what}`);
+  })();
+}
+
+async function verifyUpdated() {
+  if (process.platform === 'win32') {
+    const installed = await poll('the new version to be installed', () => {
+      const v = execFileSync('powershell.exe', ['-NoProfile', '-Command', `(Get-Item '${exe}').VersionInfo.ProductVersion`], { encoding: 'utf8' }).trim();
+      return v.startsWith(expectedVersion) ? v : null;
+    }, 180);
+    console.log(`installed version is now ${installed}`);
+    await poll('the new version to start', () => /Browser\.exe/i.test(execFileSync('tasklist', ['/FI', 'IMAGENAME eq Browser.exe'], { encoding: 'utf8' })), 60);
+  } else {
+    const sha = (f) => crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
+    const update = fs.readdirSync(serveDir).find((f) => f.endsWith('.AppImage'));
+    const expected = sha(path.join(serveDir, update));
+    await poll('the AppImage to be replaced', () => sha(exe) === expected, 120);
+    console.log('the AppImage was replaced with the new version');
+    await poll('the new version to start', () => execFileSync('pgrep', ['-f', exe], { encoding: 'utf8' }).trim(), 60);
+  }
+  console.log('the new version is running');
+}
+
 async function main() {
   const child = spawn(exe, [`--remote-debugging-port=${PORT}`, '--use-mock-keychain'], {
     env: {
@@ -69,7 +107,10 @@ async function main() {
       for (let j = 0; j < 60 && !exited; j++) await sleep(1000);
       if (!exited) throw new Error('app did not exit after Restart to update');
       console.log('old version exited; the updater takes over');
-      process.exit(0); // don't wait on anything the old app left running
+      // Stay in this step until the new version is in place and running: CI runners (Windows
+      // job objects) kill whatever a step started once it ends, which would kill the updater.
+      await verifyUpdated();
+      process.exit(0); // don't wait on anything the apps leave running
     }
   }
   child.kill();
