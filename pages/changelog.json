@@ -15,7 +15,8 @@
     "Import history from Chrome, Brave, Edge, Vivaldi or Arc, and export all your data",
     "Security: weekly checks for Electron security fixes, and urgent fixes install within minutes",
     "Customize the new tab page: a background color or your own image, pinned and custom shortcuts with site icons, and hide shortcuts or bookmarks",
-    "Address autofill: save your addresses and fill name, email, phone and address fields with one click"
+    "Address autofill: save your addresses and fill name, email, phone and address fields with one click",
+    "Profiles: keep work and personal browsing completely separate, each with its own color"
   ],
   "0.19.0": [
     "Theme setting: match the system, dark or light",

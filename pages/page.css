@@ -330,3 +330,7 @@ body.bg-color.bg-light { --fg: #17141f; --dim: #4a4656; --card: rgba(255, 255, 2
 .address-form input { height: 36px; font-size: 13.5px; }
 .addr-row { display: flex; gap: 8px; }
 .address-form .buttons { justify-content: flex-end; margin-top: 4px; }
+
+/* settings: profiles */
+.profile-row .profile-dot { width: 26px; height: 26px; padding: 0; border-radius: 50%; border: 2px solid var(--card); box-shadow: 0 0 0 1px var(--border-strong); flex: none; }
+.profile-row .profile-name { height: 32px; max-width: 280px; font-size: 14px; }

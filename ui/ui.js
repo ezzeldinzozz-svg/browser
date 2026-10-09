@@ -189,6 +189,12 @@ function render(state) {
   $('media').hidden = lastMedia.length === 0;
   $('media').classList.toggle('on', lastMedia.some((m) => m.playing));
   if (!$('sitepopup').hidden && $('sitepopup').classList.contains('media')) renderMediaPopup();
+  if (state.profile) {
+    $('profile-initial').textContent = state.profile.initial;
+    $('profile').style.setProperty('--profile-color', state.profile.color);
+    $('profile').title = `Profile: ${state.profile.name}`;
+    $('profile').ariaLabel = `Profile ${state.profile.name}. Switch or add profiles`;
+  }
   $('reader').hidden = !state.reader;
   $('reader').classList.toggle('on', state.reader === 'on');
   $('reader').title = state.reader === 'on' ? 'Leave reader mode' : 'Reader mode';
@@ -1205,3 +1211,5 @@ $('dp-connect').addEventListener('click', () => deviceChoice && closeDevicePicke
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape' && devicePick) closeDevicePicker(null);
 });
+
+$('profile').addEventListener('click', () => api.profileMenu());

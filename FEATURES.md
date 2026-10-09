@@ -24,7 +24,7 @@ Edit freely: move lines between sections, delete what you don't want, add your o
 
 ## To do — should have
 
-- [ ] Profiles: separate data, cookies, permissions and extensions per profile; profile switcher; window color per profile
+- [x] Profiles: everything separate per profile (each runs as its own Operecs process with its own folder); profile button with the profile's color in the toolbar; add / rename / recolor / delete in Settings. Each open profile has its own Dock icon
 - [x] Address & contact form autofill (not passwords): pick a saved address under a focused field; offered to save on submit; Settings → Addresses
 - [x] Print preview with page range and layout — on Mac the system print panel provides it (preview, pages, orientation, scale, Save as PDF); a built-in preview is only needed for Windows/Linux (parked)
 - [x] New tab: background image or color, show/hide shortcuts and bookmarks, site icons on tiles, pin / edit / remove / add shortcuts (Customize button)

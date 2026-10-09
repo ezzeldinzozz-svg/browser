@@ -632,3 +632,57 @@ document.getElementById('address-form').addEventListener('submit', async (e) => 
   e.target.hidden = true;
 });
 browserAPI.getAddresses().then(renderAddresses);
+
+// ---- profiles
+function renderProfiles({ list, current, colors }) {
+  const box = document.getElementById('profile-list');
+  box.textContent = '';
+  for (const p of list) {
+    const row = document.createElement('div');
+    row.className = 'row profile-row';
+    const dot = document.createElement('button');
+    dot.className = 'profile-dot';
+    dot.style.background = p.color;
+    dot.title = 'Change color';
+    dot.setAttribute('aria-label', `Change color of ${p.name}`);
+    dot.addEventListener('click', async () => {
+      const next = colors[(colors.indexOf(p.color) + 1) % colors.length];
+      renderProfiles(await browserAPI.updateProfile(p.id, { color: next }));
+    });
+    const name = document.createElement('input');
+    name.value = p.name;
+    name.setAttribute('aria-label', 'Profile name');
+    name.className = 'profile-name';
+    name.addEventListener('change', async () => renderProfiles(await browserAPI.updateProfile(p.id, { name: name.value })));
+    const main = document.createElement('div');
+    main.className = 'main';
+    main.append(name);
+    row.append(dot, main);
+    if (p.id === current) {
+      const here = document.createElement('span');
+      here.className = 'hint';
+      here.textContent = 'This window';
+      row.append(here);
+    } else {
+      const open = document.createElement('button');
+      open.textContent = 'Open';
+      open.addEventListener('click', () => browserAPI.openProfile(p.id));
+      row.append(open);
+    }
+    if (p.id !== 'main' && p.id !== current) {
+      const remove = document.createElement('button');
+      remove.textContent = 'Delete';
+      remove.addEventListener('click', async () => renderProfiles(await browserAPI.removeProfile(p.id)));
+      row.append(remove);
+    }
+    box.append(row);
+  }
+}
+document.getElementById('profile-add').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const input = document.getElementById('profile-name');
+  if (!input.value.trim()) return input.focus();
+  renderProfiles(await browserAPI.addProfile(input.value));
+  input.value = '';
+});
+browserAPI.getProfiles().then(renderProfiles);

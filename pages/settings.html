@@ -204,6 +204,14 @@
       <select id="perm-add-value" aria-label="Allow or block"><option value="allow">Allow</option><option value="block">Block</option></select>
       <button type="submit">Add exception</button>
     </form>
+    <h2 id="profiles">Profiles</h2>
+    <p class="hint">Each profile has its own history, bookmarks, extensions, cookies, settings and addresses — for example one for work and one for personal browsing. Profiles open in their own windows.</p>
+    <div id="profile-list"></div>
+    <form id="profile-add" class="perm-add">
+      <input id="profile-name" aria-label="New profile name" placeholder="New profile name, e.g. Work" autocomplete="off" spellcheck="false">
+      <button type="submit">Add profile</button>
+    </form>
+
     <h2>Addresses</h2>
     <p class="hint">Fill in address and contact forms with one click: focus a field like "Name" or "Street" and pick an address. Operecs offers to save one when you send a form. Passwords and cards come from your password-manager extension.</p>
     <div id="addresses"></div>

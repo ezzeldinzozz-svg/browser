@@ -659,6 +659,10 @@ function sendTabs(w) {
     }),
     media: mediaTabs(w),
     hiddenActions: store.data.settings.hiddenActions || [],
+    profile: (() => {
+      const p = profileInfo();
+      return { name: p.name, color: p.color, initial: (p.name.trim()[0] || 'P').toUpperCase(), many: readProfiles().length > 1 };
+    })(),
   });
 }
 
@@ -799,7 +803,7 @@ function createWindow({ private: isPrivate = false, session: saved = null, ses: 
     ...restoredBounds(saved),
     minWidth: 480,
     minHeight: 320,
-    title: isPrivate ? 'Operecs — Private' : 'Operecs',
+    title: isPrivate ? 'Operecs — Private' : readProfiles().length > 1 ? `Operecs — ${profileInfo().name}` : 'Operecs',
     backgroundColor: canvasColor(isPrivate),
     // The tab strip is the title bar: traffic lights inset on macOS, overlay buttons on Windows.
     ...(isMac ? { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 15, y: 13 } } : {}),
@@ -3868,6 +3872,45 @@ function setupIpc() {
   handle('tab:move', fromChrome, (w, id, index) => moveTab(w, id, index));
   handle('tab:tear-off', fromChrome, (w, id) => tearOffTab(w, id));
   handle('device:choose', fromChrome, (w, pickId, deviceId) => finishDeviceChooser(w, pickId, deviceId || null));
+  handle('profile:menu', fromChrome, (w) => showProfileMenu(w));
+  const profileList = () => ({ list: readProfiles(), current: currentProfile, colors: PROFILE_COLORS });
+  handle('profiles:list', fromInternal, () => profileList());
+  handle('profiles:add', fromInternal, (_tab, name, color) => {
+    addProfile(name, color);
+    sendAll();
+    return profileList();
+  });
+  handle('profiles:update', fromInternal, (_tab, id, changes = {}) => {
+    const list = readProfiles();
+    const p = list.find((x) => x.id === id);
+    if (p) {
+      if (typeof changes.name === 'string' && changes.name.trim()) p.name = changes.name.trim().slice(0, 40);
+      if (PROFILE_COLORS.includes(changes.color)) p.color = changes.color;
+      writeProfiles(list);
+      sendAll();
+    }
+    return profileList();
+  });
+  handle('profiles:open', fromInternal, (_tab, id) => openProfile(String(id)));
+  handle('profiles:remove', fromInternal, async (tab, id) => {
+    id = String(id);
+    if (id === 'main' || id === currentProfile) return profileList();
+    const p = readProfiles().find((x) => x.id === id);
+    if (!p) return profileList();
+    const { response } = await dialog.showMessageBox(tab.w.win, {
+      type: 'warning',
+      message: `Delete the profile \u201c${p.name}\u201d?`,
+      detail: 'Its history, bookmarks, passwords in extensions, cookies and settings are deleted from this computer. Close its windows first.',
+      buttons: ['Delete Profile', 'Cancel'],
+      defaultId: 1,
+      cancelId: 1,
+    });
+    if (response !== 0) return profileList();
+    writeProfiles(readProfiles().filter((x) => x.id !== id));
+    await fs.promises.rm(profileDir(id), { recursive: true, force: true }).catch(() => {});
+    sendAll();
+    return profileList();
+  });
   handle('media:toggle', fromChrome, (w, id) => {
     const tab = allTabs().find((t) => t.id === id && t.w.private === w.private);
     if (tab) return toggleMedia(tab);
@@ -4510,6 +4553,72 @@ async function serveInternal(request) {
 if (process.env.BROWSER_PROFILE_DIR) app.setPath('userData', path.resolve(process.env.BROWSER_PROFILE_DIR));
 else if (!app.isPackaged) app.setPath('userData', path.join(app.getPath('appData'), 'Browser Dev'));
 
+// ---------------------------------------------------------------- profiles
+
+// Each extra profile is its own folder (<main profile>/Profiles/<id>) and runs as its own
+// Operecs process (`--profile=<id>`), so cookies, history, bookmarks, extensions, settings and
+// addresses are completely separate. profiles.json in the main profile lists them.
+const MAIN_USER_DATA = app.getPath('userData');
+const PROFILES_FILE = path.join(MAIN_USER_DATA, 'profiles.json');
+const PROFILE_COLORS = ['#9b6cff', '#4f8cff', '#2fb67c', '#f2994a', '#eb5757', '#e35d9b', '#12a4b8', '#8d8d99'];
+
+let profilesCache = null; // { mtime, list }; another profile's process may change the file
+function readProfiles() {
+  let mtime = 0;
+  try {
+    mtime = fs.statSync(PROFILES_FILE).mtimeMs;
+  } catch {
+    mtime = 0;
+  }
+  if (profilesCache && profilesCache.mtime === mtime) return profilesCache.list.map((p) => ({ ...p }));
+  let list = [];
+  try {
+    list = JSON.parse(fs.readFileSync(PROFILES_FILE, 'utf8'));
+  } catch {
+    list = [];
+  }
+  list = (Array.isArray(list) ? list : []).filter((p) => p && /^[a-z0-9-]{1,40}$/.test(p.id) && typeof p.name === 'string');
+  if (!list.some((p) => p.id === 'main')) list.unshift({ id: 'main', name: 'Personal', color: PROFILE_COLORS[0] });
+  profilesCache = { mtime, list };
+  return list.map((p) => ({ ...p }));
+}
+function writeProfiles(list) {
+  fs.mkdirSync(MAIN_USER_DATA, { recursive: true });
+  fs.writeFileSync(PROFILES_FILE, JSON.stringify(list, null, 2));
+}
+const profileDir = (id) => (id === 'main' ? MAIN_USER_DATA : path.join(MAIN_USER_DATA, 'Profiles', id));
+
+const PROFILE_ARG = (process.argv.find((a) => a.startsWith('--profile=')) || '').slice('--profile='.length);
+const currentProfile = PROFILE_ARG && PROFILE_ARG !== 'main' && readProfiles().some((p) => p.id === PROFILE_ARG) ? PROFILE_ARG : 'main';
+if (currentProfile !== 'main') app.setPath('userData', profileDir(currentProfile));
+const profileInfo = () => readProfiles().find((p) => p.id === currentProfile) || { id: 'main', name: 'Personal', color: PROFILE_COLORS[0] };
+
+// Opens a profile's window: here for this profile, otherwise by starting (or waking) its process.
+function openProfile(id) {
+  if (id === currentProfile) return void createWindow();
+  if (!readProfiles().some((p) => p.id === id)) return;
+  const args = [...(app.isPackaged ? [] : [app.getAppPath()]), ...(id === 'main' ? [] : [`--profile=${id}`])];
+  require('child_process').spawn(process.execPath, args, { detached: true, stdio: 'ignore' }).unref();
+}
+
+function addProfile(name, color) {
+  const list = readProfiles();
+  const id = `p-${Date.now().toString(36)}`;
+  list.push({ id, name: String(name || 'Profile').trim().slice(0, 40) || 'Profile', color: PROFILE_COLORS.includes(color) ? color : PROFILE_COLORS[list.length % PROFILE_COLORS.length] });
+  writeProfiles(list);
+  return id;
+}
+
+function showProfileMenu(w) {
+  const list = readProfiles();
+  Menu.buildFromTemplate([
+    ...list.map((p) => ({ label: p.name, type: 'checkbox', checked: p.id === currentProfile, click: () => openProfile(p.id) })),
+    { type: 'separator' },
+    { label: 'Add Profile…', click: () => openInternalPage(w, 'settings') },
+    { label: 'Manage Profiles…', click: () => openInternalPage(w, 'settings') },
+  ]).popup({ window: w.win });
+}
+
 // Settings that must be applied before Electron starts, read straight from the profile.
 function readEarlySettings() {
   try {
@@ -4657,7 +4766,8 @@ app.whenReady().then(() => {
       { program: process.execPath, arguments: '--private-window', iconPath: process.execPath, iconIndex: 0, title: 'New Private Window', description: 'Open a private window' },
     ]);
   }
-  updater.start(onUpdateState);
+  // Only the main profile's process updates the app; the others just run the new version later.
+  if (currentProfile === 'main') updater.start(onUpdateState);
 });
 
 // A critical (security) update: ask to restart now; restart by itself 10 minutes later.
