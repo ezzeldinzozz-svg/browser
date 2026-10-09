@@ -22,6 +22,7 @@ async function loadSettings() {
   document.getElementById('startup-pages-box').hidden = s.startupMode !== 'pages';
   document.getElementById('startup-pages').value = (s.startupPages || []).join('\n');
   document.getElementById('show-home').checked = s.showHomeButton;
+  document.getElementById('confirm-close').checked = s.confirmClose;
   document.getElementById('home-page').value = s.homePage || '';
   if (!engine.options.length) {
     for (const e of s.searchEngines) engine.append(new Option(e.name, e.id));
@@ -281,3 +282,4 @@ document.getElementById('home-page').addEventListener('change', (e) => {
   e.target.value = v;
   browserAPI.setSetting('homePage', v);
 });
+document.getElementById('confirm-close').addEventListener('change', (e) => browserAPI.setSetting('confirmClose', e.target.checked));

@@ -325,6 +325,11 @@ function renderSuggest(engine) {
       title.textContent = go ? r.text : `${r.text}`;
       url.textContent = go ? '' : `— Search ${engine}`;
       url.style.color = 'var(--fg-dim)';
+    } else if (r.kind === 'tab') {
+      icon.textContent = '\u29C9';
+      title.textContent = r.title;
+      url.textContent = `\u2014 Switch to tab`;
+      url.style.color = 'var(--fg-dim)';
     } else {
       icon.textContent = r.bookmarked ? '★' : '◷';
       title.textContent = r.title;
@@ -349,6 +354,7 @@ function renderSuggest(engine) {
 }
 
 let lastEngine = '';
+let inlineUrl = null;
 async function updateSuggestions(allowInline) {
   const seq = ++suggestSeq;
   const text = typed;
@@ -356,11 +362,17 @@ async function updateSuggestions(allowInline) {
   const res = await api.suggest(text);
   if (seq !== suggestSeq || document.activeElement !== address) return; // stale
   lastEngine = res.engine;
+  inlineUrl = null;
   if (allowInline && res.inline && res.inline.toLowerCase().startsWith(text.toLowerCase())) {
     address.value = text + res.inline.slice(text.length);
     address.setSelectionRange(text.length, address.value.length);
+    inlineUrl = res.items[0] ? res.items[0].url : null; // the page the completion came from
   }
-  rows = [{ kind: 'typed', text: address.value }, ...res.items.map((p) => ({ kind: 'page', ...p }))];
+  rows = [
+    { kind: 'typed', text: address.value },
+    ...(res.tabs || []).map((t) => ({ kind: 'tab', ...t })),
+    ...res.items.map((p) => ({ kind: 'page', ...p })),
+  ];
   // don't list the inline-completed page twice
   rows = rows.filter((r, i) => i === 0 || !sameAddress(r.url, rows[0].text));
   selected = 0;
@@ -371,7 +383,8 @@ const bare = (u) => String(u).replace(/^https?:\/\//i, '').replace(/^www\./i, ''
 const sameAddress = (url, text) => bare(url) === bare(text);
 
 function navigate(row) {
-  api.go(row.kind === 'page' ? row.url : row.text);
+  if (row.kind === 'tab') api.switchToTab(row.tabId);
+  else api.go(row.kind === 'page' ? row.url : row.text);
   closeSuggest();
   address.blur();
 }
@@ -390,11 +403,11 @@ address.addEventListener('keydown', (e) => {
     e.preventDefault();
     selected = (selected + (e.key === 'ArrowDown' ? 1 : -1) + rows.length) % rows.length;
     const r = rows[selected];
-    address.value = r.kind === 'page' ? r.url : r.text;
+    address.value = r.kind === 'page' ? r.url : r.kind === 'tab' ? r.display : r.text;
     renderSuggest(lastEngine);
   } else if (e.key === 'Enter') {
     e.preventDefault();
-    if (open && rows[selected] && rows[selected].kind === 'page') navigate(rows[selected]);
+    if (open && rows[selected] && rows[selected].kind !== 'typed') navigate(rows[selected]);
     else navigate({ kind: 'typed', text: address.value });
   } else if (e.key === 'Escape') {
     if (open) {
@@ -404,6 +417,12 @@ address.addEventListener('keydown', (e) => {
       address.value = shownUrl;
       address.blur();
     }
+  } else if (e.key === 'Delete' && e.shiftKey && open && rows[selected] && (rows[selected].kind === 'page' ? !rows[selected].bookmarked : selected === 0 && inlineUrl)) {
+    // Shift+Delete removes the selected history suggestion (or the page behind the inline completion)
+    e.preventDefault();
+    api.removeSuggestion(rows[selected].kind === 'page' ? rows[selected].url : inlineUrl);
+    address.value = typed;
+    updateSuggestions(false);
   } else if (e.key === 'Delete' || e.key === 'Backspace') {
     // first Backspace removes the inline completion, like other browsers
     if (address.selectionStart !== address.selectionEnd && address.selectionEnd === address.value.length && address.value !== typed) {
@@ -880,3 +899,9 @@ document.addEventListener('keydown', (e) => {
 $('home').addEventListener('click', () => api.goHome());
 $('restore-yes').addEventListener('click', () => api.restorePages());
 $('restore-no').addEventListener('click', () => api.dismissRestore());
+
+// Right-click in the address bar: edit menu with Paste and Go (built by the main process).
+address.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  api.addressMenu();
+});

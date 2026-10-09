@@ -112,6 +112,7 @@ class Store {
       adblock: true,
       searchEngine: 'duckduckgo',
       showBookmarksBar: true,
+      confirmClose: true, // "Close 5 tabs?" / "Quit with 8 tabs open?"
       askDownloadLocation: false,
       downloadDir: null, // null = the OS Downloads folder
       ...this.data.settings,
@@ -275,10 +276,11 @@ function sendTabs(w) {
       blocked: current ? current.blocked : 0,
     },
     tabs: w.tabs.map((t) => {
-      const url = t.wc.getURL();
+      const pendingEntry = t.pending && t.pending.entries[t.pending.index];
+      const url = pendingEntry ? pendingEntry.url : t.wc.getURL();
       return {
         id: t.id,
-        title: t.wc.getTitle() || displayUrl(url) || 'New Tab',
+        title: (pendingEntry ? pendingEntry.title : t.wc.getTitle()) || displayUrl(url) || 'New Tab',
         url: displayUrl(url),
         loading: t.wc.isLoading(),
         favicon: t.favicon,
@@ -416,7 +418,24 @@ function createWindow({ private: isPrivate = false, session: saved = null, ses: 
   if (saved && saved.maximized) win.maximize();
   // Leaving window fullscreen (green button, F11) also ends a page's video fullscreen.
   win.on('leave-full-screen', () => exitFullscreen(activeTab(w)));
-  win.on('close', () => onWindowClose(w));
+  win.on('close', (e) => {
+    if (!quitting && !quitConfirmed && !w.closeConfirmed && store.data.settings.confirmClose && w.tabs.length > 1) {
+      e.preventDefault();
+      confirmClosing(w.win, `Close ${w.tabs.length} tabs?`, 'Close Window').then((ok) => {
+        if (!ok) return;
+        w.closeConfirmed = true;
+        w.win.close();
+      });
+      return;
+    }
+    onWindowClose(w);
+  });
+  // macOS "swipe between pages" (three-finger swipe setting)
+  win.on('swipe', (_e, direction) => {
+    const tab = activeTab(w);
+    if (tab && direction === 'right') tab.wc.navigationHistory.goBack();
+    if (tab && direction === 'left') tab.wc.navigationHistory.goForward();
+  });
   win.on('closed', () => onWindowClosed(w));
 
   const statusView = new WebContentsView({
@@ -431,7 +450,7 @@ function createWindow({ private: isPrivate = false, session: saved = null, ses: 
 
   layout(w);
   if (saved && saved.tabs.length) {
-    for (const h of saved.tabs) createTab(w, h.entries[h.index].url, { background: true, history: h });
+    for (const h of saved.tabs) createTab(w, h.entries[h.index].url, { background: true, history: h, lazy: true });
     selectTab(w, w.tabs[Math.min(saved.active, w.tabs.length - 1)].id);
   } else if (!empty) {
     createTab(w, internalURL('newtab'));
@@ -447,6 +466,23 @@ function restoredBounds(saved) {
   const area = screen.getDisplayMatching(b).workArea;
   const visible = b.x < area.x + area.width - 100 && b.x + b.width > area.x + 100 && b.y >= area.y - 10 && b.y < area.y + area.height - 100;
   return visible ? b : { width: b.width, height: b.height };
+}
+
+// Resolves true to go ahead. "Don't ask again" turns the confirmation off in Settings.
+async function confirmClosing(parent, message, action) {
+  const { response, checkboxChecked } = await dialog.showMessageBox(parent, {
+    type: 'question',
+    message,
+    buttons: [action, 'Cancel'],
+    defaultId: 0,
+    cancelId: 1,
+    checkboxLabel: "Don't ask again",
+  });
+  if (checkboxChecked && response === 0) {
+    store.data.settings.confirmClose = false;
+    store.save();
+  }
+  return response === 0;
 }
 
 function onWindowClose(w) {
@@ -527,7 +563,8 @@ function configureSession(ses) {
 // options.background: open without switching to it
 // options.after: place right after this tab (links opened from a page)
 // options.history: { entries, index } to restore back/forward history instead of loading url
-function createTab(w, url, { background = false, after = null, history = null } = {}) {
+// options.lazy: with history, don't load until the tab is first selected (restored sessions)
+function createTab(w, url, { background = false, after = null, history = null, lazy = false } = {}) {
   const view = new WebContentsView({
     webPreferences: {
       session: w.ses,
@@ -661,7 +698,9 @@ function createTab(w, url, { background = false, after = null, history = null } 
   });
 
   layout(w);
-  if (history && history.entries.length) {
+  if (history && history.entries.length && lazy && background) {
+    tab.pending = history; // loaded by selectTab
+  } else if (history && history.entries.length) {
     wc.navigationHistory.restore(history).catch(() => wc.loadURL(url).catch(() => {}));
   } else {
     wc.loadURL(url).catch(() => {});
@@ -715,6 +754,11 @@ function selectTab(w, id) {
     w.statusText = '';
   }
   w.activeId = id;
+  if (tab.pending) {
+    const history = tab.pending;
+    tab.pending = null;
+    tab.wc.navigationHistory.restore(history).catch(() => tab.wc.loadURL(history.entries[history.index].url).catch(() => {}));
+  }
   for (const t of w.tabs) t.view.setVisible(t.id === id);
   layout(w);
   tab.wc.focus();
@@ -1102,6 +1146,7 @@ function updateHistoryTitle(tab) {
 
 // A tab's back/forward history, trimmed for storage. Error pages restore as their original URL.
 function tabHistory(tab) {
+  if (tab.pending) return { ...tab.pending, pinned: tab.pinned }; // restored but never opened
   if (tab.wc.isDestroyed()) return null;
   const nav = tab.wc.navigationHistory;
   let entries = nav.getAllEntries().map((e) => {
@@ -1863,6 +1908,100 @@ function suggestions(text) {
   };
 }
 
+// Open tabs (same kind of window: normal or private) matching what's typed: "Switch to tab".
+function openTabSuggestions(w, text) {
+  const q = text.trim().toLowerCase();
+  if (q.length < 2) return [];
+  const current = activeTab(w);
+  const results = [];
+  for (const win of windows.filter((x) => x.private === w.private)) {
+    for (const t of win.tabs) {
+      if (t === current) continue;
+      const entry = t.pending && t.pending.entries[t.pending.index];
+      const url = entry ? entry.url : t.wc.getURL();
+      const title = (entry ? entry.title : t.wc.getTitle()) || url;
+      if (!isWeb(url)) continue;
+      if (title.toLowerCase().includes(q) || url.toLowerCase().includes(q)) {
+        results.push({ tabId: t.id, title, display: url.replace(/^https?:\/\/(www\.)?/, '') });
+      }
+    }
+  }
+  return results.slice(0, 3);
+}
+
+function switchToTab(w, tabId) {
+  const tab = allTabs().find((t) => t.id === tabId && t.w.private === w.private);
+  if (!tab) return;
+  selectTab(tab.w, tab.id);
+  tab.w.win.focus();
+}
+
+// Cmd/Ctrl+Shift+A: every open tab, grouped by window.
+function showTabSearch(w) {
+  const groups = windows
+    .filter((x) => x.private === w.private && liveWindow(x))
+    .map((x, i) => [
+      ...(i ? [{ type: 'separator' }] : []),
+      ...x.tabs.map((t) => {
+        const entry = t.pending && t.pending.entries[t.pending.index];
+        const title = (entry ? entry.title : t.wc.getTitle()) || displayUrl(entry ? entry.url : t.wc.getURL()) || 'New Tab';
+        return { label: trimLabel(title, 60), type: 'checkbox', checked: x === w && t.id === w.activeId, click: () => switchToTab(w, t.id) };
+      }),
+    ]);
+  Menu.buildFromTemplate(groups.flat()).popup({ window: w.win });
+}
+
+// Right-click in the address bar: the edit menu plus Paste and Go / Paste and Search.
+async function showAddressMenu(w) {
+  const wc = w.chromeView.webContents;
+  const clip = String((await clipboard.readText()) || '').trim(); // async in this Electron
+  const pasteTarget = clip ? resolveInput(clip) : null;
+  const searches = pasteTarget && pasteTarget.startsWith(searchUrl('').split('?')[0]) && !/^https?:\/\//i.test(clip);
+  Menu.buildFromTemplate([
+    { label: 'Undo', click: () => wc.undo() },
+    { type: 'separator' },
+    { label: 'Cut', click: () => wc.cut() },
+    { label: 'Copy', click: () => wc.copy() },
+    { label: 'Paste', enabled: !!clip, click: () => wc.paste() },
+    {
+      label: searches ? `Paste and Search` : 'Paste and Go',
+      enabled: !!pasteTarget,
+      click: () => {
+        const tab = activeTab(w);
+        if (tab && pasteTarget) tab.wc.loadURL(pasteTarget).catch(() => {});
+        tab?.wc.focus();
+      },
+    },
+    { type: 'separator' },
+    { label: 'Select All', click: () => wc.selectAll() },
+  ]).popup({ window: w.win });
+}
+
+// Cmd/Ctrl+S: complete web page, single-file archive or PDF, picked by the file type.
+async function savePageAs(w) {
+  const tab = activeTab(w);
+  if (!tab || tab.pending) return;
+  const title = (tab.wc.getTitle() || 'page').replace(/[\\/:*?"<>|]+/g, ' ').trim().slice(0, 100) || 'page';
+  const { canceled, filePath } = await dialog.showSaveDialog(w.win, {
+    defaultPath: path.join(downloadDir(), `${title}.html`),
+    filters: [
+      { name: 'Web Page, Complete', extensions: ['html'] },
+      { name: 'Web Archive (single file)', extensions: ['mhtml'] },
+      { name: 'PDF', extensions: ['pdf'] },
+    ],
+  });
+  if (canceled || !filePath) return;
+  try {
+    if (/\.pdf$/i.test(filePath)) {
+      await fs.promises.writeFile(filePath, await tab.wc.printToPDF({ printBackground: true }));
+    } else {
+      await tab.wc.savePage(filePath, /\.mhtml?$/i.test(filePath) ? 'MHTML' : 'HTMLComplete');
+    }
+  } catch (err) {
+    dialog.showMessageBox(w.win, { type: 'warning', message: "Couldn't save the page.", detail: err.message });
+  }
+}
+
 // ---------------------------------------------------------------- site info
 
 const SITE_PERMISSIONS = ['camera', 'microphone', 'geolocation', 'notifications', 'clipboard-read', 'openExternal'];
@@ -1964,7 +2103,17 @@ function setupIpc() {
     if (w.overlay) w.win.contentView.addChildView(w.chromeView); // bring the toolbar view to the front
     layout(w);
   });
-  handle('suggest', fromChrome, (_w, text) => suggestions(String(text || '')));
+  handle('suggest', fromChrome, (w, text) => {
+    const result = suggestions(String(text || ''));
+    result.tabs = openTabSuggestions(w, String(text || ''));
+    return result;
+  });
+  handle('suggest:remove', fromChrome, (_w, url) => {
+    store.data.history = store.data.history.filter((h) => h.url !== url);
+    store.save();
+  });
+  handle('tab:switch', fromChrome, (w, tabId) => switchToTab(w, tabId));
+  handle('address:menu', fromChrome, (w) => showAddressMenu(w));
   handle('screen:choose', fromChrome, (w, pickId, sourceId) => resolveScreenPick(w, pickId, sourceId ? String(sourceId) : null));
   handle('site:info', fromChrome, (w) => siteInfo(w));
   handle('site:set-permission', fromChrome, (w, origin, key, value) => {
@@ -2104,7 +2253,7 @@ function setupIpc() {
   });
   handle('data:settings-set', fromInternal, (_tab, key, value) => {
     const valid =
-      (['restoreSession', 'adblock', 'askDownloadLocation', 'blockThirdPartyCookies', 'showHomeButton'].includes(key) &&
+      (['restoreSession', 'adblock', 'askDownloadLocation', 'blockThirdPartyCookies', 'showHomeButton', 'confirmClose'].includes(key) &&
         typeof value === 'boolean') ||
       (key === 'startup' && ['continue', 'newtab', 'pages'].includes(value)) ||
       (key === 'homePage' && typeof value === 'string' && (value === '' || /^(https?|file):\/\//i.test(value))) ||
@@ -2232,7 +2381,7 @@ function buildMenu() {
               { role: 'hideOthers' },
               { role: 'unhide' },
               { type: 'separator' },
-              { role: 'quit' },
+              { label: 'Quit Browser', accelerator: 'Cmd+Q', click: userQuit },
             ],
           },
         ]
@@ -2250,11 +2399,12 @@ function buildMenu() {
         { label: 'Open Location', accelerator: 'CmdOrCtrl+L', click: inWindow(focusAddress) },
         { label: 'Switch Between Toolbar and Page', accelerator: 'F6', click: inWindow(cycleFocus) },
         { type: 'separator' },
+        { label: 'Save Page As…', accelerator: 'CmdOrCtrl+S', click: inWindow(savePageAs) },
         { label: 'Print…', accelerator: 'CmdOrCtrl+P', click: inWindow((w) => printTab(activeTab(w))) },
         { type: 'separator' },
         { label: 'Settings', accelerator: 'CmdOrCtrl+,', click: open('settings') },
         { label: 'Extensions', click: open('extensions') },
-        ...(isMac ? [] : [{ type: 'separator' }, { role: 'quit' }]),
+        ...(isMac ? [] : [{ type: 'separator' }, { label: 'Exit', accelerator: 'Ctrl+Q', click: userQuit }]),
       ],
     },
     {
@@ -2349,6 +2499,7 @@ function buildMenu() {
       submenu: [
         { label: 'Next Tab', accelerator: 'Ctrl+Tab', click: inWindow((w) => cycleTab(w, 1)) },
         { label: 'Previous Tab', accelerator: 'Ctrl+Shift+Tab', click: inWindow((w) => cycleTab(w, -1)) },
+        { label: 'Search Tabs…', accelerator: 'CmdOrCtrl+Shift+A', click: inWindow(showTabSearch) },
         { type: 'separator' },
         ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => ({
           label: n === 9 ? 'Last Tab' : `Tab ${n}`,
@@ -2609,8 +2760,20 @@ app.on('open-file', (e, file) => {
 
 // ---------------------------------------------------------------- updates
 
+let quitConfirmed = false;
+
+// Only a quit the user asks for (Cmd/Ctrl+Q, the Quit menu item) gets "Quit with N tabs?".
+// Shutdown, logout, signals and the updater quit without asking.
+let userQuitRequested = false;
+function userQuit() {
+  userQuitRequested = true;
+  app.quit();
+}
+
 function restartToUpdate() {
-  if (updater.install(true)) app.quit();
+  if (!updater.install(true)) return;
+  quitConfirmed = true; // no "Quit with N tabs?" when restarting for an update
+  app.quit();
 }
 
 async function checkForUpdatesManually() {
@@ -2634,7 +2797,18 @@ async function checkForUpdatesManually() {
   }
 }
 
-app.on('before-quit', () => {
+app.on('before-quit', (e) => {
+  const openTabs = windows.reduce((n, w) => n + w.tabs.length, 0);
+  if (store && userQuitRequested && !quitting && !quitConfirmed && store.data.settings.confirmClose && openTabs > 1) {
+    e.preventDefault();
+    userQuitRequested = false;
+    confirmClosing(focusedWindow()?.win, `Quit with ${openTabs} tabs open?`, 'Quit').then((ok) => {
+      if (!ok) return;
+      quitConfirmed = true;
+      app.quit();
+    });
+    return;
+  }
   if (store) {
     saveSession(); // all windows are still open here, so this captures every one of them
     quitting = true;

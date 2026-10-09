@@ -50,10 +50,11 @@ Ordered by priority, then by what unblocks what.
 - [x] Pin tabs (small, left-aligned, survive restart; Close Other Tabs keeps them)
 - [x] Move tab to new window (context menu; the page keeps running)
 - [ ] **P1** Tear off by dragging a tab out; drag a tab into another window
-- [ ] **P1** Tab search (Cmd/Ctrl+Shift+A style list of open tabs, also matched in the address bar: "Switch to tab")
+- [x] Tab search (Cmd/Ctrl+Shift+A lists open tabs by window) and "Switch to tab" in the address bar
 - [ ] **P1** Close multiple selected tabs (Shift/Cmd-click to select)
 - [ ] **P1** Popups that need `window.opener` (OAuth sign-in) open as real popup windows (known issue)
-- [ ] **P1** Swipe / two-finger gesture for back and forward (macOS `swipe` event)
+- [x] Swipe back/forward on macOS (three-finger "swipe between pages" setting)
+- [ ] **P2** Two-finger swipe with an overscroll arrow (Chrome-style)
 - [ ] **P2** Tab groups (named, colored, collapsible, saved)
 - [ ] **P2** Vertical tabs / sidebar layout (Arc, Edge, Brave)
 - [ ] **P2** Split view (two tabs side by side)
@@ -70,7 +71,7 @@ Ordered by priority, then by what unblocks what.
 - [x] Remember window size/position/maximized per window (only restored if still on a connected display)
 - [x] Window menu (macOS): list windows, Minimize, Zoom, Bring All to Front
 - [ ] **P1** Native-feeling title bar: tabs in the title bar with traffic lights (macOS `titleBarStyle: hiddenInset`), Windows overlay controls
-- [ ] **P1** "Close window with N tabs?" / "Quit with N tabs?" confirmation (opt-out)
+- [x] "Close N tabs?" when closing a window and "Quit with N tabs open?" on Cmd/Ctrl+Q ("Don't ask again", Settings toggle); never on shutdown, logout or updates
 - [ ] **P2** Picture-in-picture-like floating "mini window" for a tab (Arc Little Arc)
 
 ## 3. Address bar (omnibox)
@@ -85,10 +86,10 @@ Ordered by priority, then by what unblocks what.
 - [x] Security indicator: lock for https, "Not secure" for http (certificate failures already stop the page)
 - [x] Show URL without noise when unfocused (hide `https://`, `www.`), full URL on focus; site highlighted (anti-spoofing)
 - [ ] **P1** Search suggestions from the chosen engine (opt-in for privacy)
-- [ ] **P1** "Switch to tab" suggestions for already-open tabs
+- [x] "Switch to tab" suggestions for already-open tabs
 - [ ] **P1** Keyword search / site search shortcuts (`w wikipedia`, Tab-to-search), custom search engines (OpenSearch discovery)
-- [ ] **P1** Paste and Go / Paste and Search in the address bar menu
-- [ ] **P1** Delete a single suggestion (Shift+Delete)
+- [x] Paste and Go / Paste and Search in the address bar menu
+- [x] Delete a single history suggestion (Shift+Delete), including an inline completion
 - [ ] **P1** IDN homograph protection (show punycode for mixed-script domains)
 - [ ] **P2** Calculator / unit conversion / quick answers in suggestions
 - [ ] **P2** Command bar actions (Arc/Chrome: "clear history", "settings" as suggestions)
@@ -210,8 +211,9 @@ Ordered by priority, then by what unblocks what.
 - [x] View page source; Inspect Element
 - [x] PDF viewer: PDFs open in a tab with Electron's built-in viewer (verified)
 - [x] Zoom level indicator in the address bar (click to reset); per-site zoom persists across restarts (not in private windows)
-- [ ] **P1** Save page as (Cmd/Ctrl+S: complete HTML, single file/MHTML, text) via `webContents.savePage`
-- [ ] **P1** Export/Save as PDF (`printToPDF`), also from the print preview
+- [x] Save page as (Cmd/Ctrl+S): complete HTML, single-file web archive (MHTML) or PDF
+- [x] Save as PDF (`printToPDF`) from Save Page As
+- [ ] **P2** Save as PDF from a print preview
 - [ ] **P1** Print preview with page range/layout options (Chrome-style), not just the system dialog
 - [ ] **P1** Reader mode (Mozilla Readability, font/size/theme controls)
 - [ ] **P1** Default font and minimum font size settings; default zoom level
@@ -295,7 +297,7 @@ Ordered by priority, then by what unblocks what.
 - [x] Tab crash page ("This page crashed" with Reload) on `render-process-gone`; unresponsive page dialog (Wait / Exit Page)
 - [x] Crash recovery: after an unclean exit the browser offers "Restore pages" (or restores automatically when continuing where you left off)
 - [ ] **P0** Storage: JSON → SQLite (history/bookmarks/passwords scale, fewer full rewrites)
-- [ ] **P1** Lazy-load restored tabs (only load the active tab at startup)
+- [x] Lazy-load restored tabs (only the active tab of each window loads at startup)
 - [ ] **P1** Tab sleeping / memory saver: discard background tabs after N minutes, exclusions list
 - [ ] **P1** Task manager (per-tab memory/CPU via `app.getAppMetrics`, end process)
 - [ ] **P1** Corrupt-store recovery (keep a backup, don't silently start empty)
