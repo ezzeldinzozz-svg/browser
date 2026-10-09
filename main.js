@@ -2296,6 +2296,7 @@ function upgradeToHttps(details) {
     return null;
   }
   if (localHost(url.hostname) || httpsExceptions.has(url.host)) return null;
+  if (url.hostname === 'neverssl.com') return null; // used on purpose to reach Wi-Fi sign-in pages
   const tab = allTabs().find((t) => !t.wc.isDestroyed() && t.wc.id === details.webContentsId);
   if (tab) tab.httpsUpgrade = { from: details.url, host: url.host };
   url.protocol = 'https:';

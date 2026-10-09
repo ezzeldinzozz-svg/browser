@@ -411,8 +411,9 @@ Ordered by priority, then by what unblocks what.
 - [ ] **P1** JavaScript dialogs styled and tab-modal *(Electron limit: `alert`/`confirm` use native app-modal dialogs and `prompt()` isn't supported; Electron has no hook to replace them)*
 - [x] **P1** Form re-submission warning on reload after POST (Electron used to cancel such reloads silently; we confirm and resend the form data)
 - [x] **P1** Proxy settings (system by default; no proxy, manual server, PAC) in Settings → Privacy
-- [ ] **P1** Captive portal detection (hotel/airport Wi-Fi sign-in)
-- [ ] **P1** Offline page (with a little game is optional)
+- [x] **P1** Captive portal help: error pages for timeouts, unknown hosts and certificate errors offer "Sign in to the network" (opens http://neverssl.com, exempt from HTTPS-Only)
+- [ ] **P2** Automatic captive portal detection (probe on network change)
+- [x] **P1** Offline page: "You're offline" that reloads by itself when the connection is back; clearer pages for unknown hosts, timeouts and proxy failures
 - [ ] **P1** Web Serial/USB/HID/Bluetooth device chooser (`select-bluetooth-device`, `select-hid-device` handlers) or deny with a message
 - [ ] **P1** Google sign-in smoke test (UA spoofing can break any time) *(Electron limit)*
 - [ ] **P2** QR code for the current page
