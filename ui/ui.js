@@ -14,10 +14,10 @@ let dragId = null;
 
 function renderTab(t, isActive) {
   const el = document.createElement('div');
-  el.className = 'tab' + (isActive ? ' active' : '') + (t.pinned ? ' pinned' : '') + (t.sleeping ? ' sleeping' : '');
+  el.className = 'tab' + (isActive ? ' active' : '') + (t.pinned ? ' pinned' : '') + (t.sleeping ? ' sleeping' : '') + (t.multi ? ' multi' : '');
   el.title = t.url && t.url !== t.title ? `${t.title}\n${t.url}` : t.title;
   el.setAttribute('role', 'tab');
-  el.setAttribute('aria-selected', String(isActive));
+  el.setAttribute('aria-selected', String(isActive || !!t.multi));
   el.tabIndex = isActive ? 0 : -1;
   el.setAttribute('aria-label', t.title + (t.audible ? ', playing audio' : '') + (t.muted ? ', muted' : ''));
   el.draggable = true;
@@ -80,7 +80,8 @@ function renderTab(t, isActive) {
       e.preventDefault();
       api.closeTab(t.id);
     } else if (e.button === 0) {
-      api.selectTab(t.id);
+      // Cmd (Mac) / Ctrl-click adds or removes a tab from the selection; Shift-click selects a range
+      api.selectTab(t.id, { toggle: navigator.platform.startsWith('Mac') ? e.metaKey : e.ctrlKey, range: e.shiftKey });
     }
   });
   el.addEventListener('contextmenu', (e) => {

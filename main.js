@@ -89,13 +89,14 @@ const PERM_LABELS = {
   midi: 'use your MIDI devices',
   midiSysex: 'fully control your MIDI devices',
   openExternal: 'open an app on your computer',
+  'automatic-downloads': 'download multiple files',
   // An embedded site (sign-in widget, video player…) asking for its cookies while third-party
   // cookies are blocked (Storage Access API).
   'storage-access': 'use its cookies and site data while embedded on other sites',
   'top-level-storage-access': 'use its cookies and site data while embedded on other sites',
 };
 // Permission types that can be set to Ask or Block for every site in Settings.
-const PERMISSION_DEFAULT_KEYS = ['camera', 'microphone', 'geolocation', 'notifications', 'clipboard-read', 'openExternal'];
+const PERMISSION_DEFAULT_KEYS = ['camera', 'microphone', 'geolocation', 'notifications', 'clipboard-read', 'openExternal', 'automatic-downloads'];
 const PROMPTABLE = new Set(['media', ...Object.keys(PERM_LABELS)]);
 
 const isMac = process.platform === 'darwin';
@@ -226,6 +227,50 @@ function displayUrl(u) {
   if (name === 'error') return readableHost(new URL(u).searchParams.get('url') || '');
   if (name) return `${SCHEME}://${name}`;
   return readableHost(u);
+}
+
+// ---------------------------------------------------------------- cookies and site data
+
+// Groups hosts by site: "mail.google.com" -> "google.com", "news.bbc.co.uk" -> "bbc.co.uk".
+// (A short heuristic, not the full public suffix list.)
+function siteKey(host) {
+  const labels = String(host).replace(/^\./, '').replace(/\.$/, '').toLowerCase().split('.');
+  if (labels.length <= 2 || /^[\d.]+$/.test(host)) return labels.join('.');
+  const [sld, tld] = labels.slice(-2);
+  const take = tld.length === 2 && (sld.length <= 3 || ['gov', 'com', 'net', 'org', 'edu', 'ac', 'co'].includes(sld)) ? 3 : 2;
+  return labels.slice(-take).join('.');
+}
+
+// Sites with cookies, which is what Chromium lets us list (other storage can't be enumerated).
+async function siteDataList(w) {
+  const ses = w.private ? w.ses : session.defaultSession;
+  const sites = new Map();
+  for (const c of await ses.cookies.get({})) {
+    const host = c.domain.replace(/^\./, '');
+    const key = siteKey(host);
+    const entry = sites.get(key) || { site: key, cookies: 0, hosts: new Set() };
+    entry.cookies++;
+    entry.hosts.add(host);
+    sites.set(key, entry);
+  }
+  return [...sites.values()]
+    .map((e) => ({ site: e.site, cookies: e.cookies, hosts: [...e.hosts].sort() }))
+    .sort((a, b) => a.site.localeCompare(b.site));
+}
+
+async function removeSiteData(w, site) {
+  if (!site) return;
+  const ses = w.private ? w.ses : session.defaultSession;
+  const hosts = new Set([site, `www.${site}`]);
+  for (const c of await ses.cookies.get({})) {
+    const host = c.domain.replace(/^\./, '');
+    if (siteKey(host) !== site) continue;
+    hosts.add(host);
+    await ses.cookies.remove(`${c.secure ? 'https' : 'http'}://${host}${c.path || '/'}`, c.name).catch(() => {});
+  }
+  for (const host of hosts) {
+    for (const scheme of ['https', 'http']) await ses.clearStorageData({ origin: `${scheme}://${host}` }).catch(() => {});
+  }
 }
 
 // ---------------------------------------------------------------- international domain names
@@ -391,6 +436,7 @@ function sendTabs(w) {
         canGoBack: canGo(t.wc, 'back'),
         canGoForward: canGo(t.wc, 'forward'),
         pinned: t.pinned,
+        multi: w.multi.size > 1 && w.multi.has(t.id),
         sleeping: !!t.pending,
         capture: captureState(t),
         audible: t.wc.isCurrentlyAudible(),
@@ -491,6 +537,8 @@ function createWindow({ private: isPrivate = false, session: saved = null, ses: 
     private: isPrivate,
     ses,
     closedTabs: [], // most recent last
+    multi: new Set(), // tab ids selected together (Cmd/Ctrl- or Shift-click)
+    multiAnchor: null,
     overlay: false, // toolbar dropdown/popup open
     downloadWarnings: [], // ids of finished risky downloads awaiting Keep/Discard
     restoreOffer: null, // saved windows from a run that crashed
@@ -730,6 +778,7 @@ function createTab(w, url, { background = false, after = null, history = null, l
     favicon: '', // data: URL shown in the tab strip
     faviconSrc: '', // the page's icon URL being fetched
     prompts: [], // pending permission requests
+    pageDownloads: 0, // downloads started since the user last clicked or typed in the page
     auth: [], // pending HTTP sign-in requests
     find: { open: false, text: '', active: 0, matches: 0 },
     fullscreen: false,
@@ -781,6 +830,11 @@ function createTab(w, url, { background = false, after = null, history = null, l
   wc.on('did-stop-loading', () => sendTabs(tab.w));
   wc.on('did-start-navigation', (details) => {
     if (details.isMainFrame && !details.isSameDocument) tab.blocked = 0;
+  });
+  // A page may start one download on its own; more need the user's OK unless they clicked or
+  // typed in between (like Chrome).
+  wc.on('input-event', (_e, input) => {
+    if (input.type === 'mouseDown' || input.type === 'rawKeyDown' || input.type === 'keyDown' || input.type === 'touchStart') tab.pageDownloads = 0;
   });
   wc.on('did-navigate', (_e, u) => {
     if (isWeb(u)) tab.httpsUpgrade = null;
@@ -962,9 +1016,14 @@ async function loadFavicon(tab, url) {
   }
 }
 
-function selectTab(w, id) {
+// keepSelection: leave the multi-tab selection (Cmd/Ctrl- or Shift-click) as it is.
+function selectTab(w, id, keepSelection = false) {
   const tab = getTab(w, id);
   if (!tab) return;
+  if (!keepSelection) {
+    w.multi.clear();
+    w.multiAnchor = null;
+  }
   if (w.activeId !== id) {
     const previous = activeTab(w);
     if (previous) previous.lastShown = Date.now();
@@ -985,9 +1044,48 @@ function selectTab(w, id) {
   saveSession();
 }
 
+// Tabs selected together with Cmd/Ctrl- or Shift-click (only meaningful with 2 or more).
+function selectedTabs(w) {
+  const tabs = w.tabs.filter((t) => w.multi.has(t.id));
+  return tabs.length > 1 ? tabs : [];
+}
+
+// Click with modifiers on a tab: toggle = Cmd/Ctrl, range = Shift (from the anchor tab).
+function clickTab(w, id, mods = {}) {
+  if (!getTab(w, id)) return;
+  if (mods.range) {
+    const anchor = getTab(w, w.multiAnchor) ? w.multiAnchor : w.activeId;
+    const a = w.tabs.findIndex((t) => t.id === anchor);
+    const b = w.tabs.findIndex((t) => t.id === id);
+    w.multi = new Set(w.tabs.slice(Math.min(a, b), Math.max(a, b) + 1).map((t) => t.id));
+    w.multiAnchor = anchor;
+    return selectTab(w, id, true);
+  }
+  if (mods.toggle) {
+    if (w.multi.size === 0) w.multi.add(w.activeId);
+    if (w.multi.has(id) && w.multi.size > 1) {
+      w.multi.delete(id);
+      if (id === w.activeId) return selectTab(w, [...w.multi].pop(), true);
+      return sendTabs(w);
+    }
+    w.multi.add(id);
+    w.multiAnchor = id;
+    return selectTab(w, id, true);
+  }
+  selectTab(w, id);
+}
+
+// Cmd/Ctrl+W: the selected tabs if the active tab is one of them, else just the active tab.
+function closeActiveTabs(w) {
+  const many = selectedTabs(w);
+  if (many.length && many.some((t) => t.id === w.activeId)) closeTabs(w, (t) => !many.includes(t));
+  else closeTab(w, w.activeId);
+}
+
 function closeTab(w, id) {
   const idx = w.tabs.findIndex((t) => t.id === id);
   if (idx === -1) return;
+  w.multi.delete(id);
   const [tab] = w.tabs.splice(idx, 1);
   rememberClosedTab(w, tab, idx);
   dismissPrompts(tab);
@@ -1049,6 +1147,7 @@ function detachTab(tab) {
   const { w } = tab;
   const idx = w.tabs.indexOf(tab);
   w.tabs.splice(idx, 1);
+  w.multi.delete(tab.id);
   dismissPrompts(tab);
   cancelAuth(tab);
   exitFullscreen(tab);
@@ -1059,27 +1158,55 @@ function detachTab(tab) {
 }
 
 function moveTabToNewWindow(tab) {
-  const from = tab.w;
-  if (from.tabs.length < 2) return;
+  moveTabsToNewWindow([tab]);
+}
+
+function moveTabsToNewWindow(tabs) {
+  const from = tabs[0].w;
+  if (from.tabs.length <= tabs.length) return;
+  const wasActive = tabs.find((t) => t.id === from.activeId) || tabs[tabs.length - 1];
   const target = createWindow({ private: from.private, ses: from.private ? from.ses : null, empty: true });
-  detachTab(tab);
-  tab.w = target;
-  tab.openerId = null;
-  target.tabs.push(tab);
+  for (const tab of tabs) {
+    detachTab(tab);
+    tab.w = target;
+    tab.openerId = null;
+    target.tabs.push(tab);
+    target.win.contentView.addChildView(tab.view);
+    if (extensions && !target.private) extensions.addTab(tab.wc, target.win);
+  }
   normalizeOrder(target);
-  target.win.contentView.addChildView(tab.view);
-  if (extensions && !target.private) extensions.addTab(tab.wc, target.win);
   layout(target);
-  selectTab(target, tab.id);
+  selectTab(target, wasActive.id);
 }
 
 function closeTabs(w, keep) {
   for (const t of w.tabs.filter((x) => !keep(x))) closeTab(w, t.id);
 }
 
+function showSelectedTabsMenu(w, tabs) {
+  const n = tabs.length;
+  const allPinned = tabs.every((t) => t.pinned);
+  const allMuted = tabs.every((t) => t.wc.isAudioMuted());
+  Menu.buildFromTemplate([
+    { label: `Reload ${n} Tabs`, click: () => tabs.forEach((t) => (t.pending ? null : t.wc.reload())) },
+    { label: `Duplicate ${n} Tabs`, click: () => tabs.forEach((t) => duplicateTab(t)) },
+    { label: allPinned ? `Unpin ${n} Tabs` : `Pin ${n} Tabs`, click: () => tabs.forEach((t) => setPinned(t, !allPinned)) },
+    {
+      label: allMuted ? `Unmute ${n} Tabs` : `Mute ${n} Tabs`,
+      click: () => tabs.forEach((t) => t.wc.isAudioMuted() === allMuted && toggleMute(t)),
+    },
+    { type: 'separator' },
+    { label: `Move ${n} Tabs to New Window`, enabled: w.tabs.length > n, click: () => moveTabsToNewWindow(tabs) },
+    { type: 'separator' },
+    { label: `Close ${n} Tabs`, click: () => closeTabs(w, (t) => !tabs.includes(t)) },
+  ]).popup({ window: w.win });
+}
+
 function showTabMenu(w, id) {
   const tab = getTab(w, id);
   if (!tab) return;
+  const many = selectedTabs(w);
+  if (many.includes(tab)) return showSelectedTabsMenu(w, many);
   const idx = w.tabs.indexOf(tab);
   const muted = tab.wc.isAudioMuted();
   Menu.buildFromTemplate([
@@ -1883,7 +2010,7 @@ function showPageMenu(tab, params) {
       media.push(
         { type: 'separator' },
         { label: `Open ${kind} in New Tab`, click: () => createTab(w, params.srcURL, { after: tab, background: true }) },
-        { label: `Save ${kind} As…`, enabled: f.canSave !== false, click: () => wc.downloadURL(params.srcURL) },
+        { label: `Save ${kind} As…`, enabled: f.canSave !== false, click: () => userDownload(wc, params.srcURL) },
         { label: `Copy ${kind} Address`, click: () => clipboard.writeText(params.srcURL) },
       );
     }
@@ -1892,7 +2019,7 @@ function showPageMenu(tab, params) {
   if (params.mediaType === 'image' && params.srcURL) {
     const image = [
       { label: 'Copy Image', click: () => wc.copyImageAt(params.x, params.y) },
-      { label: 'Save Image As…', click: () => wc.downloadURL(params.srcURL) },
+      { label: 'Save Image As…', click: () => userDownload(wc, params.srcURL) },
     ];
     if (isWeb(params.srcURL)) {
       image.unshift({ label: 'Open Image in New Tab', click: () => createTab(w, params.srcURL, { after: tab, background: true }) });
@@ -2113,6 +2240,43 @@ function isInsecureDownload(item, wc) {
   });
 }
 
+// Downloads the user started (Save As…, Retry, an allowed prompt) skip the multiple-downloads check.
+const userDownloads = new Set();
+function userDownload(target, url) {
+  userDownloads.add(url);
+  target.downloadURL(url);
+}
+
+// Returns true when the download may go ahead now. Otherwise it's cancelled here, and restarted
+// if the user allows automatic downloads for the site.
+function allowAutomaticDownload(item, wc) {
+  const url = item.getURL();
+  if (userDownloads.delete(url)) return true;
+  const tab = tabOfWc(wc);
+  if (!tab) return true;
+  tab.pageDownloads++;
+  if (tab.pageDownloads <= 1) return true;
+  const origin = originOf(wc.getURL());
+  if (!origin) return true;
+  const decision = decisionFor(tab.w, origin, 'automatic-downloads') || (permissionDefault('automatic-downloads') === 'block' ? 'block' : undefined);
+  if (decision === 'allow') return true;
+  item.cancel();
+  if (decision === 'block') return false;
+  const retry = (ok) => {
+    if (ok && !wc.isDestroyed()) userDownload(wc, url);
+  };
+  const same = tab.prompts.find((p) => p.origin === origin && p.keys.join() === 'automatic-downloads');
+  if (same) same.callbacks.push(retry);
+  else {
+    tab.prompts.push({ id: nextPromptId++, origin, keys: ['automatic-downloads'], scheme: null, callbacks: [retry] });
+    if (tab.id === tab.w.activeId) {
+      layout(tab.w);
+      sendTabs(tab.w);
+    }
+  }
+  return false;
+}
+
 function onWillDownload(_e, item, wc) {
   if (isInsecureDownload(item, wc) && !insecureDownloadsAllowed.delete(item.getURL())) {
     item.cancel();
@@ -2130,11 +2294,12 @@ function onWillDownload(_e, item, wc) {
       .then(({ response }) => {
         if (response !== 1 || wc.isDestroyed()) return;
         insecureDownloadsAllowed.add(url);
-        wc.downloadURL(url);
+        userDownload(wc, url);
       })
       .catch(() => {});
     return;
   }
+  if (!allowAutomaticDownload(item, wc)) return;
   let finalPath = uniqueDownloadPath(item.getFilename() || 'download');
   if (store.data.settings.askDownloadLocation) {
     const owner = tabOfWc(wc)?.w || focusedWindow();
@@ -2483,7 +2648,7 @@ async function savePageAs(w) {
 
 // ---------------------------------------------------------------- site info
 
-const SITE_PERMISSIONS = ['camera', 'microphone', 'geolocation', 'notifications', 'clipboard-read', 'openExternal'];
+const SITE_PERMISSIONS = ['camera', 'microphone', 'geolocation', 'notifications', 'clipboard-read', 'openExternal', 'automatic-downloads'];
 const PERMISSION_NAMES = {
   'storage-access': 'Cookies while embedded',
   'top-level-storage-access': 'Cookies while embedded',
@@ -2493,6 +2658,7 @@ const PERMISSION_NAMES = {
   notifications: 'Notifications',
   'clipboard-read': 'Clipboard',
   openExternal: 'Open apps',
+  'automatic-downloads': 'Automatic downloads',
 };
 
 function siteInfo(w) {
@@ -2584,7 +2750,7 @@ function setupIpc() {
     createTab(w, internalURL('newtab'));
   });
   handle('tab:close', fromChrome, (w, id) => closeTab(w, id));
-  handle('tab:select', fromChrome, (w, id) => selectTab(w, id));
+  handle('tab:select', fromChrome, (w, id, mods) => clickTab(w, id, { toggle: !!(mods && mods.toggle), range: !!(mods && mods.range) }));
   handle('tab:menu', fromChrome, (w, id) => showTabMenu(w, id));
   handle('ui:overlay', fromChrome, (w, open) => {
     w.overlay = !!open;
@@ -2618,6 +2784,12 @@ function setupIpc() {
     else site[key] = value;
     if (Object.keys(site).length === 0) delete perms[origin];
     if (!w.private) store.save();
+  });
+  handle('data:site-data', fromInternal, (tab) => siteDataList(tab.w));
+  handle('data:site-data-remove', fromInternal, (tab, site) => removeSiteData(tab.w, String(site || '')));
+  handle('data:site-data-remove-all', fromInternal, async (tab) => {
+    const ses = tab.w.private ? tab.w.ses : session.defaultSession;
+    await ses.clearStorageData({ storages: ['cookies', 'localstorage', 'indexdb', 'serviceworkers', 'cachestorage', 'filesystem', 'websql', 'shadercache'] });
   });
   handle('site:clear-data', fromChrome, async (w) => {
     const tab = activeTab(w);
@@ -2723,7 +2895,7 @@ function setupIpc() {
   });
   handle('download:retry', fromInternal, (tab, id) => {
     const d = ownDownload(tab, id);
-    if (d && ['cancelled', 'interrupted'].includes(d.state) && isWeb(d.url)) (tab.w.private ? tab.w.ses : session.defaultSession).downloadURL(d.url);
+    if (d && ['cancelled', 'interrupted'].includes(d.state) && isWeb(d.url)) userDownload(tab.w.private ? tab.w.ses : session.defaultSession, d.url);
   });
   handle('download:clear', fromInternal, (tab) => {
     store.data.downloads = store.data.downloads.filter(
@@ -2978,7 +3150,7 @@ function buildMenu() {
         { label: 'New Window', accelerator: 'CmdOrCtrl+N', click: () => createWindow() },
         { label: 'New Private Window', accelerator: 'CmdOrCtrl+Shift+N', click: () => createWindow({ private: true }) },
         { type: 'separator' },
-        { label: 'Close Tab', accelerator: 'CmdOrCtrl+W', click: inWindow((w) => closeTab(w, w.activeId)) },
+        { label: 'Close Tab', accelerator: 'CmdOrCtrl+W', click: inWindow((w) => closeActiveTabs(w)) },
         { label: 'Close Window', accelerator: 'CmdOrCtrl+Shift+W', click: inWindow((w) => w.win.close()) },
         { label: 'Reopen Closed Tab', accelerator: 'CmdOrCtrl+Shift+T', click: inWindow(reopenClosedTab) },
         { label: 'Open Location', accelerator: 'CmdOrCtrl+L', click: inWindow(focusAddress) },
@@ -3292,7 +3464,7 @@ function setupExtensions() {
     selectTab: (wc) => {
       const tab = tabOfWc(wc);
       if (!tab) return;
-      selectTab(tab.w, tab.id);
+      if (tab.w.activeId !== tab.id) selectTab(tab.w, tab.id); // (also called back when we select a tab)
       tab.w.win.focus();
     },
     removeTab: (wc) => {

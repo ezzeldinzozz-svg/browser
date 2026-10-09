@@ -9,6 +9,7 @@ const NAMES = {
   midi: 'MIDI devices',
   midiSysex: 'MIDI full control',
   openExternal: 'Open apps',
+  'automatic-downloads': 'Automatic downloads',
 };
 
 const list = document.getElementById('list');
@@ -375,4 +376,65 @@ document.getElementById('languages').addEventListener('change', async (e) => {
     await browserAPI.setSetting('languages', list);
     loadSettings();
   }
+});
+
+// ---- cookies and site data
+let siteData = null;
+const siteDataBox = document.getElementById('sitedata');
+const siteDataSearch = document.getElementById('sitedata-search');
+
+function renderSiteData() {
+  siteDataBox.textContent = '';
+  if (!siteData) return;
+  const q = siteDataSearch.value.trim().toLowerCase();
+  const shown = siteData.filter((d) => !q || d.site.includes(q) || d.hosts.some((h) => h.includes(q)));
+  document.getElementById('sitedata-all').hidden = siteData.length === 0;
+  if (shown.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.textContent = siteData.length ? 'No matching sites.' : 'No sites have stored cookies.';
+    siteDataBox.append(empty);
+    return;
+  }
+  for (const d of shown.slice(0, 300)) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    const main = document.createElement('div');
+    main.className = 'main t';
+    main.textContent = d.site;
+    const meta = document.createElement('span');
+    meta.className = 'hint';
+    meta.textContent = ` ${d.cookies} cookie${d.cookies === 1 ? '' : 's'}`;
+    main.title = d.hosts.join('\n');
+    main.append(meta);
+    const remove = document.createElement('button');
+    remove.textContent = 'Remove';
+    remove.addEventListener('click', async () => {
+      remove.disabled = true;
+      await browserAPI.removeSiteData(d.site);
+      siteData = siteData.filter((x) => x !== d);
+      renderSiteData();
+    });
+    row.append(main, remove);
+    siteDataBox.append(row);
+  }
+  if (shown.length > 300) {
+    const more = document.createElement('div');
+    more.className = 'empty';
+    more.textContent = `And ${shown.length - 300} more. Search to find a site.`;
+    siteDataBox.append(more);
+  }
+}
+
+async function loadSiteData() {
+  siteData = await browserAPI.getSiteData();
+  document.getElementById('sitedata-load').textContent = 'Refresh';
+  renderSiteData();
+}
+document.getElementById('sitedata-load').addEventListener('click', loadSiteData);
+siteDataSearch.addEventListener('input', () => (siteData ? renderSiteData() : loadSiteData()));
+document.getElementById('sitedata-all').addEventListener('click', async () => {
+  if (!confirm('Remove cookies and site data for every site? This signs you out of all sites.')) return;
+  await browserAPI.removeAllSiteData();
+  loadSiteData();
 });

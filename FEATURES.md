@@ -51,7 +51,7 @@ Ordered by priority, then by what unblocks what.
 - [x] Move tab to new window (context menu; the page keeps running)
 - [ ] **P1** Tear off by dragging a tab out; drag a tab into another window
 - [x] Tab search (Cmd/Ctrl+Shift+A lists open tabs by window) and "Switch to tab" in the address bar
-- [ ] **P1** Close multiple selected tabs (Shift/Cmd-click to select)
+- [x] **P1** Close multiple selected tabs (Shift/Cmd-click to select)
 - [x] Sign-in popups (`window.open` with size features) open as real popup windows that keep `window.opener`; the title shows the site
 - [x] Swipe back/forward on macOS (three-finger "swipe between pages" setting)
 - [ ] **P2** Two-finger swipe with an overscroll arrow (Chrome-style)
@@ -140,7 +140,7 @@ Ordered by priority, then by what unblocks what.
 - [x] Remove a single entry from the downloads list
 - [ ] **P2** Delete the file from disk; drag a finished download into another app
 - [x] **P1** Block downloads from insecure (http) origins on https pages (mixed-content downloads)
-- [ ] **P1** Multiple-automatic-downloads permission prompt
+- [x] **P1** Multiple-automatic-downloads permission prompt
 - [ ] **P2** Malware reputation check for downloads (Web Risk API) *(Electron limit: no free Google Safe Browsing)*
 
 ## 7. Passwords, autofill & passkeys
@@ -182,7 +182,7 @@ Ordered by priority, then by what unblocks what.
 - [ ] **P1** Mixed-content handling / indicator; block insecure forms on https pages
 - [x] Global Privacy Control on by default (Sec-GPC header + `navigator.globalPrivacyControl`), setting to turn off
 - [ ] **P1** Weekly Electron patch bump routine + "update required" kill switch for critical CVEs
-- [ ] **P1** Cookies & site data manager (list by site, remove one, remove all)
+- [x] **P1** Cookies & site data manager (list by site, remove one, remove all)
 - [ ] **P2** Fingerprinting protection (Brave-style farbling of canvas/audio/fonts, reduce UA/client hints)
 - [ ] **P2** Bounce tracking / query-parameter tracker stripping (utm_, fbclid, gclid)
 - [ ] **P2** Cookie consent banner auto-reject (Brave "Block cookie notices")

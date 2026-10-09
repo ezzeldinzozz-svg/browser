@@ -161,6 +161,7 @@ button {
 }
 .tab:hover { background: var(--bg-hover); }
 .tab.active { background: var(--bg-active); color: var(--fg); }
+.tab.multi:not(.active) { background: color-mix(in srgb, var(--bg-active) 65%, transparent); color: var(--fg); }
 .tab img, .tab .spinner { width: 14px; height: 14px; flex: none; }
 .tab .title { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .tab .close {

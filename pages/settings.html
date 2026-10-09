@@ -128,6 +128,15 @@
     <p class="hint">Sites where blocking is turned off (use the shield in the toolbar to change a site):</p>
     <div id="allowlist"></div>
 
+    <h2>Cookies and site data</h2>
+    <p class="hint">Sites that have stored cookies on this computer. Removing a site's data also clears its other storage and signs you out of it.</p>
+    <div class="sitedata-tools">
+      <input id="sitedata-search" type="search" placeholder="Search sites" autocomplete="off" spellcheck="false">
+      <button id="sitedata-load">Show sites</button>
+      <button id="sitedata-all" hidden>Remove all</button>
+    </div>
+    <div id="sitedata"></div>
+
     <h2>Site permissions</h2>
     <p class="hint">What sites may use when they ask. "Ask" shows a prompt; "Block" denies without asking.</p>
     <div id="perm-defaults" class="perm-grid"></div>
