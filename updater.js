@@ -264,43 +264,19 @@ function install(relaunch) {
     ].join('\n');
     detached('/bin/sh', ['-c', script, 'browser-updater', String(process.pid), next, target, relaunch ? '1' : '0', kind]);
   } else {
-    // Windows: once this process is gone, run the installer silently (per-user, no admin).
-    // --force-run starts the new version afterwards.
-    const ps1 = path.join(path.dirname(next), 'install-update.ps1');
-    fs.writeFileSync(
-      ps1,
-      [
-        'param([int]$ProcessId, [string]$Installer, [int]$Relaunch)',
-        // install-update.log next to the installer, for diagnosing failed updates
-        '$log = Join-Path (Split-Path $Installer) "install-update.log"',
-        'function Log($m) { Add-Content -Path $log -Value "$(Get-Date -Format o) $m" }',
-        'Log "waiting for process $ProcessId to exit"',
-        'Wait-Process -Id $ProcessId -ErrorAction SilentlyContinue',
-        'Start-Sleep -Seconds 1',
-        '$installArgs = @("/S", "--updated")',
-        'if ($Relaunch -eq 1) { $installArgs += "--force-run" }',
-        'Log "running $Installer $installArgs"',
-        'try {',
-        '  $p = Start-Process -FilePath $Installer -ArgumentList $installArgs -Wait -PassThru',
-        '  Log "installer exit code $($p.ExitCode)"',
-        '} catch { Log "installer failed: $_" }',
-      ].join('\r\n'),
-    );
+    // Windows: start the installer silently (per-user, no admin) and quit; the installer waits
+    // for / closes the running app itself, then --force-run starts the new version. This is
+    // the same hand-off electron-updater uses.
     const log = path.join(path.dirname(next), 'install-update.log');
     const note = (m) => fs.appendFileSync(log, `${new Date().toISOString()} ${m}\r\n`);
-    note(`starting updater for ${next} (app pid ${process.pid})`);
+    const args = ['--updated', '/S', ...(relaunch ? ['--force-run'] : [])];
     try {
-      const helper = spawn(
-        'powershell.exe',
-        ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden',
-          '-File', ps1, '-ProcessId', String(process.pid), '-Installer', next, '-Relaunch', relaunch ? '1' : '0'],
-        { detached: true, stdio: 'ignore', windowsHide: true },
-      );
-      helper.on('error', (err) => note(`could not start the updater: ${err.message}`));
-      helper.unref();
-      note(`updater started as pid ${helper.pid}`);
+      const installer = spawn(next, args, { detached: true, stdio: 'ignore' });
+      installer.on('error', (err) => note(`could not start the installer: ${err.message}`));
+      installer.unref();
+      note(`started ${next} ${args.join(' ')} as pid ${installer.pid}`);
     } catch (err) {
-      note(`could not start the updater: ${err.message}`);
+      note(`could not start the installer: ${err.message}`);
     }
   }
   return true;
