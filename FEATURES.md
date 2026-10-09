@@ -143,7 +143,10 @@ Ordered by priority, then by what unblocks what.
 ## 7. Passwords, autofill & passkeys
 
 - [x] HTTP Basic/Digest sign-in bar, with "not secure" warning on http
-- [ ] **P0** Save-password prompt on form submit, and autofill saved logins (encrypted with `safeStorage` → Keychain / DPAPI / libsecret) *(Electron limit: no built-in password manager; macOS Keychain access needs a signed app)*
+- [x] Save-password prompt after sign-in (Save / Update / Never for this site), encrypted with `safeStorage` (Keychain / DPAPI / libsecret); never in private windows
+- [x] Fill saved logins from a browser-drawn dropdown under the login field (the page never sees the list; same-origin frames only)
+- [x] Settings → Passwords: search, show/copy (Touch ID first where available; copied passwords cleared after 60 s), delete, "never saved" list
+- [ ] **P1** Import/export passwords (CSV), password generator, breach check
 - [ ] **P0** Passkeys / WebAuthn: verify Touch ID / security keys / iCloud Keychain passkeys work (needs signed app + entitlements on macOS) *(Electron limit: platform authenticator support is partial)*
 - [ ] **P1** Password manager page: view (after OS auth), edit, delete, search, export/import CSV
 - [ ] **P1** Strong password generator on sign-up fields

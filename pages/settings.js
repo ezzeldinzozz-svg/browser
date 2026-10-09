@@ -281,3 +281,95 @@ document.getElementById('home-page').addEventListener('change', (e) => {
   e.target.value = v;
   browserAPI.setSetting('homePage', v);
 });
+
+// ---- Passwords
+
+async function loadPasswords() {
+  const { available, logins, never } = await browserAPI.listPasswords();
+  const term = document.getElementById('pw-search').value.trim().toLowerCase();
+  const list = document.getElementById('pw-list');
+  list.textContent = '';
+  const shown = logins.filter((l) => !term || l.origin.toLowerCase().includes(term) || l.username.toLowerCase().includes(term));
+  if (!available) {
+    const note = document.createElement('div');
+    note.className = 'empty';
+    note.textContent = "Password saving isn't available because the system keychain can't be used.";
+    list.append(note);
+  } else if (shown.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.textContent = logins.length ? 'No matches.' : 'No saved passwords yet.';
+    list.append(empty);
+  }
+  for (const l of shown) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    const main = document.createElement('div');
+    main.className = 'main';
+    const site = document.createElement('div');
+    site.className = 't';
+    site.textContent = l.origin.replace(/^https:\/\//, '');
+    const user = document.createElement('div');
+    user.className = 'u';
+    user.textContent = l.username || '(no username)';
+    const secret = document.createElement('div');
+    secret.className = 'u secret';
+    main.append(site, user, secret);
+
+    const show = document.createElement('button');
+    show.textContent = 'Show';
+    show.addEventListener('click', async () => {
+      if (secret.textContent) {
+        secret.textContent = '';
+        show.textContent = 'Show';
+        return;
+      }
+      const value = await browserAPI.revealPassword(l.id);
+      if (value === null) return;
+      secret.textContent = value;
+      show.textContent = 'Hide';
+      setTimeout(() => {
+        secret.textContent = '';
+        show.textContent = 'Show';
+      }, 30000);
+    });
+    const copy = document.createElement('button');
+    copy.textContent = 'Copy';
+    copy.addEventListener('click', async () => {
+      if (await browserAPI.copyPassword(l.id)) {
+        copy.textContent = 'Copied';
+        setTimeout(() => (copy.textContent = 'Copy'), 2000);
+      }
+    });
+    const del = document.createElement('button');
+    del.textContent = 'Delete';
+    del.addEventListener('click', async () => {
+      await browserAPI.deletePassword(l.id);
+      loadPasswords();
+    });
+    row.append(main, show, copy, del);
+    list.append(row);
+  }
+
+  const neverBox = document.getElementById('pw-never-box');
+  const neverList = document.getElementById('pw-never-list');
+  neverBox.hidden = never.length === 0;
+  neverList.textContent = '';
+  for (const origin of never) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    const main = document.createElement('div');
+    main.className = 'main t';
+    main.textContent = origin.replace(/^https:\/\//, '');
+    const remove = document.createElement('button');
+    remove.textContent = 'Remove';
+    remove.addEventListener('click', async () => {
+      await browserAPI.removePasswordNever(origin);
+      loadPasswords();
+    });
+    row.append(main, remove);
+    neverList.append(row);
+  }
+}
+document.getElementById('pw-search').addEventListener('input', loadPasswords);
+loadPasswords();

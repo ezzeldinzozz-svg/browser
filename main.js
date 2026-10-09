@@ -16,12 +16,14 @@ const {
   screen,
   session,
   shell,
+  systemPreferences,
   webContents,
   webFrameMain,
 } = require('electron');
 const updater = require('./updater');
 const adblock = require('./adblock');
 const bookmarks = require('./bookmarks');
+const passwords = require('./passwords');
 
 const CHROME_H = 80; // tab strip (36) + toolbar (44)
 const BOOKMARKS_BAR_H = 30;
@@ -260,6 +262,10 @@ function sendTabs(w) {
     downloads: downloadSummary(w),
     update: updater.getState(),
     restoreOffer: !!w.restoreOffer,
+    passwordOffer:
+      current && current.pwOffer && current.pwOffer.shown
+        ? { kind: current.pwOffer.kind, site: siteOf(current.pwOffer.origin) || current.pwOffer.origin, username: current.pwOffer.username }
+        : null,
     showHome: !!store.data.settings.showHomeButton,
     downloadWarning: (() => {
       const rec = store.data.downloads.find((d) => d.id === w.downloadWarnings[0]);
@@ -296,7 +302,14 @@ function chromeHeight(w) {
   const tab = activeTab(w);
   if (!tab) return CHROME_H + (store.data.settings.showBookmarksBar ? BOOKMARKS_BAR_H : 0);
   if (tab.fullscreen) return 0;
-  const bars = [w.restoreOffer, w.downloadWarnings.length, tab.prompts.length, tab.auth.length, tab.find.open].filter(Boolean).length;
+  const bars = [
+    w.restoreOffer,
+    w.downloadWarnings.length,
+    tab.pwOffer && tab.pwOffer.shown,
+    tab.prompts.length,
+    tab.auth.length,
+    tab.find.open,
+  ].filter(Boolean).length;
   return CHROME_H + (store.data.settings.showBookmarksBar ? BOOKMARKS_BAR_H : 0) + bars * BAR_H;
 }
 
@@ -354,6 +367,7 @@ function layout(w) {
     t.view.setBounds({ x: 0, y: top, width, height: Math.max(0, height - top) });
   }
   if (w.statusView) layoutStatus(w);
+  if (w.pwView && w.pwTarget) hidePasswordPicker(w);
 }
 
 // options.private: a private window with its own throwaway session
@@ -386,6 +400,8 @@ function createWindow({ private: isPrivate = false, session: saved = null, ses: 
     restoreOffer: null, // saved windows from a run that crashed
     screenPick: null, // pending screen-sharing request
     statusView: null, // link-hover URL bubble
+    pwView: null, // saved-login dropdown next to a focused login field
+    pwTarget: null, // { tab, frame, origin } the dropdown fills
     statusText: '',
     permissions: {}, // private windows only
     allowlist: new Set(), // private windows only: sites with ad blocking switched off
@@ -425,6 +441,16 @@ function createWindow({ private: isPrivate = false, session: saved = null, ses: 
   statusView.webContents.on('will-navigate', (e) => e.preventDefault());
   w.statusView = statusView;
   win.contentView.addChildView(statusView);
+
+  const pwView = new WebContentsView({
+    webPreferences: { preload: PRELOAD, sandbox: true, contextIsolation: true, nodeIntegration: false },
+  });
+  pwView.setBackgroundColor('#00000000');
+  pwView.setVisible(false);
+  pwView.webContents.loadURL(`${SCHEME}://ui/pwpicker.html`);
+  pwView.webContents.on('will-navigate', (e) => e.preventDefault());
+  w.pwView = pwView;
+  win.contentView.addChildView(pwView);
 
   layout(w);
   if (saved && saved.tabs.length) {
@@ -469,6 +495,7 @@ function onWindowClosed(w) {
   }
   if (!w.chromeView.webContents.isDestroyed()) w.chromeView.webContents.close();
   if (!w.statusView.webContents.isDestroyed()) w.statusView.webContents.close();
+  if (!w.pwView.webContents.isDestroyed()) w.pwView.webContents.close();
   if (w.private && !windows.some((o) => o.ses === w.ses)) {
     // Nothing from a private window outlives it.
     w.ses.clearStorageData().catch(() => {});
@@ -517,7 +544,7 @@ function configureSession(ses) {
   ses.on('will-download', onWillDownload);
   // macOS 15+ shows its own screen/window picker; elsewhere our picker in the toolbar view.
   ses.setDisplayMediaRequestHandler(onDisplayMediaRequest, { useSystemPicker: true });
-  ses.registerPreloadScript({ type: 'frame', filePath: path.join(__dirname, 'capture-preload.js') });
+  ses.registerPreloadScript({ type: 'frame', filePath: path.join(__dirname, 'web-preload.js') });
   adblock.attach(ses);
 }
 
@@ -548,7 +575,8 @@ function createTab(w, url, { background = false, after = null, history = null } 
     find: { open: false, text: '', active: 0, matches: 0 },
     fullscreen: false,
     blocked: 0, // ads/trackers blocked on the current page
-    capture: new Map(), // frame key -> { camera, microphone, screen } reported by capture-preload.js
+    capture: new Map(), // frame key -> { camera, microphone, screen } reported by web-preload.js
+    pwOffer: null, // { origin, username, password, kind: 'save'|'update', shown } after a login
     pinned: !!(history && history.pinned),
     openerId: after ? after.id : null,
   };
@@ -590,6 +618,12 @@ function createTab(w, url, { background = false, after = null, history = null } 
   });
   wc.on('did-navigate', (_e, u) => {
     tab.capture.clear();
+    hidePasswordPicker(tab.w);
+    // A navigation right after a login means it worked: show the save offer now.
+    if (tab.pwOffer) {
+      if (tab.pwOffer.shown) tab.pwOffer = null;
+      else tab.pwOffer.shown = true;
+    }
     applySiteZoom(tab);
     tab.favicon = tab.faviconSrc = '';
     dismissPrompts(tab); // a prompt must never carry over to a different page
@@ -708,6 +742,7 @@ function selectTab(w, id) {
   if (!tab) return;
   if (w.activeId !== id) {
     exitFullscreen(activeTab(w));
+    hidePasswordPicker(w);
     w.statusText = '';
   }
   w.activeId = id;
@@ -1338,6 +1373,106 @@ function resolveScreenPick(w, pickId, sourceId) {
   if (!w.chromeView.webContents.isDestroyed()) w.chromeView.webContents.send('screen-picker', null);
 }
 
+// ---------------------------------------------------------------- passwords
+
+// Logins may be saved/filled only in a tab's top frame, or a frame of the same origin.
+function loginFrameOk(tab, frame) {
+  if (!frame || !tab) return false;
+  return frame === tab.wc.mainFrame || frame.origin === tab.wc.mainFrame.origin;
+}
+
+function onPasswordSubmitted(e, msg) {
+  const tab = tabOfWc(e.sender);
+  if (!tab || tab.w.private || !msg || typeof msg.password !== 'string' || !loginFrameOk(tab, e.senderFrame)) return;
+  const origin = e.senderFrame.origin;
+  const username = String(msg.username || '').slice(0, 300);
+  const kind = passwords.offerFor(origin, username, msg.password);
+  if (!kind) return;
+  const offer = { origin, username, password: msg.password, kind, shown: false };
+  tab.pwOffer = offer;
+  // Pages that sign in without navigating (single-page apps) get the offer after a moment.
+  setTimeout(() => {
+    if (tab.pwOffer === offer && !offer.shown && !tab.wc.isDestroyed()) {
+      offer.shown = true;
+      layout(tab.w);
+      sendTabs(tab.w);
+    }
+  }, 1500);
+}
+
+function resolvePasswordOffer(w, decision) {
+  const tab = activeTab(w);
+  const offer = tab && tab.pwOffer;
+  if (!offer) return;
+  if (decision === 'save') passwords.save(offer.origin, offer.username, offer.password);
+  else if (decision === 'never') passwords.never(offer.origin);
+  tab.pwOffer = null;
+  layout(w);
+  sendTabs(w);
+}
+
+const PW_ROW_H = 34;
+
+function showPasswordPicker(e, rect) {
+  const tab = tabOfWc(e.sender);
+  if (!tab || tab.id !== tab.w.activeId || e.senderFrame !== tab.wc.mainFrame || !passwords.available()) return;
+  const origin = e.senderFrame.origin;
+  const logins = passwords.forOrigin(origin);
+  const w = tab.w;
+  if (!logins.length || !rect) return hidePasswordPicker(w);
+  clearTimeout(w.pwHideTimer);
+  w.pwTarget = { tab, frame: e.senderFrame, origin };
+  const [winW, winH] = w.win.getContentSize();
+  const width = Math.round(Math.min(Math.max(Number(rect.width) || 0, 260), 420));
+  const height = Math.min(logins.length, 6) * PW_ROW_H + 10;
+  const x = Math.round(Math.max(0, Math.min(Number(rect.x) || 0, winW - width)));
+  const y = Math.round(Math.min(chromeHeight(w) + (Number(rect.y) || 0) + 2, winH - height));
+  w.pwView.setBounds({ x, y, width, height });
+  w.pwView.webContents.send('pw-items', logins.map((p) => ({ id: p.id, username: p.username || '(no username)' })));
+  w.win.contentView.addChildView(w.pwView); // above the page
+  w.pwView.setVisible(true);
+}
+
+function hidePasswordPicker(w, delay = 0) {
+  if (!w || !w.pwView) return;
+  clearTimeout(w.pwHideTimer);
+  const hide = () => {
+    w.pwTarget = null;
+    if (!w.pwView.webContents.isDestroyed()) w.pwView.setVisible(false);
+  };
+  // Clicking the dropdown first blurs the field; give the click time to land.
+  if (delay) w.pwHideTimer = setTimeout(hide, delay);
+  else hide();
+}
+
+function fillPassword(w, id) {
+  const target = w.pwTarget;
+  const login = passwords.find(id);
+  hidePasswordPicker(w);
+  if (!target || !login || login.origin !== target.origin) return;
+  try {
+    // the frame may be gone, or may have navigated to another site meanwhile
+    if (target.frame.detached || target.frame.origin !== target.origin) return;
+    target.frame.send('pw:fill', { username: login.username, password: passwords.reveal(id) });
+  } catch {
+    return;
+  }
+  store.save();
+  target.tab.wc.focus();
+}
+
+// Settings asks before showing or copying a password: Touch ID where the Mac has it.
+async function confirmOwner(reason) {
+  if (isMac && systemPreferences.canPromptTouchID()) {
+    try {
+      await systemPreferences.promptTouchID(reason);
+    } catch {
+      return false;
+    }
+  }
+  return true;
+}
+
 // ---------------------------------------------------------------- HTTP sign-in
 
 let nextAuthId = 1;
@@ -1921,7 +2056,41 @@ function handle(channel, guard, fn) {
 }
 
 function setupIpc() {
-  // Sent by capture-preload.js in web pages: only ever changes that page's own tab indicator.
+  // Sent by web-preload.js in web pages. The origin always comes from the sending frame, never the page.
+  ipcMain.on('pw:submitted', onPasswordSubmitted);
+  ipcMain.on('pw:focus', (e, rect) => showPasswordPicker(e, rect));
+  ipcMain.on('pw:blur', (e) => {
+    const tab = tabOfWc(e.sender);
+    if (tab) hidePasswordPicker(tab.w, 250);
+  });
+  // The dropdown view itself (browser://ui/pwpicker.html)
+  ipcMain.handle('pw:choose', (e, id) => {
+    const w = windows.find((x) => x.pwView && x.pwView.webContents === e.sender);
+    if (!w) throw new Error('Unauthorized: pw:choose');
+    fillPassword(w, Number(id));
+  });
+  handle('pw:respond', fromChrome, (w, decision) => {
+    if (['save', 'never', 'dismiss'].includes(decision)) resolvePasswordOffer(w, decision);
+  });
+  handle('pw:list', fromInternal, () => ({ available: passwords.available(), logins: passwords.list(), never: passwords.neverList() }));
+  handle('pw:reveal', fromInternal, async (_tab, id) =>
+    (await confirmOwner('show a saved password')) ? passwords.reveal(Number(id)) : null,
+  );
+  handle('pw:copy', fromInternal, async (_tab, id) => {
+    if (!(await confirmOwner('copy a saved password'))) return false;
+    const secret = passwords.reveal(Number(id));
+    if (secret === null) return false;
+    clipboard.writeText(secret);
+    // don't leave it on the clipboard forever
+    setTimeout(() => {
+      if (clipboard.readText() === secret) clipboard.clear();
+    }, 60000);
+    return true;
+  });
+  handle('pw:delete', fromInternal, (_tab, id) => passwords.remove(Number(id)));
+  handle('pw:never-remove', fromInternal, (_tab, origin) => passwords.removeNever(String(origin)));
+
+  // Sent by web-preload.js in web pages: only ever changes that page's own tab indicator.
   ipcMain.on('capture:state', (e, state) => {
     const tab = tabOfWc(e.sender);
     if (!tab || !e.senderFrame || !state) return;
@@ -2421,6 +2590,7 @@ app.whenReady().then(() => {
   if (!isPrimaryInstance) return;
   protocol.handle(SCHEME, serveInternal);
   store = new Store(path.join(app.getPath('userData'), 'browser-data.json'));
+  passwords.init(store.data, () => store.save());
   bookmarks.init(store.data, () => {
     store.save();
     sendAll();

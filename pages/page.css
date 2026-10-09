@@ -49,6 +49,10 @@ h2 { font-size: 16px; font-weight: 500; }
 .hint { color: var(--dim); margin-top: 0; }
 .check { display: flex; align-items: center; gap: 8px; margin-bottom: 20px; cursor: pointer; }
 #allowlist { margin-bottom: 28px; }
+#pw-search { margin-bottom: 6px; height: 32px; font-size: 13px; }
+#pw-list { margin-bottom: 12px; }
+#pw-never-box { margin-bottom: 28px; }
+.secret { font-family: ui-monospace, Menlo, monospace; color: var(--fg) !important; user-select: text; }
 .perm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px 20px; margin-bottom: 16px; }
 .perm-grid label, .perm-list label { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .perm-grid select, .perm-list select, .perm-add select { margin: 0; height: 28px; }
