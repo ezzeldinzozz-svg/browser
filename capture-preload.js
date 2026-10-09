@@ -57,3 +57,23 @@ if (/^https?:$/.test(location.protocol)) {
   }
   ipcRenderer.on('capture:stop', () => stopAll && stopAll());
 }
+
+// ---- Global Privacy Control: navigator.globalPrivacyControl matches the Sec-GPC header
+
+if (/^https?:$/.test(location.protocol)) {
+  let gpc = false;
+  try {
+    gpc = ipcRenderer.sendSync('gpc:enabled') === true;
+  } catch {
+    gpc = false;
+  }
+  if (gpc) {
+    try {
+      contextBridge.executeInMainWorld({
+        func: () => Object.defineProperty(Navigator.prototype, 'globalPrivacyControl', { get: () => true, configurable: true }),
+      });
+    } catch {
+      // page world not available
+    }
+  }
+}

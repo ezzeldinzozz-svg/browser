@@ -34,7 +34,7 @@ const PRELOAD = path.join(__dirname, 'gen', 'preload.js'); // bundled from prelo
 // The browser's own pages live at browser://<name>/ and are served from pages/<name>.html.
 // The toolbar is browser://ui/. Only these origins may call the privileged IPC API.
 const SCHEME = 'browser';
-const INTERNAL = new Set(['newtab', 'history', 'bookmarks', 'downloads', 'settings', 'error', 'welcome', 'privacy', 'extensions']);
+const INTERNAL = new Set(['newtab', 'history', 'bookmarks', 'downloads', 'settings', 'error', 'welcome', 'privacy', 'extensions', 'shortcuts', 'licenses']);
 const UI_URL = `${SCHEME}://ui/`;
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -96,10 +96,23 @@ class Store {
       zoom: {}, // site -> zoom level (0 = 100%)
     };
     this.timer = null;
-    try {
-      Object.assign(this.data, JSON.parse(fs.readFileSync(file, 'utf8')));
-    } catch {
-      // first run or unreadable file: start empty
+    // The previous good version is kept as .bak. If the main file is damaged, it's set aside
+    // (never overwritten) and the backup is used instead of silently starting empty.
+    this.recoveredFrom = null;
+    for (const candidate of [file, `${file}.bak`]) {
+      if (!fs.existsSync(candidate)) continue;
+      try {
+        Object.assign(this.data, JSON.parse(fs.readFileSync(candidate, 'utf8')));
+        if (candidate !== file) this.recoveredFrom = candidate;
+        break;
+      } catch (err) {
+        if (candidate === file) {
+          const aside = `${file}.damaged-${Date.now()}`;
+          fs.renameSync(file, aside);
+          console.error(`Profile data was unreadable (${err.message}); kept it as ${aside}`);
+          this.isNew = false;
+        }
+      }
     }
     this.data.settings = {
       restoreSession: true,
@@ -113,6 +126,9 @@ class Store {
       searchEngine: 'duckduckgo',
       showBookmarksBar: true,
       confirmClose: true, // "Close 5 tabs?" / "Quit with 8 tabs open?"
+      gpc: true, // Global Privacy Control: Sec-GPC header + navigator.globalPrivacyControl
+      dns: 'automatic', // 'automatic' | 'off' | 'cloudflare' | 'quad9' | 'custom'
+      dnsCustom: '',
       askDownloadLocation: false,
       downloadDir: null, // null = the OS Downloads folder
       ...this.data.settings,
@@ -128,6 +144,7 @@ class Store {
     const data = { ...this.data, downloads: this.data.downloads.filter((d) => !d.private) };
     try {
       fs.writeFileSync(this.file + '.tmp', JSON.stringify(data));
+      if (fs.existsSync(this.file)) fs.copyFileSync(this.file, `${this.file}.bak`);
       fs.renameSync(this.file + '.tmp', this.file);
     } catch (err) {
       console.error('Failed to save store:', err);
@@ -545,6 +562,23 @@ function onVerifyCertificate(request, callback) {
   callback(-3);
 }
 
+const DNS_PROVIDERS = {
+  cloudflare: { name: 'Cloudflare', url: 'https://cloudflare-dns.com/dns-query' },
+  quad9: { name: 'Quad9', url: 'https://dns.quad9.net/dns-query' },
+};
+
+// Secure DNS (DNS over HTTPS). 'automatic' upgrades to DoH when the system's DNS provider
+// supports it; a chosen provider means DoH only.
+function applyDns() {
+  const { dns, dnsCustom } = store.data.settings;
+  const server = dns === 'custom' ? dnsCustom : DNS_PROVIDERS[dns] ? DNS_PROVIDERS[dns].url : null;
+  if (server && /^https:\/\//i.test(server)) {
+    app.configureHostResolver({ secureDnsMode: 'secure', secureDnsServers: [server] });
+  } else {
+    app.configureHostResolver({ secureDnsMode: dns === 'off' ? 'off' : 'automatic' });
+  }
+}
+
 function configureSession(ses) {
   ses.setCertificateVerifyProc(onVerifyCertificate);
   // Present as plain Chrome: sites such as Google sign-in reject the Electron token.
@@ -554,6 +588,11 @@ function configureSession(ses) {
   ses.setPermissionRequestHandler(onPermissionRequest);
   ses.setPermissionCheckHandler(onPermissionCheck);
   ses.on('will-download', onWillDownload);
+  // Global Privacy Control: asks sites not to sell or share the user's data.
+  ses.webRequest.onBeforeSendHeaders({ urls: ['<all_urls>'] }, (details, callback) => {
+    if (store.data.settings.gpc) details.requestHeaders['Sec-GPC'] = '1';
+    callback({ requestHeaders: details.requestHeaders });
+  });
   // macOS 15+ shows its own screen/window picker; elsewhere our picker in the toolbar view.
   ses.setDisplayMediaRequestHandler(onDisplayMediaRequest, { useSystemPicker: true });
   ses.registerPreloadScript({ type: 'frame', filePath: path.join(__dirname, 'capture-preload.js') });
@@ -992,6 +1031,20 @@ function showBookmarkMenu(w, id) {
     template = common.slice(1);
   }
   Menu.buildFromTemplate(template).popup({ window: w.win });
+}
+
+// A new folder in the bookmarks bar with every web page open in the window.
+function bookmarkAllTabs(w) {
+  const pages = w.tabs
+    .map((t) => {
+      const entry = t.pending && t.pending.entries[t.pending.index];
+      return { url: entry ? entry.url : t.wc.getURL(), title: entry ? entry.title : t.wc.getTitle() };
+    })
+    .filter((p) => isWeb(p.url));
+  if (pages.length === 0) return;
+  const folder = bookmarks.addFolder(`Tabs ${new Date().toLocaleDateString()}`, 'bar');
+  for (const p of pages) bookmarks.add({ url: p.url, title: p.title || p.url, parentId: folder.id });
+  w.chromeView.webContents.send('bookmark-edit', bookmarkEditInfo(folder.id, true));
 }
 
 function setBookmarksBar(show) {
@@ -1500,6 +1553,42 @@ function showPageMenu(tab, params) {
         : [{ label: 'Open Link in Private Window', click: () => openInNewWindow(params.linkURL, true) }]),
       { label: 'Copy Link Address', click: () => clipboard.writeText(params.linkURL) },
     ]);
+  }
+  if ((params.mediaType === 'video' || params.mediaType === 'audio') && params.srcURL !== undefined) {
+    const f = params.mediaFlags || {};
+    // Acts on the media element under the cursor (main frame only; coordinates are its own).
+    const onMedia = (code) =>
+      params.frame === wc.mainFrame
+        ? wc.executeJavaScript(`(() => { const m = document.elementFromPoint(${params.x}, ${params.y})?.closest('video, audio'); if (m) { ${code} } })()`, true).catch(() => {})
+        : null;
+    const kind = params.mediaType === 'video' ? 'Video' : 'Audio';
+    const media = [
+      { label: f.isPaused ? 'Play' : 'Pause', click: () => onMedia(f.isPaused ? 'm.play()' : 'm.pause()') },
+      { label: f.isMuted ? 'Unmute' : 'Mute', click: () => onMedia('m.muted = !m.muted') },
+      { label: 'Loop', type: 'checkbox', checked: !!f.isLooping, click: () => onMedia('m.loop = !m.loop') },
+      ...(f.canToggleControls
+        ? [{ label: 'Show Controls', type: 'checkbox', checked: !!f.isControlsVisible, click: () => onMedia('m.controls = !m.controls') }]
+        : []),
+      ...(params.mediaType === 'video' && f.canShowPictureInPicture
+        ? [
+            {
+              label: 'Picture in Picture',
+              type: 'checkbox',
+              checked: !!f.isShowingPictureInPicture,
+              click: () => onMedia('document.pictureInPictureElement ? document.exitPictureInPicture() : m.requestPictureInPicture()'),
+            },
+          ]
+        : []),
+    ];
+    if (isWeb(params.srcURL)) {
+      media.push(
+        { type: 'separator' },
+        { label: `Open ${kind} in New Tab`, click: () => createTab(w, params.srcURL, { after: tab, background: true }) },
+        { label: `Save ${kind} As…`, enabled: f.canSave !== false, click: () => wc.downloadURL(params.srcURL) },
+        { label: `Copy ${kind} Address`, click: () => clipboard.writeText(params.srcURL) },
+      );
+    }
+    groups.push(media);
   }
   if (params.mediaType === 'image' && params.srcURL) {
     const image = [
@@ -2068,6 +2157,10 @@ function handle(channel, guard, fn) {
 }
 
 function setupIpc() {
+  ipcMain.on('gpc:enabled', (e) => {
+    e.returnValue = !!(store && store.data.settings.gpc);
+  });
+
   // Sent by capture-preload.js in web pages: only ever changes that page's own tab indicator.
   ipcMain.on('capture:state', (e, state) => {
     const tab = tabOfWc(e.sender);
@@ -2220,6 +2313,17 @@ function setupIpc() {
   handle('download:decide', fromInternal, (tab, id, decision) => {
     if (ownDownload(tab, id) && ['keep', 'discard'].includes(decision)) resolveDangerousDownload(id, decision);
   });
+  handle('download:remove', fromInternal, (tab, id) => {
+    const d = ownDownload(tab, id);
+    if (!d || d.state === 'progressing' || d.state === 'dangerous') return;
+    store.data.downloads = store.data.downloads.filter((x) => x.id !== id);
+    store.save();
+    notifyDownloads(true);
+  });
+  handle('download:retry', fromInternal, (tab, id) => {
+    const d = ownDownload(tab, id);
+    if (d && ['cancelled', 'interrupted'].includes(d.state) && isWeb(d.url)) (tab.w.private ? tab.w.ses : session.defaultSession).downloadURL(d.url);
+  });
   handle('download:clear', fromInternal, (tab) => {
     store.data.downloads = store.data.downloads.filter(
       (d) => d.state === 'progressing' || d.state === 'dangerous' || (d.private && !tab.w.private),
@@ -2253,15 +2357,18 @@ function setupIpc() {
   });
   handle('data:settings-set', fromInternal, (_tab, key, value) => {
     const valid =
-      (['restoreSession', 'adblock', 'askDownloadLocation', 'blockThirdPartyCookies', 'showHomeButton', 'confirmClose'].includes(key) &&
+      (['restoreSession', 'adblock', 'askDownloadLocation', 'blockThirdPartyCookies', 'showHomeButton', 'confirmClose', 'gpc'].includes(key) &&
         typeof value === 'boolean') ||
       (key === 'startup' && ['continue', 'newtab', 'pages'].includes(value)) ||
+      (key === 'dns' && ['automatic', 'off', 'custom', ...Object.keys(DNS_PROVIDERS)].includes(value)) ||
+      (key === 'dnsCustom' && typeof value === 'string' && (value === '' || /^https:\/\/[^\s]+$/i.test(value))) ||
       (key === 'homePage' && typeof value === 'string' && (value === '' || /^(https?|file):\/\//i.test(value))) ||
       (key === 'startupPages' && Array.isArray(value) && value.every((u) => typeof u === 'string' && /^(https?|file):\/\//i.test(u))) ||
       (key === 'searchEngine' && Object.hasOwn(SEARCH_ENGINES, value));
     if (!valid) return;
     store.data.settings[key] = value;
     store.save();
+    if (key === 'dns' || key === 'dnsCustom') applyDns();
     sendAll();
   });
   handle('data:adblock-allow-remove', fromInternal, (_tab, site) => {
@@ -2316,6 +2423,11 @@ function setupIpc() {
   });
   handle('data:clear-browsing', fromInternal, (tab, opts) => clearBrowsingData(tab.w, opts || {}));
   handle('data:history', fromInternal, () => store.data.history);
+  handle('data:licenses', fromInternal, async () => JSON.parse(await fs.promises.readFile(path.join(__dirname, 'gen', 'licenses.json'), 'utf8')));
+  handle('data:history-remove-site', fromInternal, (_tab, site) => {
+    store.data.history = store.data.history.filter((h) => siteOf(h.url) !== site);
+    store.save();
+  });
   handle('data:history-clear', fromInternal, () => {
     store.data.history = [];
     store.save();
@@ -2491,6 +2603,7 @@ function buildMenu() {
           accelerator: 'CmdOrCtrl+Shift+B',
           click: (item) => setBookmarksBar(item.checked),
         },
+        { label: 'Bookmark All Tabs…', accelerator: 'CmdOrCtrl+Shift+D', click: inWindow(bookmarkAllTabs) },
         { label: 'Bookmark Manager', accelerator: 'CmdOrCtrl+Shift+O', click: open('bookmarks') },
       ],
     },
@@ -2512,6 +2625,18 @@ function buildMenu() {
       ],
     },
     ...(isMac ? [{ role: 'windowMenu' }] : []),
+    {
+      role: 'help',
+      submenu: [
+        { label: 'Keyboard Shortcuts', accelerator: 'CmdOrCtrl+/', click: open('shortcuts') },
+        {
+          label: 'Report a Problem…',
+          click: inWindow((w) => createTab(w, 'https://github.com/ezzeldinzozz-svg/browser/issues/new')),
+        },
+        { label: 'Privacy', click: open('privacy') },
+        { label: 'Open-Source Licenses', click: open('licenses') },
+      ],
+    },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
@@ -2531,6 +2656,19 @@ async function serveInternal(request) {
     rel ||= `${host}.html`;
   } else {
     return new Response('Not found', { status: 404 });
+  }
+  // Chromium's and Electron's own license notices, which ship with the app (the npm packages'
+  // licenses come from gen/licenses.json through data:licenses).
+  if (host === 'licenses' && rel === 'chromium') {
+    const candidates = [
+      path.join(process.resourcesPath || '', 'LICENSES.chromium.html'),
+      path.join(__dirname, 'node_modules', 'electron', 'dist', 'LICENSES.chromium.html'),
+    ];
+    const found = candidates.find((c) => fs.existsSync(c));
+    if (!found) return new Response('Not found', { status: 404 });
+    return new Response(await fs.promises.readFile(found), {
+      headers: { 'content-type': 'text/html; charset=utf-8', 'content-security-policy': "default-src 'none'; style-src 'unsafe-inline'" },
+    });
   }
   const file = path.resolve(dir, rel);
   const type = MIME[path.extname(file)];
@@ -2600,6 +2738,7 @@ app.whenReady().then(() => {
     shouldBlock,
     onBlocked,
   });
+  applyDns();
   configureSession(session.defaultSession);
   setupExtensions();
   app.on('login', onLogin);

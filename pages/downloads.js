@@ -81,6 +81,11 @@ async function refresh() {
         button('Open', () => browserAPI.openDownload(d.id)),
         button('Show in folder', () => browserAPI.showDownload(d.id)),
       );
+    } else if (!d.discarded) {
+      row.append(button('Retry', () => browserAPI.retryDownload(d.id)));
+    }
+    if (d.state !== 'progressing' && d.state !== 'dangerous') {
+      row.append(button('\u00D7', () => browserAPI.removeDownloadEntry(d.id).then(refresh)));
     }
     list.append(row);
   }

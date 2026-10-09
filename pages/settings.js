@@ -23,6 +23,10 @@ async function loadSettings() {
   document.getElementById('startup-pages').value = (s.startupPages || []).join('\n');
   document.getElementById('show-home').checked = s.showHomeButton;
   document.getElementById('confirm-close').checked = s.confirmClose;
+  document.getElementById('gpc').checked = s.gpc;
+  document.getElementById('dns').value = s.dns;
+  document.getElementById('dns-custom').value = s.dnsCustom || '';
+  document.getElementById('dns-custom').hidden = s.dns !== 'custom';
   document.getElementById('home-page').value = s.homePage || '';
   if (!engine.options.length) {
     for (const e of s.searchEngines) engine.append(new Option(e.name, e.id));
@@ -283,3 +287,23 @@ document.getElementById('home-page').addEventListener('change', (e) => {
   browserAPI.setSetting('homePage', v);
 });
 document.getElementById('confirm-close').addEventListener('change', (e) => browserAPI.setSetting('confirmClose', e.target.checked));
+
+// ---- Privacy: GPC and secure DNS
+document.getElementById('gpc').addEventListener('change', (e) => browserAPI.setSetting('gpc', e.target.checked));
+document.getElementById('dns').addEventListener('change', async (e) => {
+  const custom = document.getElementById('dns-custom');
+  custom.hidden = e.target.value !== 'custom';
+  if (e.target.value !== 'custom' || /^https:\/\//i.test(custom.value)) await browserAPI.setSetting('dns', e.target.value);
+  if (e.target.value === 'custom') custom.focus();
+});
+document.getElementById('dns-custom').addEventListener('change', async (e) => {
+  const value = e.target.value.trim();
+  if (!/^https:\/\/\S+$/i.test(value)) {
+    e.target.setCustomValidity('Enter an https:// DNS-over-HTTPS address');
+    e.target.reportValidity();
+    return;
+  }
+  e.target.setCustomValidity('');
+  await browserAPI.setSetting('dnsCustom', value);
+  await browserAPI.setSetting('dns', 'custom');
+});

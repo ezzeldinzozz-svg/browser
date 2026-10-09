@@ -81,6 +81,17 @@
     <h2>Privacy</h2>
     <label class="check"><input id="adblock" type="checkbox"> Block ads and trackers</label>
     <label class="check"><input id="tpc" type="checkbox"> Block third-party cookies (sites can still ask to use theirs when embedded)</label>
+    <label class="check"><input id="gpc" type="checkbox"> Ask sites not to sell or share my data (Global Privacy Control)</label>
+    <label class="dns">Secure DNS
+      <select id="dns">
+        <option value="automatic">Automatic (when your network's DNS supports it)</option>
+        <option value="cloudflare">Cloudflare (1.1.1.1)</option>
+        <option value="quad9">Quad9</option>
+        <option value="custom">Custom…</option>
+        <option value="off">Off</option>
+      </select>
+    </label>
+    <input id="dns-custom" type="text" placeholder="https://dns.example/dns-query" spellcheck="false" hidden>
     <p id="tpc-restart" class="hint" hidden>Takes effect after restarting Browser. <button id="tpc-restart-now">Restart now</button></p>
     <p class="hint">Sites where blocking is turned off (use the shield in the toolbar to change a site):</p>
     <div id="allowlist"></div>

@@ -16,6 +16,10 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 - Tabs, address bar (URL or search with the chosen engine: DuckDuckGo default, Google, Bing, Brave, Ecosia, Kagi, Startpage), back/forward/reload/stop, keyboard shortcuts
 - Tab strip: drag to reorder, pinned tabs (kept left, restored), audio indicator with click-to-mute, right-click menu (new tab to the right, reload, duplicate, pin, mute, move to new window, close / others / to the right, reopen closed)
 - Bookmarks, history, downloads page, find in page, new-tab page, settings page
+- Privacy/network: Global Privacy Control (Sec-GPC header via `webRequest.onBeforeSendHeaders`, `navigator.globalPrivacyControl` via capture-preload.js), secure DNS (`app.configureHostResolver`)
+- Store safety: each save keeps the previous file as `browser-data.json.bak`; an unreadable file is renamed `.damaged-<time>` and the backup is loaded
+- Help menu: `browser://shortcuts`, report a problem, privacy, `browser://licenses` (npm licenses generated into `gen/licenses.json` by `scripts/build.js`; Chromium's `LICENSES.chromium.html` bundled via `extraResources`)
+- Media context menu (play/pause, mute, loop, controls, picture in picture, save/copy); history grouped by day with "Remove site"; downloads Retry and remove entry; Bookmark All Tabs
 - Address bar: "Switch to tab" suggestions, Paste and Go (its context menu is built in main; note `clipboard.readText()` is async in this Electron), Shift+Delete removes a history suggestion; Cmd/Ctrl+Shift+A searches open tabs
 - Restored tabs are lazy: background tabs keep their saved history in `tab.pending` and load on first select (the session saver uses `tab.pending` as their history)
 - "Close N tabs?" / "Quit with N tabs open?" only for quits the user asks for (our own Quit menu item sets `userQuitRequested`); signals, shutdown and updates never ask. Save Page As (HTML / MHTML / PDF)

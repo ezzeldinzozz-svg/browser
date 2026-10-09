@@ -107,7 +107,7 @@ Ordered by priority, then by what unblocks what.
 - [x] Search bookmarks; drag to reorder or into folders in the manager
 - [ ] **P2** Sort bookmarks
 - [x] Open all in folder
-- [ ] **P1** "Bookmark all tabs"
+- [x] "Bookmark all tabs" (Cmd/Ctrl+Shift+D) into a dated folder
 - [ ] **P2** Bookmarks menu in the menu bar listing bookmarks and folders
 - [ ] **P2** Favicons stored for bookmarks
 
@@ -117,10 +117,10 @@ Ordered by priority, then by what unblocks what.
 - [x] History page with text search (title + URL)
 - [x] Clear all history
 - [x] Delete single entries (removes every visit to that page)
-- [ ] **P1** "Remove all from this site"
+- [x] "Remove site" (every visit to that site)
 - [x] Clear browsing data (Settings, Cmd/Ctrl+Shift+Backspace): time range × history, download list, cookies & site data, cache (cookies/cache always all time: Electron limit)
 - [ ] **P2** Clear site permissions from the same dialog
-- [ ] **P1** Group by day with date headers; infinite scroll beyond 500 items
+- [x] Grouped by day with date headers; "Show more" for older entries
 - [ ] **P1** History menu shows recently closed tabs and recently visited pages
 - [ ] **P1** Full-text indexed search (needs SQLite)
 - [ ] **P2** Auto-delete history older than N days; "clear on quit" option
@@ -135,8 +135,10 @@ Ordered by priority, then by what unblocks what.
 - [x] Downloads marked as from the internet (macOS quarantine attribute, Windows Mark of the Web) so Gatekeeper/SmartScreen check them
 - [x] Option "Ask where to save each file" and a choose-download-folder setting
 - [x] Downloads panel from the toolbar button (recent items, progress, Open/Show/Cancel/Keep/Discard), button pulses when a download starts
-- [ ] **P1** Retry/resume interrupted downloads (`session.createInterruptedDownload`)
-- [ ] **P1** Remove a single entry; delete file from disk; drag a finished download into another app
+- [x] Retry failed/cancelled downloads (downloads again)
+- [ ] **P2** Resume interrupted downloads from where they stopped (`session.createInterruptedDownload`)
+- [x] Remove a single entry from the downloads list
+- [ ] **P2** Delete the file from disk; drag a finished download into another app
 - [ ] **P1** Block downloads from insecure (http) origins on https pages (mixed-content downloads)
 - [ ] **P1** Multiple-automatic-downloads permission prompt
 - [ ] **P2** Malware reputation check for downloads (Web Risk API) *(Electron limit: no free Google Safe Browsing)*
@@ -176,9 +178,9 @@ Ordered by priority, then by what unblocks what.
 - [ ] **P1** HTTPS-Only / HTTPS-upgrade mode with a "continue to http" interstitial
 - [ ] **P1** Full certificate viewer (issuer and expiry are shown in the site info popup)
 - [ ] **P1** Safe browsing / phishing & malware protection (Web Risk API, paid, or ship without and say so) *(Electron limit)*
-- [ ] **P1** DNS over HTTPS setting (`app.configureHostResolver` secure DNS mode + provider)
+- [x] Secure DNS setting: Automatic / Cloudflare / Quad9 / custom DoH / Off (`app.configureHostResolver`)
 - [ ] **P1** Mixed-content handling / indicator; block insecure forms on https pages
-- [ ] **P1** "Send Do Not Track / Global Privacy Control" setting (GPC header + `navigator.globalPrivacyControl`)
+- [x] Global Privacy Control on by default (Sec-GPC header + `navigator.globalPrivacyControl`), setting to turn off
 - [ ] **P1** Weekly Electron patch bump routine + "update required" kill switch for critical CVEs
 - [ ] **P1** Cookies & site data manager (list by site, remove one, remove all)
 - [ ] **P2** Fingerprinting protection (Brave-style farbling of canvas/audio/fonts, reduce UA/client hints)
@@ -195,11 +197,12 @@ Ordered by priority, then by what unblocks what.
 - [ ] **P1** Share a single tab, system audio (Windows loopback)
 - [x] Camera / microphone / screen-sharing in-use dot on tabs (best effort: tracks getUserMedia/getDisplayMedia in the page)
 - [x] In-use indicator in the address bar with a Stop button
-- [ ] **P1** Picture-in-picture: verify the video PiP button and `requestPictureInPicture()` work; add a context-menu/toolbar entry
+- [x] Picture-in-picture from the video context menu
+- [ ] **P2** Picture-in-picture toolbar button
 - [ ] **P1** Autoplay policy setting (block audible autoplay by default, per-site allow)
 - [ ] **P1** Media keys / Now Playing integration on macOS (verify Chromium's hardware media key handling is on)
 - [ ] **P1** Global media controls (toolbar popup for playing tabs)
-- [ ] **P1** Video/audio context menu: play/pause, loop, show controls, save video, copy video address, PiP
+- [x] Video/audio context menu: play/pause, mute, loop, show controls, picture in picture, open/save/copy address
 - [ ] **P1** Widevine DRM for Netflix/Spotify/Disney+ via castLabs ECS + EVS signing, or a clear "not supported" message *(Electron limit)*
 - [ ] **P2** Cast / AirPlay *(Electron limit: no Chromecast media router)*
 
@@ -250,7 +253,7 @@ Ordered by priority, then by what unblocks what.
 - [x] Make this my default browser button + status in Settings (macOS confirms; Windows opens Default apps settings)
 - [x] Search engine setting
 - [x] Privacy & security in Settings: clear data, ad/tracker blocking, third-party cookies, permission defaults and exceptions
-- [ ] **P1** HTTPS-only mode, DNS over HTTPS, safe browsing (needs a provider)
+- [ ] **P1** HTTPS-only mode, safe browsing (needs a provider); DNS over HTTPS is done
 - [x] On startup: continue where you left off / New Tab page / specific pages (with "Use current pages")
 - [ ] **P1** Appearance: light/dark/system theme (toolbar and internal pages follow `nativeTheme`), accent color, show bookmarks bar, show home button
 - [ ] **P1** Home page / new-tab page choice
@@ -300,7 +303,7 @@ Ordered by priority, then by what unblocks what.
 - [x] Lazy-load restored tabs (only the active tab of each window loads at startup)
 - [ ] **P1** Tab sleeping / memory saver: discard background tabs after N minutes, exclusions list
 - [ ] **P1** Task manager (per-tab memory/CPU via `app.getAppMetrics`, end process)
-- [ ] **P1** Corrupt-store recovery (keep a backup, don't silently start empty)
+- [x] Corrupt-store recovery: previous version kept as `.bak`; an unreadable file is set aside and the backup loaded
 - [ ] **P2** Energy saver mode on battery (throttle background tabs, limit frame rate)
 - [ ] **P2** Preload/prefetch settings
 
@@ -357,15 +360,15 @@ Ordered by priority, then by what unblocks what.
 - [x] First-run welcome: default browser, bookmark import, search engine, ad/cookie blocking, link to privacy page
 - [x] About section in Settings: version, update status, last check, Check for updates
 - [ ] **P2** Electron/Chromium version and open-source licenses in About
-- [ ] **P1** Help menu: keyboard shortcuts, report a problem, website/support link
-- [ ] **P1** Keyboard shortcuts reference page
+- [x] Help menu: keyboard shortcuts, report a problem (GitHub issues), privacy, licenses
+- [x] Keyboard shortcuts page (`browser://shortcuts`, Cmd/Ctrl+/)
 - [ ] **P2** Feature tips / tour
 
 ## 23. Legal & policy
 
 - [x] MIT license file for the project
 - [x] Privacy policy (`PRIVACY.md`, `browser://privacy`) listing everything that goes over the network; linked from Settings and the welcome page
-- [ ] **P1** Bundle and show third-party licenses (Electron's `LICENSES.chromium.html`, npm dependencies, filter lists like EasyList)
+- [x] Licenses page (`browser://licenses`): npm dependencies (generated at build), Chromium/Electron notices (bundled), filter lists
 - [ ] **P1** Product name + icon (replace placeholder "Browser" and the default Electron icon); trademark check
 - [ ] **P2** Terms of use / EULA; avoid "Chrome"/"Google" marks
 
