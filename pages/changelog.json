@@ -9,7 +9,8 @@
     "Built-in screenshots (visible page, selection or full page), Read Aloud, in-page translation, and QR code sharing",
     "Picture-in-Picture button in the media hub, and per-site autoplay permissions",
     "Accent color themes, compact mode, customizable keyboard shortcuts, and installable web apps (PWA windows)",
-    "Single-tab screen sharing, client certificate selection, and custom protocol handlers (mailto:, web+…)"
+    "Single-tab screen sharing, client certificate selection, and custom protocol handlers (mailto:, web+…)",
+    "Redesigned Settings dashboard with category tabs and list pagination, plus a Settings toolbar button and customizable toolbar icons (right-click the toolbar or edit in Settings → Appearance & Toolbar)"
   ],
   "0.20.0": [
     "History moved into a fast database, with full-text search on the History page",

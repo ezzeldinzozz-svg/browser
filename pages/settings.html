@@ -3,261 +3,415 @@
 <head>
   <meta charset="utf-8">
   <title>Settings</title>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'">
   <link rel="stylesheet" href="page.css">
 </head>
 <body>
-  <main>
-    <h1>Settings</h1>
-    <input id="settings-search" aria-label="Search settings" type="search" placeholder="Search settings" autocomplete="off">
-    <h2>About Operecs</h2>
-    <div class="about">
-      <div>
-        <div id="about-version" class="t"></div>
-        <div id="about-status" class="u"></div>
+  <main class="settings-shell">
+    <aside class="settings-sidebar">
+      <div class="settings-brand">
+        <h1>Settings</h1>
+        <p class="settings-sub">Configure Operecs</p>
       </div>
-      <button id="about-action"></button>
-    </div>
-    <p class="hint"><a href="browser://privacy/">Privacy: what Operecs sends over the network</a></p>
-    <h2>Default browser</h2>
-    <div class="about">
-      <div id="default-status" class="u"></div>
-      <button id="default-set" hidden>Make default</button>
-    </div>
+      <div class="settings-search-wrap">
+        <input id="settings-search" aria-label="Search settings" type="search" placeholder="Search settings…" autocomplete="off">
+      </div>
+      <nav id="settings-tabs" class="settings-tabs" role="tablist" aria-label="Settings categories">
+        <button type="button" class="settings-tab active" role="tab" aria-selected="true" data-tab="general">
+          <svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5"/><path d="M20 20l-4.2-4.2"/></svg>
+          <span>General &amp; Search</span>
+        </button>
+        <button type="button" class="settings-tab" role="tab" aria-selected="false" data-tab="appearance">
+          <svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 9h18M9 9v11"/></svg>
+          <span>Appearance &amp; Toolbar</span>
+        </button>
+        <button type="button" class="settings-tab" role="tab" aria-selected="false" data-tab="privacy">
+          <svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7.5 3v5.8c0 4.7-3.2 8.8-7.5 10.2-4.3-1.4-7.5-5.5-7.5-10.2V6z"/></svg>
+          <span>Privacy &amp; Security</span>
+        </button>
+        <button type="button" class="settings-tab" role="tab" aria-selected="false" data-tab="sites">
+          <svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>
+          <span>Sites &amp; Permissions</span>
+        </button>
+        <button type="button" class="settings-tab" role="tab" aria-selected="false" data-tab="profiles">
+          <svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8.5" r="3.8"/><path d="M5 20c0-3.8 3.1-6.5 7-6.5s7 2.7 7 6.5"/></svg>
+          <span>Profiles &amp; Autofill</span>
+        </button>
+        <button type="button" class="settings-tab" role="tab" aria-selected="false" data-tab="system">
+          <svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.77 1.02 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          <span>Apps, System &amp; About</span>
+        </button>
+      </nav>
+    </aside>
 
-    <h2>Search engine</h2>
-    <p class="hint">Used when you type something that isn't an address.</p>
-    <select id="engine" aria-label="Search engine"></select>
-    <p class="hint">Search any engine from the address bar by typing its keyword first, e.g. <code>w cats</code>.</p>
-    <div id="engines"></div>
-    <form id="engine-add" class="perm-add">
-      <input id="engine-name" aria-label="Search engine name" type="text" placeholder="Name, e.g. Wikipedia" autocomplete="off" spellcheck="false">
-      <input id="engine-keyword" aria-label="Search engine keyword" type="text" placeholder="Keyword, e.g. w" autocomplete="off" spellcheck="false" style="flex: 0 0 110px">
-      <input id="engine-url" aria-label="Search engine address with %s" type="text" placeholder="URL with %s, e.g. https://en.wikipedia.org/w/index.php?search=%s" autocomplete="off" spellcheck="false" style="flex: 2">
-      <button type="submit">Add</button>
-    </form>
-    <p id="engine-error" class="hint" hidden></p>
-    <label class="check"><input id="search-suggestions" type="checkbox"> Show search suggestions (sends what you type in the address bar to the search engine; never in private windows)</label>
+    <div class="settings-content">
+      <div id="settings-search-empty" class="settings-card empty" hidden>No settings match your search.</div>
 
-    <h2>On startup</h2>
-    <div class="startup">
-      <label class="check"><input type="radio" name="startup" value="continue"> Continue where you left off</label>
-      <label class="check"><input type="radio" name="startup" value="newtab"> Open the New Tab page</label>
-      <label class="check"><input type="radio" name="startup" value="pages"> Open specific pages</label>
-      <div id="startup-pages-box" hidden>
-        <textarea id="startup-pages" rows="3" placeholder="One address per line, e.g. https://example.com" spellcheck="false"></textarea>
-        <button id="startup-use-current">Use current pages</button>
-        <span id="startup-pages-saved" class="hint"></span>
+      <!-- ==================== TAB 1: GENERAL & SEARCH ==================== -->
+      <section class="settings-panel active" data-tab="general" role="tabpanel">
+        <div class="settings-panel-head">
+          <div class="settings-panel-title">General &amp; Search</div>
+          <div class="settings-panel-desc">Startup behavior, default browser, search engines, downloads, and language preferences.</div>
+        </div>
+
+        <div class="settings-card">
+          <h2>Default browser</h2>
+          <div class="about">
+            <div id="default-status" class="u"></div>
+            <button id="default-set" hidden>Make default</button>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h2>On startup</h2>
+          <div class="startup">
+            <label class="check"><input type="radio" name="startup" value="continue"> Continue where you left off</label>
+            <label class="check"><input type="radio" name="startup" value="newtab"> Open the New Tab page</label>
+            <label class="check"><input type="radio" name="startup" value="pages"> Open specific pages</label>
+            <div id="startup-pages-box" hidden>
+              <textarea id="startup-pages" rows="3" placeholder="One address per line, e.g. https://example.com" spellcheck="false"></textarea>
+              <button id="startup-use-current">Use current pages</button>
+              <span id="startup-pages-saved" class="hint"></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <h2>Search engine</h2>
+          <p class="hint">Used when you type something that isn't an address.</p>
+          <select id="engine" aria-label="Search engine"></select>
+          <label class="check"><input id="search-suggestions" type="checkbox"> Show search suggestions (sends what you type in the address bar to the search engine; never in private windows)</label>
+          <p class="hint">Search any engine from the address bar by typing its keyword first, e.g. <code>w cats</code>.</p>
+          <div id="engines"></div>
+          <form id="engine-add" class="perm-add">
+            <input id="engine-name" aria-label="Search engine name" type="text" placeholder="Name, e.g. Wikipedia" autocomplete="off" spellcheck="false">
+            <input id="engine-keyword" aria-label="Search engine keyword" type="text" placeholder="Keyword, e.g. w" autocomplete="off" spellcheck="false" style="flex: 0 0 110px">
+            <input id="engine-url" aria-label="Search engine address with %s" type="text" placeholder="URL with %s, e.g. https://en.wikipedia.org/w/index.php?search=%s" autocomplete="off" spellcheck="false" style="flex: 2">
+            <button type="submit">Add</button>
+          </form>
+          <p id="engine-error" class="hint" hidden></p>
+        </div>
+
+        <div class="settings-card">
+          <h2>Downloads</h2>
+          <div class="about">
+            <div>
+              <div class="t">Save files to</div>
+              <div id="download-dir" class="u"></div>
+            </div>
+            <button id="download-dir-change">Change…</button>
+          </div>
+          <label class="check"><input id="ask-download" type="checkbox"> Ask where to save each file</label>
+        </div>
+
+        <div class="settings-card">
+          <h2>Languages</h2>
+          <label class="dns" id="ui-language-row" hidden>Language of Operecs
+            <select id="ui-language" aria-label="Language of Operecs"><option value="auto">Same as the system</option></select>
+          </label>
+          <p id="ui-language-restart" class="hint" hidden>Takes effect after restarting Operecs. <button id="ui-language-restart-now">Restart now</button></p>
+          <label class="dns">Preferred languages for websites
+            <input id="languages" type="text" spellcheck="false" placeholder="e.g. en-US, ar">
+          </label>
+          <p id="languages-hint" class="hint"></p>
+          <label class="check"><input id="spellcheck" type="checkbox"> Check spelling as I type</label>
+          <p class="hint">Words you added to the dictionary (right-click a misspelled word → Add to Dictionary):</p>
+          <div id="dictionary"></div>
+        </div>
+      </section>
+
+      <!-- ==================== TAB 2: APPEARANCE & TOOLBAR ==================== -->
+      <section class="settings-panel" data-tab="appearance" role="tabpanel" hidden>
+        <div class="settings-panel-head">
+          <div class="settings-panel-title">Appearance &amp; Toolbar</div>
+          <div class="settings-panel-desc">Customize your theme, accent color, tab layout, and which action buttons appear in the toolbar.</div>
+        </div>
+
+        <div class="settings-card">
+          <h2>Appearance</h2>
+          <div class="settings-grid-two">
+            <label class="dns">Theme
+              <select id="theme">
+                <option value="system">Match the system</option>
+                <option value="dark">Dark</option>
+                <option value="light">Light</option>
+              </select>
+            </label>
+            <div class="dns">Accent color
+              <div id="accent-swatches" class="accent-swatches" role="radiogroup" aria-label="Accent color"></div>
+            </div>
+          </div>
+          <label class="check"><input id="compact-mode" type="checkbox"> Compact mode (slim tab strip and toolbar)</label>
+          <label class="check"><input id="vertical-tabs" type="checkbox"> Vertical tabs (show tabs in a left sidebar)</label>
+          <label class="check"><input id="show-bookmarks-bar" type="checkbox"> Show Bookmarks bar (<kbd>⇧⌘B</kbd>)</label>
+          <label class="check"><input id="show-home" type="checkbox"> Show Home button in the toolbar</label>
+          <div class="homepage">
+            <input id="home-page" aria-label="Home page" type="text" placeholder="Home page (empty = New Tab page)" spellcheck="false">
+          </div>
+        </div>
+
+        <div class="settings-card">
+          <div class="card-head-row">
+            <h2>Toolbar buttons</h2>
+            <button type="button" id="toolbar-reset">Reset to defaults</button>
+          </div>
+          <p class="hint">Choose which buttons appear in the browser toolbar. You can also right-click anywhere on the toolbar to toggle buttons on the fly.</p>
+          <div id="toolbar-buttons-grid" class="toolbar-buttons-grid"></div>
+        </div>
+
+        <div class="settings-card">
+          <h2>Tabs and windows</h2>
+          <label class="check"><input id="confirm-close" type="checkbox"> Ask before closing a window or quitting with several tabs open</label>
+          <p class="hint"><a href="browser://shortcuts/">Customize keyboard shortcuts →</a></p>
+        </div>
+      </section>
+
+      <!-- ==================== TAB 3: PRIVACY & SECURITY ==================== -->
+      <section class="settings-panel" data-tab="privacy" role="tabpanel" hidden>
+        <div class="settings-panel-head">
+          <div class="settings-panel-title">Privacy &amp; Security</div>
+          <div class="settings-panel-desc">Ad &amp; tracker blocking, fingerprinting protection, DNS-over-HTTPS, proxy settings, and browsing data cleanup.</div>
+        </div>
+
+        <div class="settings-card">
+          <h2>Privacy</h2>
+          <label class="check"><input id="adblock" type="checkbox"> Block ads and trackers</label>
+          <label class="check"><input id="reject-cookies" type="checkbox"> Automatically reject cookie banners on websites</label>
+          <label class="check"><input id="fingerprinting-protection" type="checkbox"> Protect against browser fingerprinting (adds subtle noise to canvas, WebGL and audio)</label>
+          <label class="check"><input id="tpc" type="checkbox"> Block third-party cookies (sites can still ask to use theirs when embedded)</label>
+          <p id="tpc-restart" class="hint" hidden>Takes effect after restarting Operecs. <button id="tpc-restart-now">Restart now</button></p>
+          <label class="check"><input id="gpc" type="checkbox"> Ask sites not to sell or share my data (Global Privacy Control)</label>
+          <label class="check"><input id="strip-tracking" type="checkbox"> Remove tracking parameters (utm_, fbclid, gclid…) from addresses I open</label>
+          <label class="check"><input id="https-only" type="checkbox"> Always use secure connections (HTTPS-Only: warn before opening sites that only support HTTP)</label>
+          <p class="hint"><a href="browser://privacy/">Privacy: what Operecs sends over the network →</a></p>
+        </div>
+
+        <div class="settings-card">
+          <h2>Network &amp; DNS</h2>
+          <label class="dns">Secure DNS
+            <select id="dns">
+              <option value="automatic">Automatic (when your network's DNS supports it)</option>
+              <option value="cloudflare">Cloudflare (1.1.1.1)</option>
+              <option value="quad9">Quad9</option>
+              <option value="custom">Custom…</option>
+              <option value="off">Off</option>
+            </select>
+          </label>
+          <input id="dns-custom" aria-label="Custom secure DNS address" type="text" placeholder="https://dns.example/dns-query" spellcheck="false" hidden>
+          <label class="dns">Proxy
+            <select id="proxy-mode">
+              <option value="system">Use the system's settings</option>
+              <option value="direct">No proxy</option>
+              <option value="manual">Manual proxy server…</option>
+              <option value="pac">Automatic configuration (PAC)…</option>
+            </select>
+          </label>
+          <form id="proxy-manual" class="perm-add" hidden>
+            <input id="proxy-server" aria-label="Proxy server" type="text" placeholder="host:port, or socks5://host:port" spellcheck="false">
+            <input id="proxy-bypass" aria-label="Addresses that bypass the proxy" type="text" placeholder="Bypass, e.g. &lt;local&gt;;*.example.com" spellcheck="false">
+            <button type="submit">Save</button>
+          </form>
+          <form id="proxy-pac" class="perm-add" hidden>
+            <input id="proxy-pac-url" aria-label="Proxy auto-configuration address" type="text" placeholder="https://example.com/proxy.pac" spellcheck="false">
+            <button type="submit">Save</button>
+          </form>
+          <p id="proxy-saved" class="hint" hidden>Proxy settings saved.</p>
+        </div>
+
+        <div class="settings-card">
+          <h2>Ad-blocking exceptions</h2>
+          <p class="hint">Sites where blocking is turned off (use the shield in the toolbar to change a site):</p>
+          <div id="allowlist"></div>
+        </div>
+
+        <div class="settings-card">
+          <h2 id="clear">Clear browsing data</h2>
+          <div class="clear">
+            <label>Time range
+              <select id="clear-range">
+                <option value="hour">Last hour</option>
+                <option value="day">Last 24 hours</option>
+                <option value="week">Last 7 days</option>
+                <option value="month">Last 4 weeks</option>
+                <option value="all">All time</option>
+              </select>
+            </label>
+            <label class="check"><input id="clear-history" type="checkbox" checked> Browsing history</label>
+            <label class="check"><input id="clear-downloads" type="checkbox" checked> Download list (files stay on disk)</label>
+            <label class="check"><input id="clear-cookies" type="checkbox"> Cookies and site data (signs you out of most sites; all time)</label>
+            <label class="check"><input id="clear-cache" type="checkbox" checked> Cached images and files (all time)</label>
+            <button id="clear-go" class="primary">Clear data</button>
+            <span id="clear-done" class="hint"></span>
+          </div>
+          <label class="dns">Keep history for
+            <select id="history-keep">
+              <option value="0">Forever</option>
+              <option value="365">1 year</option>
+              <option value="90">90 days</option>
+              <option value="30">30 days</option>
+              <option value="7">7 days</option>
+            </select>
+          </label>
+          <p class="hint">Clear when Operecs quits:</p>
+          <div class="clear-on-quit">
+            <label class="check"><input id="quit-history" type="checkbox"> Browsing history</label>
+            <label class="check"><input id="quit-downloads" type="checkbox"> Download list</label>
+            <label class="check"><input id="quit-cookies" type="checkbox"> Cookies and site data (you'll be signed out of sites each time)</label>
+            <label class="check"><input id="quit-cache" type="checkbox"> Cached images and files</label>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== TAB 4: SITES & PERMISSIONS ==================== -->
+      <section class="settings-panel" data-tab="sites" role="tabpanel" hidden>
+        <div class="settings-panel-head">
+          <div class="settings-panel-title">Sites &amp; Permissions</div>
+          <div class="settings-panel-desc">Control default site behavior, camera/microphone/location permissions, per-site exceptions, and stored cookies.</div>
+        </div>
+
+        <div class="settings-card">
+          <h2>Sites</h2>
+          <div class="settings-grid-two">
+            <label class="dns">Autoplay
+              <select id="autoplay">
+                <option value="block-audible">Block videos with sound until I interact with the page</option>
+                <option value="allow">Allow autoplay</option>
+              </select>
+            </label>
+            <label class="dns">Default zoom
+              <select id="default-zoom"></select>
+            </label>
+          </div>
+          <p class="hint">Changes apply to pages opened after you change them.</p>
+        </div>
+
+        <div class="settings-card">
+          <h2>Site permissions</h2>
+          <p class="hint">What sites may use when they ask. "Ask" shows a prompt; "Block" denies without asking.</p>
+          <div id="perm-defaults" class="perm-grid"></div>
+          <p class="hint">Exceptions for specific sites:</p>
+          <div id="list"></div>
+          <form id="perm-add" class="perm-add">
+            <input id="perm-add-site" aria-label="Site for the exception" type="text" placeholder="Site, e.g. meet.example.com" autocomplete="off" spellcheck="false">
+            <select id="perm-add-key" aria-label="Permission"></select>
+            <select id="perm-add-value" aria-label="Allow or block"><option value="allow">Allow</option><option value="block">Block</option></select>
+            <button type="submit">Add exception</button>
+          </form>
+          <p class="hint">Protocol handlers (sites allowed to open links like mailto: or web+…):</p>
+          <div id="protocol-handlers"></div>
+        </div>
+
+        <div class="settings-card">
+          <h2>Cookies and site data</h2>
+          <p class="hint">Sites that have stored cookies on this computer. Removing a site's data also clears its other storage and signs you out of it.</p>
+          <div class="sitedata-tools">
+            <input id="sitedata-search" aria-label="Search sites" type="search" placeholder="Search sites" autocomplete="off" spellcheck="false">
+            <button id="sitedata-load">Show sites</button>
+            <button id="sitedata-all" hidden>Remove all</button>
+          </div>
+          <div id="sitedata"></div>
+        </div>
+      </section>
+
+      <!-- ==================== TAB 5: PROFILES & AUTOFILL ==================== -->
+      <section class="settings-panel" data-tab="profiles" role="tabpanel" hidden>
+        <div class="settings-panel-head">
+          <div class="settings-panel-title">Profiles &amp; Autofill</div>
+          <div class="settings-panel-desc">Manage isolated browser profiles and saved contact/shipping addresses for one-click form filling.</div>
+        </div>
+
+        <div class="settings-card">
+          <h2 id="profiles">Profiles</h2>
+          <p class="hint">Each profile has its own history, bookmarks, extensions, cookies, settings and addresses — for example one for work and one for personal browsing. Profiles open in their own windows.</p>
+          <div id="profile-list"></div>
+          <form id="profile-add" class="perm-add">
+            <input id="profile-name" aria-label="New profile name" placeholder="New profile name, e.g. Work" autocomplete="off" spellcheck="false">
+            <button type="submit">Add profile</button>
+          </form>
+        </div>
+
+        <div class="settings-card">
+          <h2>Addresses</h2>
+          <p class="hint">Fill in address and contact forms with one click: focus a field like "Name" or "Street" and pick an address. Operecs offers to save one when you send a form. Passwords and cards come from your password-manager extension.</p>
+          <div id="addresses"></div>
+          <form id="address-form" class="address-form" hidden>
+            <input id="addr-name" aria-label="Full name" placeholder="Full name" autocomplete="off">
+            <input id="addr-organization" aria-label="Company" placeholder="Company (optional)" autocomplete="off">
+            <input id="addr-street" aria-label="Street address" placeholder="Street address" autocomplete="off">
+            <input id="addr-street2" aria-label="Apartment, suite" placeholder="Apartment, suite… (optional)" autocomplete="off">
+            <div class="addr-row">
+              <input id="addr-city" aria-label="City" placeholder="City" autocomplete="off">
+              <input id="addr-region" aria-label="State or region" placeholder="State / region" autocomplete="off">
+              <input id="addr-postal" aria-label="Postal code" placeholder="Postal code" autocomplete="off">
+            </div>
+            <input id="addr-country" aria-label="Country" placeholder="Country" autocomplete="off">
+            <div class="addr-row">
+              <input id="addr-email" aria-label="Email" placeholder="Email" autocomplete="off">
+              <input id="addr-phone" aria-label="Phone" placeholder="Phone" autocomplete="off">
+            </div>
+            <div class="buttons"><button type="button" id="address-cancel">Cancel</button><button type="submit" class="primary">Save address</button></div>
+          </form>
+          <div class="buttons"><button id="address-add">Add address</button></div>
+        </div>
+      </section>
+
+      <!-- ==================== TAB 6: APPS, SYSTEM & ABOUT ==================== -->
+      <section class="settings-panel" data-tab="system" role="tabpanel" hidden>
+        <div class="settings-panel-head">
+          <div class="settings-panel-title">Apps, System &amp; About</div>
+          <div class="settings-panel-desc">Updates, memory &amp; battery optimization, installed web apps, data backup, and factory reset.</div>
+        </div>
+
+        <div class="settings-card">
+          <h2>About Operecs</h2>
+          <div class="about">
+            <div>
+              <div id="about-version" class="t"></div>
+              <div id="about-status" class="u"></div>
+            </div>
+            <button id="about-action"></button>
+          </div>
+          <p class="hint"><a href="browser://whatsnew/">What's new in Operecs</a> · <a href="browser://licenses/">Open-source licenses</a></p>
+        </div>
+
+        <div class="settings-card">
+          <h2>Performance</h2>
+          <label class="check"><input id="energy-saver" type="checkbox"> Energy saver: on battery, let tabs I haven't used for 10 minutes sleep</label>
+          <label class="check"><input id="memory-saver" type="checkbox"> Memory saver: let tabs I haven't used for a while sleep</label>
+          <label class="dns">Put tabs to sleep after
+            <select id="memory-saver-minutes">
+              <option value="15">15 minutes</option><option value="30">30 minutes</option><option value="60">1 hour</option>
+              <option value="120">2 hours</option><option value="240">4 hours</option>
+            </select>
+          </label>
+          <p class="hint">Sleeping tabs reload when you open them. Pinned tabs, tabs playing sound and tabs using your camera or microphone stay awake. <a href="browser://tasks/">Open Task Manager →</a></p>
+        </div>
+
+        <div class="settings-card">
+          <h2>Installed web apps</h2>
+          <p class="hint">Sites installed to open in their own window (right-click a page or use the lock icon → Install as app).</p>
+          <div id="installed-apps"></div>
+        </div>
+
+        <div class="settings-card">
+          <h2>Your data</h2>
+          <p class="hint">Save your bookmarks (HTML, works in any browser) and your history, settings and site permissions (JSON) to a folder. Import history from another browser on the History page.</p>
+          <div class="buttons"><button id="export-all">Export my data…</button> <span id="export-result" class="hint"></span></div>
+        </div>
+
+        <div class="settings-card">
+          <h2>Reset</h2>
+          <p class="hint">Restore every setting to its default. Bookmarks, history, passwords in extensions and site data stay.</p>
+          <button id="reset-settings">Reset settings</button>
+        </div>
+      </section>
+
+      <div id="settings-tab-pager" class="settings-tab-pager">
+        <button type="button" id="tab-prev">← Previous</button>
+        <div id="tab-dots" class="tab-dots"></div>
+        <button type="button" id="tab-next">Next →</button>
       </div>
     </div>
-
-    <h2>Tabs and windows</h2>
-    <label class="check"><input id="confirm-close" type="checkbox"> Ask before closing a window or quitting with several tabs open</label>
-    <p class="hint"><a href="browser://shortcuts/">Customize keyboard shortcuts</a></p>
-
-    <h2>Sites</h2>
-    <label class="dns">Autoplay
-      <select id="autoplay">
-        <option value="block-audible">Block videos with sound until I interact with the page</option>
-        <option value="allow">Allow autoplay</option>
-      </select>
-    </label>
-    <label class="dns">Default zoom
-      <select id="default-zoom"></select>
-    </label>
-    <p class="hint">Changes apply to pages opened after you change them.</p>
-
-    <h2>Performance</h2>
-    <label class="check"><input id="energy-saver" type="checkbox"> Energy saver: on battery, let tabs I haven't used for 10 minutes sleep</label>
-    <label class="check"><input id="memory-saver" type="checkbox"> Memory saver: let tabs I haven't used for a while sleep</label>
-    <label class="dns">Put tabs to sleep after
-      <select id="memory-saver-minutes">
-        <option value="15">15 minutes</option><option value="30">30 minutes</option><option value="60">1 hour</option>
-        <option value="120">2 hours</option><option value="240">4 hours</option>
-      </select>
-    </label>
-    <p class="hint">Sleeping tabs reload when you open them. Pinned tabs, tabs playing sound and tabs using your camera or microphone stay awake. View → Task Manager shows what each tab uses.</p>
-
-    <h2>Languages</h2>
-    <label class="dns" id="ui-language-row" hidden>Language of Operecs
-      <select id="ui-language" aria-label="Language of Operecs"><option value="auto">Same as the system</option></select>
-    </label>
-    <p id="ui-language-restart" class="hint" hidden>Takes effect after restarting Operecs. <button id="ui-language-restart-now">Restart now</button></p>
-    <label class="dns">Preferred languages for websites
-      <input id="languages" type="text" spellcheck="false" placeholder="e.g. en-US, ar">
-    </label>
-    <p id="languages-hint" class="hint"></p>
-    <label class="check"><input id="spellcheck" type="checkbox"> Check spelling as I type</label>
-    <p class="hint">Words you added to the dictionary (right-click a misspelled word → Add to Dictionary):</p>
-    <div id="dictionary"></div>
-
-    <h2>Appearance</h2>
-    <label class="dns">Theme
-      <select id="theme">
-        <option value="system">Match the system</option>
-        <option value="dark">Dark</option>
-        <option value="light">Light</option>
-      </select>
-    </label>
-    <div class="dns">Accent color
-      <div id="accent-swatches" class="accent-swatches" role="radiogroup" aria-label="Accent color"></div>
-    </div>
-    <label class="check"><input id="compact-mode" type="checkbox"> Compact mode (slim tab strip and toolbar)</label>
-    <label class="check"><input id="vertical-tabs" type="checkbox"> Vertical tabs (show tabs in a left sidebar)</label>
-    <label class="check"><input id="show-home" type="checkbox"> Show Home button</label>
-    <div class="homepage">
-      <input id="home-page" aria-label="Home page" type="text" placeholder="Home page (empty = New Tab page)" spellcheck="false">
-    </div>
-
-    <h2>Downloads</h2>
-    <div class="about">
-      <div>
-        <div class="t">Save files to</div>
-        <div id="download-dir" class="u"></div>
-      </div>
-      <button id="download-dir-change">Change…</button>
-    </div>
-    <label class="check"><input id="ask-download" type="checkbox"> Ask where to save each file</label>
-
-    <h2 id="clear">Clear browsing data</h2>
-    <div class="clear">
-      <label>Time range
-        <select id="clear-range">
-          <option value="hour">Last hour</option>
-          <option value="day">Last 24 hours</option>
-          <option value="week">Last 7 days</option>
-          <option value="month">Last 4 weeks</option>
-          <option value="all">All time</option>
-        </select>
-      </label>
-      <label class="check"><input id="clear-history" type="checkbox" checked> Browsing history</label>
-      <label class="check"><input id="clear-downloads" type="checkbox" checked> Download list (files stay on disk)</label>
-      <label class="check"><input id="clear-cookies" type="checkbox"> Cookies and site data (signs you out of most sites; all time)</label>
-      <label class="check"><input id="clear-cache" type="checkbox" checked> Cached images and files (all time)</label>
-      <button id="clear-go">Clear data</button>
-      <span id="clear-done" class="hint"></span>
-    </div>
-    <label class="dns">Keep history for
-      <select id="history-keep">
-        <option value="0">Forever</option>
-        <option value="365">1 year</option>
-        <option value="90">90 days</option>
-        <option value="30">30 days</option>
-        <option value="7">7 days</option>
-      </select>
-    </label>
-    <p class="hint">Clear when Operecs quits:</p>
-    <div class="clear-on-quit">
-      <label class="check"><input id="quit-history" type="checkbox"> Browsing history</label>
-      <label class="check"><input id="quit-downloads" type="checkbox"> Download list</label>
-      <label class="check"><input id="quit-cookies" type="checkbox"> Cookies and site data (you'll be signed out of sites each time)</label>
-      <label class="check"><input id="quit-cache" type="checkbox"> Cached images and files</label>
-    </div>
-
-    <h2>Privacy</h2>
-    <label class="check"><input id="adblock" type="checkbox"> Block ads and trackers</label>
-    <label class="check"><input id="reject-cookies" type="checkbox"> Automatically reject cookie banners on websites</label>
-    <label class="check"><input id="fingerprinting-protection" type="checkbox"> Protect against browser fingerprinting (adds subtle noise to canvas, WebGL and audio)</label>
-    <label class="check"><input id="tpc" type="checkbox"> Block third-party cookies (sites can still ask to use theirs when embedded)</label>
-    <label class="check"><input id="gpc" type="checkbox"> Ask sites not to sell or share my data (Global Privacy Control)</label>
-    <label class="check"><input id="strip-tracking" type="checkbox"> Remove tracking parameters (utm_, fbclid, gclid…) from addresses I open</label>
-    <label class="check"><input id="https-only" type="checkbox"> Always use secure connections (HTTPS-Only: warn before opening sites that only support HTTP)</label>
-    <label class="dns">Secure DNS
-      <select id="dns">
-        <option value="automatic">Automatic (when your network's DNS supports it)</option>
-        <option value="cloudflare">Cloudflare (1.1.1.1)</option>
-        <option value="quad9">Quad9</option>
-        <option value="custom">Custom…</option>
-        <option value="off">Off</option>
-      </select>
-    </label>
-    <input id="dns-custom" aria-label="Custom secure DNS address" type="text" placeholder="https://dns.example/dns-query" spellcheck="false" hidden>
-    <label class="dns">Proxy
-      <select id="proxy-mode">
-        <option value="system">Use the system's settings</option>
-        <option value="direct">No proxy</option>
-        <option value="manual">Manual proxy server…</option>
-        <option value="pac">Automatic configuration (PAC)…</option>
-      </select>
-    </label>
-    <form id="proxy-manual" class="perm-add" hidden>
-      <input id="proxy-server" aria-label="Proxy server" type="text" placeholder="host:port, or socks5://host:port" spellcheck="false">
-      <input id="proxy-bypass" aria-label="Addresses that bypass the proxy" type="text" placeholder="Bypass, e.g. &lt;local&gt;;*.example.com" spellcheck="false">
-      <button type="submit">Save</button>
-    </form>
-    <form id="proxy-pac" class="perm-add" hidden>
-      <input id="proxy-pac-url" aria-label="Proxy auto-configuration address" type="text" placeholder="https://example.com/proxy.pac" spellcheck="false">
-      <button type="submit">Save</button>
-    </form>
-    <p id="proxy-saved" class="hint" hidden>Proxy settings saved.</p>
-    <p id="tpc-restart" class="hint" hidden>Takes effect after restarting Operecs. <button id="tpc-restart-now">Restart now</button></p>
-    <p class="hint">Sites where blocking is turned off (use the shield in the toolbar to change a site):</p>
-    <div id="allowlist"></div>
-
-    <h2>Cookies and site data</h2>
-    <p class="hint">Sites that have stored cookies on this computer. Removing a site's data also clears its other storage and signs you out of it.</p>
-    <div class="sitedata-tools">
-      <input id="sitedata-search" aria-label="Search sites" type="search" placeholder="Search sites" autocomplete="off" spellcheck="false">
-      <button id="sitedata-load">Show sites</button>
-      <button id="sitedata-all" hidden>Remove all</button>
-    </div>
-    <div id="sitedata"></div>
-
-    <h2>Site permissions</h2>
-    <p class="hint">What sites may use when they ask. "Ask" shows a prompt; "Block" denies without asking.</p>
-    <div id="perm-defaults" class="perm-grid"></div>
-    <p class="hint">Exceptions for specific sites:</p>
-    <div id="list"></div>
-    <form id="perm-add" class="perm-add">
-      <input id="perm-add-site" aria-label="Site for the exception" type="text" placeholder="Site, e.g. meet.example.com" autocomplete="off" spellcheck="false">
-      <select id="perm-add-key" aria-label="Permission"></select>
-      <select id="perm-add-value" aria-label="Allow or block"><option value="allow">Allow</option><option value="block">Block</option></select>
-      <button type="submit">Add exception</button>
-    </form>
-    <p class="hint">Protocol handlers (sites allowed to open links like mailto: or web+…):</p>
-    <div id="protocol-handlers"></div>
-
-    <h2>Installed web apps</h2>
-    <p class="hint">Sites installed to open in their own window (right-click a page or use the lock icon → Install as app).</p>
-    <div id="installed-apps"></div>
-
-    <h2 id="profiles">Profiles</h2>
-    <p class="hint">Each profile has its own history, bookmarks, extensions, cookies, settings and addresses — for example one for work and one for personal browsing. Profiles open in their own windows.</p>
-    <div id="profile-list"></div>
-    <form id="profile-add" class="perm-add">
-      <input id="profile-name" aria-label="New profile name" placeholder="New profile name, e.g. Work" autocomplete="off" spellcheck="false">
-      <button type="submit">Add profile</button>
-    </form>
-
-    <h2>Addresses</h2>
-    <p class="hint">Fill in address and contact forms with one click: focus a field like "Name" or "Street" and pick an address. Operecs offers to save one when you send a form. Passwords and cards come from your password-manager extension.</p>
-    <div id="addresses"></div>
-    <form id="address-form" class="address-form" hidden>
-      <input id="addr-name" aria-label="Full name" placeholder="Full name" autocomplete="off">
-      <input id="addr-organization" aria-label="Company" placeholder="Company (optional)" autocomplete="off">
-      <input id="addr-street" aria-label="Street address" placeholder="Street address" autocomplete="off">
-      <input id="addr-street2" aria-label="Apartment, suite" placeholder="Apartment, suite… (optional)" autocomplete="off">
-      <div class="addr-row">
-        <input id="addr-city" aria-label="City" placeholder="City" autocomplete="off">
-        <input id="addr-region" aria-label="State or region" placeholder="State / region" autocomplete="off">
-        <input id="addr-postal" aria-label="Postal code" placeholder="Postal code" autocomplete="off">
-      </div>
-      <input id="addr-country" aria-label="Country" placeholder="Country" autocomplete="off">
-      <div class="addr-row">
-        <input id="addr-email" aria-label="Email" placeholder="Email" autocomplete="off">
-        <input id="addr-phone" aria-label="Phone" placeholder="Phone" autocomplete="off">
-      </div>
-      <div class="buttons"><button type="button" id="address-cancel">Cancel</button><button type="submit" class="primary">Save address</button></div>
-    </form>
-    <div class="buttons"><button id="address-add">Add address</button></div>
-
-    <h2>Your data</h2>
-    <p class="hint">Save your bookmarks (HTML, works in any browser) and your history, settings and site permissions (JSON) to a folder. Import history from another browser on the History page.</p>
-    <div class="buttons"><button id="export-all">Export my data…</button> <span id="export-result" class="hint"></span></div>
-
-    <h2>Reset</h2>
-    <p class="hint">Restore every setting to its default. Bookmarks, history, passwords in extensions and site data stay.</p>
-    <button id="reset-settings">Reset settings</button>
   </main>
   <script src="settings.js"></script>
 </body>

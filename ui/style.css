@@ -226,9 +226,9 @@ body.win #tabstrip { padding-right: 144px; }
 }
 #toolbar > button:hover:not(:disabled) { background: var(--surface-hover); color: var(--fg); }
 #toolbar > button:disabled { opacity: 0.32; cursor: default; }
-#star.on, #reader.on { color: var(--violet) !important; }
+#star.on, #reader.on, #split-btn.on { color: var(--violet) !important; }
 #star.on .ico { fill: currentColor; }
-#reader[hidden], #toolbar #home[hidden] { display: none; }
+#toolbar > button[hidden], #reader[hidden], #toolbar #home[hidden] { display: none; }
 #reload .stop { display: none; }
 #reload.loading .go { display: none; }
 #reload.loading .stop { display: block; }

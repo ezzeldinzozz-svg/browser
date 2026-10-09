@@ -126,6 +126,34 @@ const PROMPTABLE = new Set(['media', ...Object.keys(PERM_LABELS)]);
 const isMac = process.platform === 'darwin';
 const ACCENT_COLORS = ['violet', 'blue', 'emerald', 'amber', 'rose', 'cyan'];
 const GROUP_COLORS = { violet: '#9b6cff', blue: '#4f8cff', emerald: '#2fb67c', amber: '#f2994a', rose: '#eb5757', cyan: '#12a4b8' };
+const TOOLBAR_BUTTON_DEFAULTS = {
+  home: false,
+  shield: true,
+  star: true,
+  split: false,
+  screenshot: false,
+  translate: false,
+  readAloud: false,
+  bookmarks: false,
+  history: false,
+  downloads: true,
+  profile: true,
+  settings: true,
+};
+const TOOLBAR_BUTTON_LABELS = {
+  home: 'Home Button',
+  shield: 'Ad & Tracker Shield',
+  star: 'Bookmark Star',
+  split: 'Split View',
+  screenshot: 'Take Screenshot',
+  translate: 'Translate Page',
+  readAloud: 'Read Aloud',
+  bookmarks: 'Bookmarks',
+  history: 'History',
+  downloads: 'Downloads',
+  profile: 'Profile Switcher',
+  settings: 'Settings',
+};
 
 // ---------------------------------------------------------------- storage
 
@@ -179,10 +207,20 @@ function defaultSettings() {
     accentColor: 'violet', // 'violet' | 'blue' | 'emerald' | 'amber' | 'rose' | 'cyan'
     compactMode: false, // compact toolbar & tab strip
     verticalTabs: false, // show tabs in a left sidebar
+    toolbarButtons: { ...TOOLBAR_BUTTON_DEFAULTS }, // customizable toolbar buttons
     protocolHandlers: {}, // scheme -> { url, host }
     installedApps: [], // [{ url, title, icon }]
     shortcuts: {}, // actionId -> accelerator override
   };
+}
+
+function toolbarButtonsState() {
+  const saved = store && store.data.settings && store.data.settings.toolbarButtons;
+  const out = { ...TOOLBAR_BUTTON_DEFAULTS, ...(saved && typeof saved === 'object' ? saved : {}) };
+  if (store && store.data.settings && (!saved || !Object.hasOwn(saved, 'home'))) {
+    out.home = !!store.data.settings.showHomeButton;
+  }
+  return out;
 }
 
 class Store {
@@ -670,7 +708,7 @@ function sendTabs(w) {
     downloads: downloadSummary(w),
     update: updater.getState(),
     restoreOffer: !!w.restoreOffer,
-    showHome: !!store.data.settings.showHomeButton,
+    showHome: !!toolbarButtonsState().home,
     downloadWarning: (() => {
       const rec = store.data.downloads.find((d) => d.id === w.downloadWarnings[0]);
       return rec ? { id: rec.id, filename: rec.filename } : null;
@@ -693,6 +731,7 @@ function sendTabs(w) {
       accentColor: store.data.settings.accentColor || 'violet',
       compactMode: !!store.data.settings.compactMode,
       verticalTabs: !!store.data.settings.verticalTabs,
+      toolbarButtons: toolbarButtonsState(),
     },
     tabs: shownTabs.map((t) => {
       const pendingEntry = t.pending && t.pending.entries[t.pending.index];
@@ -4785,6 +4824,78 @@ function setupIpc() {
   });
   handle('zoom:reset', fromChrome, (w) => zoom(w, 0));
   handle('nav:home', fromChrome, (w) => goHome(w));
+  handle('nav:open-page', fromChrome, (w, name) => {
+    const page = String(name || '');
+    if (INTERNAL.has(page)) openInternalPage(w, page);
+  });
+  handle('toolbar:menu', fromChrome, (w) => {
+    const btns = toolbarButtonsState();
+    const toggleBtn = (key) => {
+      const next = { ...toolbarButtonsState(), [key]: !btns[key] };
+      store.data.settings.toolbarButtons = next;
+      if (key === 'home') store.data.settings.showHomeButton = next.home;
+      store.save();
+      sendAll();
+      buildMenu();
+    };
+    Menu.buildFromTemplate([
+      { label: 'Toolbar Buttons', enabled: false },
+      ...Object.entries(TOOLBAR_BUTTON_LABELS).map(([key, label]) => ({
+        label,
+        type: 'checkbox',
+        checked: !!btns[key],
+        click: () => toggleBtn(key),
+      })),
+      { type: 'separator' },
+      {
+        label: 'Show Bookmarks Bar',
+        type: 'checkbox',
+        checked: !!store.data.settings.showBookmarksBar,
+        click: () => {
+          store.data.settings.showBookmarksBar = !store.data.settings.showBookmarksBar;
+          store.save();
+          windows.forEach((win) => {
+            layout(win);
+            sendTabs(win);
+          });
+          buildMenu();
+        },
+      },
+      {
+        label: 'Vertical Tabs Sidebar',
+        type: 'checkbox',
+        checked: !!store.data.settings.verticalTabs,
+        click: () => {
+          store.data.settings.verticalTabs = !store.data.settings.verticalTabs;
+          store.save();
+          windows.forEach((win) => {
+            layout(win);
+            sendTabs(win);
+          });
+          buildMenu();
+        },
+      },
+      {
+        label: 'Compact Toolbar & Tabs',
+        type: 'checkbox',
+        checked: !!store.data.settings.compactMode,
+        click: () => {
+          store.data.settings.compactMode = !store.data.settings.compactMode;
+          store.save();
+          windows.forEach((win) => {
+            layout(win);
+            sendTabs(win);
+          });
+          buildMenu();
+        },
+      },
+      { type: 'separator' },
+      {
+        label: 'Customize Toolbar in Settings…',
+        click: () => openInternalPage(w, 'settings'),
+      },
+    ]).popup({ window: w.win });
+  });
   handle('restore:accept', fromChrome, (w) => restorePrevious(w));
   handle('restore:dismiss', fromChrome, (w) => {
     w.restoreOffer = null;
@@ -4881,7 +4992,9 @@ function setupIpc() {
 
   handle('data:settings', fromInternal, () => ({
     ...store.data.settings,
-    accentColors: Object.entries(ACCENT_COLORS).map(([id, c]) => ({ id, ...c })),
+    toolbarButtons: toolbarButtonsState(),
+    toolbarButtonDefs: Object.entries(TOOLBAR_BUTTON_LABELS).map(([id, label]) => ({ id, label, defaultOn: !!TOOLBAR_BUTTON_DEFAULTS[id] })),
+    accentColors: ACCENT_COLORS.map((id) => ({ id, hex: GROUP_COLORS[id] })),
     adblockAllowlist: store.data.adblockAllowlist,
     searchEngines: allEngines().map((e) => ({ id: e.id, name: e.name, keyword: e.keyword, url: e.url, custom: !!e.custom })),
     searchEngineName: searchEngine().name,
@@ -4930,6 +5043,7 @@ function setupIpc() {
         'askDownloadLocation',
         'blockThirdPartyCookies',
         'showHomeButton',
+        'showBookmarksBar',
         'confirmClose',
         'gpc',
         'httpsOnly',
@@ -4945,7 +5059,11 @@ function setupIpc() {
         'verticalTabs',
       ].includes(key) &&
         typeof value === 'boolean') ||
-      (key === 'accentColor' && Object.hasOwn(ACCENT_COLORS, value)) ||
+      (key === 'accentColor' && ACCENT_COLORS.includes(value)) ||
+      (key === 'toolbarButtons' &&
+        value &&
+        typeof value === 'object' &&
+        Object.entries(value).every(([k, v]) => Object.hasOwn(TOOLBAR_BUTTON_DEFAULTS, k) && typeof v === 'boolean')) ||
       (key === 'shortcuts' && value && typeof value === 'object' && Object.entries(value).every(([k, v]) => typeof k === 'string' && typeof v === 'string' && v.length <= 50)) ||
       (key === 'startup' && ['continue', 'newtab', 'pages'].includes(value)) ||
       (key === 'autoplay' && ['block-audible', 'allow'].includes(value)) ||
@@ -4968,12 +5086,20 @@ function setupIpc() {
       (key === 'startupPages' && Array.isArray(value) && value.every((u) => typeof u === 'string' && /^(https?|file):\/\//i.test(u))) ||
       (key === 'searchEngine' && allEngines().some((e) => e.id === value));
     if (!valid) return;
-    store.data.settings[key] = value;
+    if (key === 'toolbarButtons') {
+      store.data.settings.toolbarButtons = { ...toolbarButtonsState(), ...value };
+      store.data.settings.showHomeButton = !!store.data.settings.toolbarButtons.home;
+    } else {
+      store.data.settings[key] = value;
+      if (key === 'showHomeButton') {
+        store.data.settings.toolbarButtons = { ...toolbarButtonsState(), home: value };
+      }
+    }
     store.save();
     if (key === 'dns' || key === 'dnsCustom') applyDns();
     if (key === 'theme') nativeTheme.themeSource = value;
     if (key === 'historyKeepDays') pruneOldHistory();
-    if (key === 'compactMode' || key === 'verticalTabs') {
+    if (key === 'compactMode' || key === 'verticalTabs' || key === 'showBookmarksBar') {
       windows.forEach((w) => {
         layout(w);
         sendTabs(w);

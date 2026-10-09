@@ -22,10 +22,213 @@ const ACCENT_SWATCHES = [
   ['cyan', 'Cyan', '#36c2d6'],
 ];
 
+const TOOLBAR_ICONS = {
+  home: '<path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/>',
+  shield: '<path d="M12 3l7.5 3v5.8c0 4.7-3.2 8.8-7.5 10.2-4.3-1.4-7.5-5.5-7.5-10.2V6z"/>',
+  star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"/>',
+  split: '<rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M12 4v16"/>',
+  screenshot: '<path d="M4 8h3l2-2h6l2 2h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z"/><circle cx="12" cy="13.5" r="3.2"/>',
+  translate: '<path d="M4 5h10M9 3v2M6 5c0 4.5 2.5 8 6.5 9.5M11.5 5C10.5 9 8 12.5 4 14.5"/><path d="M13 19l4-9 4 9M14.3 16h5.4"/>',
+  readAloud: '<path d="M4 9v6h4l5 4V5L8 9H4z"/><path d="M16 9a4.5 4.5 0 0 1 0 6M18.8 6.5a8 8 0 0 1 0 11"/>',
+  bookmarks: '<path d="M6 4h12a1 1 0 0 1 1 1v15l-7-4-7 4V5a1 1 0 0 1 1-1z"/>',
+  history: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  downloads: '<path d="M12 4v11M7 10l5 5 5-5M5 20h14"/>',
+  profile: '<circle cx="12" cy="8.5" r="3.8"/><path d="M5 20c0-3.8 3.1-6.5 7-6.5s7 2.7 7 6.5"/>',
+  settings: '<circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9c.26.6.77 1.02 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+};
+
 const list = document.getElementById('list');
 const adblock = document.getElementById('adblock');
 const allowlist = document.getElementById('allowlist');
 const engine = document.getElementById('engine');
+
+// ---- Reusable pagination helper for settings lists
+
+const listPageState = {};
+
+function renderPaginatedList(container, items, pageSize, renderRow, emptyText, key = container.id) {
+  container.textContent = '';
+  if (!items || items.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.textContent = emptyText;
+    container.append(empty);
+    return;
+  }
+  const totalPages = Math.max(1, Math.ceil(items.length / pageSize));
+  let page = listPageState[key] || 1;
+  if (page > totalPages) page = totalPages;
+  if (page < 1) page = 1;
+  listPageState[key] = page;
+
+  const start = (page - 1) * pageSize;
+  const slice = items.slice(start, start + pageSize);
+  for (const item of slice) {
+    container.append(renderRow(item));
+  }
+
+  if (totalPages > 1) {
+    const pager = document.createElement('div');
+    pager.className = 'list-pager';
+
+    const prev = document.createElement('button');
+    prev.type = 'button';
+    prev.textContent = '← Previous';
+    prev.disabled = page <= 1;
+    prev.addEventListener('click', () => {
+      listPageState[key] = page - 1;
+      renderPaginatedList(container, items, pageSize, renderRow, emptyText, key);
+    });
+
+    const pagesWrap = document.createElement('div');
+    pagesWrap.className = 'pager-pages';
+    for (let p = 1; p <= totalPages; p++) {
+      if (totalPages > 7 && p !== 1 && p !== totalPages && Math.abs(p - page) > 1) {
+        if (p === 2 || p === totalPages - 1) {
+          const dots = document.createElement('span');
+          dots.className = 'pager-info';
+          dots.textContent = '…';
+          pagesWrap.append(dots);
+        }
+        continue;
+      }
+      const numBtn = document.createElement('button');
+      numBtn.type = 'button';
+      numBtn.className = 'pager-num' + (p === page ? ' active' : '');
+      numBtn.textContent = String(p);
+      numBtn.addEventListener('click', () => {
+        listPageState[key] = p;
+        renderPaginatedList(container, items, pageSize, renderRow, emptyText, key);
+      });
+      pagesWrap.append(numBtn);
+    }
+
+    const info = document.createElement('span');
+    info.className = 'pager-info';
+    info.textContent = `Page ${page} of ${totalPages} · ${items.length} items`;
+
+    const next = document.createElement('button');
+    next.type = 'button';
+    next.textContent = 'Next →';
+    next.disabled = page >= totalPages;
+    next.addEventListener('click', () => {
+      listPageState[key] = page + 1;
+      renderPaginatedList(container, items, pageSize, renderRow, emptyText, key);
+    });
+
+    pager.append(prev, pagesWrap, info, next);
+    container.append(pager);
+  }
+}
+
+// ---- Category Tabs & Tab Footer Pagination
+
+const TAB_ORDER = ['general', 'appearance', 'privacy', 'sites', 'profiles', 'system'];
+const TAB_TITLES = {
+  general: 'General & Search',
+  appearance: 'Appearance & Toolbar',
+  privacy: 'Privacy & Security',
+  sites: 'Sites & Permissions',
+  profiles: 'Profiles & Autofill',
+  system: 'Apps, System & About',
+};
+let activeTabId = 'general';
+
+function selectSettingsTab(tabId, { scrollTop = true } = {}) {
+  if (!TAB_ORDER.includes(tabId)) tabId = 'general';
+  activeTabId = tabId;
+  const searchInput = document.getElementById('settings-search');
+  if (searchInput && searchInput.value.trim()) {
+    searchInput.value = '';
+    clearSearchFilter();
+  }
+  for (const btn of document.querySelectorAll('.settings-tab')) {
+    const active = btn.dataset.tab === tabId;
+    btn.classList.toggle('active', active);
+    btn.setAttribute('aria-selected', String(active));
+  }
+  for (const panel of document.querySelectorAll('.settings-panel')) {
+    const active = panel.dataset.tab === tabId;
+    panel.classList.toggle('active', active);
+    panel.hidden = !active;
+  }
+  updateTabPager();
+  if (scrollTop) window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function updateTabPager() {
+  const idx = TAB_ORDER.indexOf(activeTabId);
+  const prevBtn = document.getElementById('tab-prev');
+  const nextBtn = document.getElementById('tab-next');
+  const dotsBox = document.getElementById('tab-dots');
+  if (!prevBtn || !nextBtn || !dotsBox) return;
+
+  if (idx > 0) {
+    prevBtn.disabled = false;
+    prevBtn.textContent = `← ${TAB_TITLES[TAB_ORDER[idx - 1]]}`;
+  } else {
+    prevBtn.disabled = true;
+    prevBtn.textContent = '← Previous';
+  }
+  if (idx < TAB_ORDER.length - 1) {
+    nextBtn.disabled = false;
+    nextBtn.textContent = `${TAB_TITLES[TAB_ORDER[idx + 1]]} →`;
+  } else {
+    nextBtn.disabled = true;
+    nextBtn.textContent = 'Next →';
+  }
+
+  dotsBox.textContent = '';
+  TAB_ORDER.forEach((id, i) => {
+    const dot = document.createElement('button');
+    dot.type = 'button';
+    dot.className = 'tab-dot' + (id === activeTabId ? ' active' : '');
+    dot.title = `${i + 1}. ${TAB_TITLES[id]}`;
+    dot.setAttribute('aria-label', TAB_TITLES[id]);
+    dot.textContent = String(i + 1);
+    dot.addEventListener('click', () => selectSettingsTab(id));
+    dotsBox.append(dot);
+  });
+}
+
+for (const btn of document.querySelectorAll('.settings-tab')) {
+  btn.addEventListener('click', () => selectSettingsTab(btn.dataset.tab));
+}
+document.getElementById('tab-prev').addEventListener('click', () => {
+  const idx = TAB_ORDER.indexOf(activeTabId);
+  if (idx > 0) selectSettingsTab(TAB_ORDER[idx - 1]);
+});
+document.getElementById('tab-next').addEventListener('click', () => {
+  const idx = TAB_ORDER.indexOf(activeTabId);
+  if (idx < TAB_ORDER.length - 1) selectSettingsTab(TAB_ORDER[idx + 1]);
+});
+
+function handleHashNavigation() {
+  const h = (location.hash || '').replace(/^#/, '');
+  if (!h) return updateTabPager();
+  if (h === 'clear') {
+    selectSettingsTab('privacy', { scrollTop: false });
+    setTimeout(() => document.getElementById('clear')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+  } else if (h === 'profiles') {
+    selectSettingsTab('profiles', { scrollTop: false });
+  } else if (TAB_ORDER.includes(h)) {
+    selectSettingsTab(h, { scrollTop: false });
+  } else {
+    const target = document.getElementById(h);
+    const panel = target && target.closest('.settings-panel');
+    if (panel && panel.dataset.tab) {
+      selectSettingsTab(panel.dataset.tab, { scrollTop: false });
+      setTimeout(() => target.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50);
+    }
+  }
+}
+window.addEventListener('hashchange', handleHashNavigation);
+handleHashNavigation();
+
+// ---- Settings loading & rendering
+
+let latestToolbarButtons = {};
+let latestToolbarDefs = [];
 
 async function loadSettings() {
   const s = await browserAPI.getSettings();
@@ -33,13 +236,17 @@ async function loadSettings() {
   for (const r of document.querySelectorAll('input[name="startup"]')) r.checked = r.value === s.startupMode;
   document.getElementById('startup-pages-box').hidden = s.startupMode !== 'pages';
   document.getElementById('startup-pages').value = (s.startupPages || []).join('\n');
-  document.getElementById('show-home').checked = s.showHomeButton;
+  document.getElementById('show-home').checked = !!(s.toolbarButtons ? s.toolbarButtons.home : s.showHomeButton);
+  document.getElementById('show-bookmarks-bar').checked = s.showBookmarksBar !== false;
   document.getElementById('theme').value = s.theme || 'system';
   document.getElementById('compact-mode').checked = !!s.compactMode;
   document.getElementById('vertical-tabs').checked = !!s.verticalTabs;
   document.getElementById('reject-cookies').checked = s.rejectCookies !== false;
   document.getElementById('fingerprinting-protection').checked = s.fingerprintingProtection !== false;
   renderAccentSwatches(s.accentColor || 'violet');
+  latestToolbarButtons = s.toolbarButtons || {};
+  latestToolbarDefs = s.toolbarButtonDefs || [];
+  renderToolbarButtons(latestToolbarDefs, latestToolbarButtons);
   renderProtocolHandlers(s.protocolHandlers || {});
   renderInstalledApps(s.installedApps || []);
   document.getElementById('strip-tracking').checked = s.stripTracking !== false;
@@ -83,29 +290,74 @@ async function loadSettings() {
   document.getElementById('download-dir').textContent = s.downloadDirShown;
   document.getElementById('ask-download').checked = s.askDownloadLocation;
   adblock.checked = s.adblock;
-  allowlist.textContent = '';
-  if (s.adblockAllowlist.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'empty';
-    empty.textContent = 'None.';
-    allowlist.append(empty);
-  }
-  for (const site of s.adblockAllowlist) {
-    const row = document.createElement('div');
-    row.className = 'row';
-    const main = document.createElement('div');
-    main.className = 'main t';
-    main.textContent = site;
-    const remove = document.createElement('button');
-    remove.textContent = 'Turn blocking back on';
-    remove.addEventListener('click', async () => {
-      await browserAPI.removeAdblockException(site);
-      loadSettings();
+  renderPaginatedList(
+    allowlist,
+    s.adblockAllowlist || [],
+    8,
+    (site) => {
+      const row = document.createElement('div');
+      row.className = 'row';
+      const main = document.createElement('div');
+      main.className = 'main t';
+      main.textContent = site;
+      const remove = document.createElement('button');
+      remove.textContent = 'Turn blocking back on';
+      remove.addEventListener('click', async () => {
+        await browserAPI.removeAdblockException(site);
+        loadSettings();
+      });
+      row.append(main, remove);
+      return row;
+    },
+    'None.',
+  );
+}
+
+function renderToolbarButtons(defs, state) {
+  const grid = document.getElementById('toolbar-buttons-grid');
+  if (!grid) return;
+  grid.textContent = '';
+  for (const d of defs) {
+    const isOn = !!state[d.id];
+    const card = document.createElement('button');
+    card.type = 'button';
+    card.className = 'toolbar-btn-card' + (isOn ? ' on' : '');
+    card.setAttribute('aria-pressed', String(isOn));
+
+    const iconWrap = document.createElement('span');
+    iconWrap.className = 'toolbar-btn-ico';
+    iconWrap.innerHTML = `<svg viewBox="0 0 24 24" aria-hidden="true">${TOOLBAR_ICONS[d.id] || ''}</svg>`;
+
+    const meta = document.createElement('span');
+    meta.className = 'toolbar-btn-meta';
+    const title = document.createElement('span');
+    title.className = 'toolbar-btn-name';
+    title.textContent = d.label;
+    const badge = document.createElement('span');
+    badge.className = 'toolbar-btn-state';
+    badge.textContent = isOn ? 'Shown in toolbar' : 'Hidden';
+    meta.append(title, badge);
+
+    card.append(iconWrap, meta);
+    card.addEventListener('click', async () => {
+      const next = { ...latestToolbarButtons, [d.id]: !isOn };
+      latestToolbarButtons = next;
+      if (d.id === 'home') document.getElementById('show-home').checked = !!next.home;
+      await browserAPI.setSetting('toolbarButtons', next);
+      renderToolbarButtons(latestToolbarDefs, latestToolbarButtons);
     });
-    row.append(main, remove);
-    allowlist.append(row);
+    grid.append(card);
   }
 }
+
+document.getElementById('toolbar-reset').addEventListener('click', async () => {
+  const defaults = {};
+  for (const d of latestToolbarDefs) defaults[d.id] = !!d.defaultOn;
+  latestToolbarButtons = defaults;
+  document.getElementById('show-home').checked = !!defaults.home;
+  await browserAPI.setSetting('toolbarButtons', defaults);
+  renderToolbarButtons(latestToolbarDefs, latestToolbarButtons);
+});
 
 function renderAccentSwatches(current) {
   const box = document.getElementById('accent-swatches');
@@ -162,37 +414,35 @@ function renderProtocolHandlers(handlers) {
 
 function renderInstalledApps(apps) {
   const box = document.getElementById('installed-apps');
-  box.textContent = '';
-  if (!apps.length) {
-    const empty = document.createElement('div');
-    empty.className = 'empty';
-    empty.textContent = 'No installed web apps.';
-    box.append(empty);
-    return;
-  }
-  for (const a of apps) {
-    const row = document.createElement('div');
-    row.className = 'row';
-    const main = document.createElement('div');
-    main.className = 'main';
-    const t = document.createElement('div');
-    t.className = 't';
-    t.textContent = a.name;
-    const u = document.createElement('div');
-    u.className = 'u';
-    u.textContent = a.url;
-    main.append(t, u);
-    const open = document.createElement('button');
-    open.textContent = 'Open';
-    open.addEventListener('click', () => browserAPI.openInstalledApp(a.id));
-    const remove = document.createElement('button');
-    remove.textContent = 'Uninstall';
-    remove.addEventListener('click', async () => {
-      renderInstalledApps(await browserAPI.removeInstalledApp(a.id));
-    });
-    row.append(main, open, remove);
-    box.append(row);
-  }
+  renderPaginatedList(
+    box,
+    apps || [],
+    6,
+    (a) => {
+      const row = document.createElement('div');
+      row.className = 'row';
+      const main = document.createElement('div');
+      main.className = 'main';
+      const t = document.createElement('div');
+      t.className = 't';
+      t.textContent = a.name || a.title || a.url;
+      const u = document.createElement('div');
+      u.className = 'u';
+      u.textContent = a.url;
+      main.append(t, u);
+      const open = document.createElement('button');
+      open.textContent = 'Open';
+      open.addEventListener('click', () => browserAPI.openInstalledApp(a.id));
+      const remove = document.createElement('button');
+      remove.textContent = 'Uninstall';
+      remove.addEventListener('click', async () => {
+        renderInstalledApps(await browserAPI.removeInstalledApp(a.id));
+      });
+      row.append(main, open, remove);
+      return row;
+    },
+    'No installed web apps.',
+  );
 }
 
 adblock.addEventListener('change', () => browserAPI.setSetting('adblock', adblock.checked));
@@ -221,50 +471,49 @@ async function load() {
   const addKey = document.getElementById('perm-add-key');
   if (!addKey.options.length) for (const d of defaults.keys) addKey.append(new Option(d.name, d.key));
 
-  // exceptions: one row per site, one Allow/Block/Ask select per saved permission
+  // exceptions: one row per site, paginated
   const origins = Object.keys(sites).sort();
-  list.textContent = '';
-  if (origins.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'empty';
-    empty.textContent = 'No exceptions yet.';
-    list.append(empty);
-  }
-  for (const origin of origins) {
-    const row = document.createElement('div');
-    row.className = 'row perm-row';
-    const main = document.createElement('div');
-    main.className = 'main';
-    const t = document.createElement('div');
-    t.className = 't';
-    t.textContent = origin;
-    main.append(t);
-    const perms = document.createElement('div');
-    perms.className = 'perm-list';
-    for (const [key, value] of Object.entries(sites[origin])) {
-      const label = document.createElement('label');
-      label.textContent = permissionNames[key] || key;
-      const select = document.createElement('select');
-      select.append(new Option('Allow', 'allow'), new Option('Block', 'block'), new Option('Ask (remove)', 'ask'));
-      select.value = value;
-      select.addEventListener('change', async () => {
-        await browserAPI.setSitePermissionFromSettings(origin, key, select.value);
+  renderPaginatedList(
+    list,
+    origins,
+    6,
+    (origin) => {
+      const row = document.createElement('div');
+      row.className = 'row perm-row';
+      const main = document.createElement('div');
+      main.className = 'main';
+      const t = document.createElement('div');
+      t.className = 't';
+      t.textContent = origin;
+      main.append(t);
+      const perms = document.createElement('div');
+      perms.className = 'perm-list';
+      for (const [key, value] of Object.entries(sites[origin])) {
+        const label = document.createElement('label');
+        label.textContent = permissionNames[key] || key;
+        const select = document.createElement('select');
+        select.append(new Option('Allow', 'allow'), new Option('Block', 'block'), new Option('Ask (remove)', 'ask'));
+        select.value = value;
+        select.addEventListener('change', async () => {
+          await browserAPI.setSitePermissionFromSettings(origin, key, select.value);
+          load();
+        });
+        label.append(select);
+        perms.append(label);
+      }
+      main.append(perms);
+
+      const reset = document.createElement('button');
+      reset.textContent = 'Remove all';
+      reset.addEventListener('click', async () => {
+        await browserAPI.resetPermissions(origin);
         load();
       });
-      label.append(select);
-      perms.append(label);
-    }
-    main.append(perms);
-
-    const reset = document.createElement('button');
-    reset.textContent = 'Remove all';
-    reset.addEventListener('click', async () => {
-      await browserAPI.resetPermissions(origin);
-      load();
-    });
-    row.append(main, reset);
-    list.append(row);
-  }
+      row.append(main, reset);
+      return row;
+    },
+    'No exceptions yet.',
+  );
 }
 
 document.getElementById('perm-add').addEventListener('submit', async (e) => {
@@ -366,7 +615,7 @@ async function refreshDefault() {
 
 document.getElementById('default-set').addEventListener('click', async () => {
   await browserAPI.setDefaultBrowser();
-  setTimeout(refreshDefault, 1500); // macOS asks for confirmation first
+  setTimeout(refreshDefault, 1500);
 });
 refreshDefault();
 window.addEventListener('focus', refreshDefault);
@@ -381,7 +630,7 @@ document.getElementById('ask-download').addEventListener('change', (e) =>
   browserAPI.setSetting('askDownloadLocation', e.target.checked),
 );
 
-// ---- Third-party cookies (applied when the browser starts)
+// ---- Third-party cookies
 
 document.getElementById('tpc').addEventListener('change', async (e) => {
   await browserAPI.setSetting('blockThirdPartyCookies', e.target.checked);
@@ -413,7 +662,14 @@ document.getElementById('startup-use-current').addEventListener('click', async (
   document.getElementById('startup-pages').value = (await browserAPI.currentPagesForStartup()).join('\n');
   saveStartupPages();
 });
-document.getElementById('show-home').addEventListener('change', (e) => browserAPI.setSetting('showHomeButton', e.target.checked));
+document.getElementById('show-home').addEventListener('change', async (e) => {
+  await browserAPI.setSetting('showHomeButton', e.target.checked);
+  latestToolbarButtons = { ...latestToolbarButtons, home: e.target.checked };
+  renderToolbarButtons(latestToolbarDefs, latestToolbarButtons);
+});
+document.getElementById('show-bookmarks-bar').addEventListener('change', (e) =>
+  browserAPI.setSetting('showBookmarksBar', e.target.checked),
+);
 document.getElementById('theme').addEventListener('change', (e) => browserAPI.setSetting('theme', e.target.value));
 document.getElementById('home-page').addEventListener('change', (e) => {
   let v = e.target.value.trim();
@@ -459,27 +715,47 @@ document.getElementById('reset-settings').addEventListener('click', async (e) =>
   location.reload();
 });
 
-// ---- Search: shows only the sections (an h2 and what follows it) that mention the words
-(() => {
-  const main = document.querySelector('main');
-  const sections = [];
-  let current = null;
-  for (const node of [...main.children]) {
-    if (node.id === 'settings-search' || node.tagName === 'H1') continue;
-    if (node.tagName === 'H2') {
-      current = { heading: node, nodes: [node] };
-      sections.push(current);
-    } else if (current) {
-      current.nodes.push(node);
-    }
+// ---- Cross-tab Search Filtering
+function clearSearchFilter() {
+  document.getElementById('settings-search-empty').hidden = true;
+  document.getElementById('settings-tab-pager').hidden = false;
+  for (const card of document.querySelectorAll('.settings-card')) {
+    card.classList.remove('filtered-out');
   }
-  const text = (s) => s.nodes.map((n) => n.textContent + ' ' + [...n.querySelectorAll('option')].map((o) => o.textContent).join(' ')).join(' ').toLowerCase();
+  for (const panel of document.querySelectorAll('.settings-panel')) {
+    const active = panel.dataset.tab === activeTabId;
+    panel.classList.toggle('active', active);
+    panel.hidden = !active;
+  }
+}
+
+(() => {
+  const cards = [...document.querySelectorAll('.settings-card')].filter((c) => c.id !== 'settings-search-empty');
+  const cardText = (c) =>
+    (c.textContent + ' ' + [...c.querySelectorAll('option, input')].map((el) => el.textContent || el.placeholder || '').join(' ')).toLowerCase();
+
   document.getElementById('settings-search').addEventListener('input', (e) => {
     const words = e.target.value.toLowerCase().split(/\s+/).filter(Boolean);
-    for (const s of sections) {
-      const show = words.every((w) => text(s).includes(w));
-      for (const n of s.nodes) n.classList.toggle('filtered-out', !show);
+    if (!words.length) {
+      clearSearchFilter();
+      return;
     }
+    document.getElementById('settings-tab-pager').hidden = true;
+    let totalShown = 0;
+    for (const panel of document.querySelectorAll('.settings-panel')) {
+      const panelCards = [...panel.querySelectorAll('.settings-card')];
+      let panelMatches = 0;
+      for (const card of panelCards) {
+        const match = words.every((w) => cardText(card).includes(w));
+        card.classList.toggle('filtered-out', !match);
+        if (match) {
+          panelMatches++;
+          totalShown++;
+        }
+      }
+      panel.hidden = panelMatches === 0;
+    }
+    document.getElementById('settings-search-empty').hidden = totalShown > 0;
   });
 })();
 
@@ -499,94 +775,99 @@ document.getElementById('languages').addEventListener('change', async (e) => {
   }
 });
 
-// ---- cookies and site data
+// ---- cookies and site data (paginated)
 let siteData = null;
 const siteDataBox = document.getElementById('sitedata');
 const siteDataSearch = document.getElementById('sitedata-search');
 
 function renderSiteData() {
-  siteDataBox.textContent = '';
-  if (!siteData) return;
+  if (!siteData) {
+    siteDataBox.textContent = '';
+    return;
+  }
   const q = siteDataSearch.value.trim().toLowerCase();
   const shown = siteData.filter((d) => !q || d.site.includes(q) || d.hosts.some((h) => h.includes(q)));
   document.getElementById('sitedata-all').hidden = siteData.length === 0;
-  if (shown.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'empty';
-    empty.textContent = siteData.length ? 'No matching sites.' : 'No sites have stored cookies.';
-    siteDataBox.append(empty);
-    return;
-  }
-  for (const d of shown.slice(0, 300)) {
-    const row = document.createElement('div');
-    row.className = 'row';
-    const main = document.createElement('div');
-    main.className = 'main t';
-    main.textContent = d.site;
-    const meta = document.createElement('span');
-    meta.className = 'hint';
-    meta.textContent = ` ${d.cookies} cookie${d.cookies === 1 ? '' : 's'}`;
-    main.title = d.hosts.join('\n');
-    main.append(meta);
-    const remove = document.createElement('button');
-    remove.textContent = 'Remove';
-    remove.addEventListener('click', async () => {
-      remove.disabled = true;
-      await browserAPI.removeSiteData(d.site);
-      siteData = siteData.filter((x) => x !== d);
-      renderSiteData();
-    });
-    row.append(main, remove);
-    siteDataBox.append(row);
-  }
-  if (shown.length > 300) {
-    const more = document.createElement('div');
-    more.className = 'empty';
-    more.textContent = `And ${shown.length - 300} more. Search to find a site.`;
-    siteDataBox.append(more);
-  }
+  renderPaginatedList(
+    siteDataBox,
+    shown,
+    10,
+    (d) => {
+      const row = document.createElement('div');
+      row.className = 'row';
+      const main = document.createElement('div');
+      main.className = 'main t';
+      main.textContent = d.site;
+      const meta = document.createElement('span');
+      meta.className = 'hint';
+      meta.textContent = ` ${d.cookies} cookie${d.cookies === 1 ? '' : 's'}`;
+      main.title = d.hosts.join('\n');
+      main.append(meta);
+      const remove = document.createElement('button');
+      remove.textContent = 'Remove';
+      remove.addEventListener('click', async () => {
+        remove.disabled = true;
+        await browserAPI.removeSiteData(d.site);
+        siteData = siteData.filter((x) => x !== d);
+        renderSiteData();
+      });
+      row.append(main, remove);
+      return row;
+    },
+    siteData.length ? 'No matching sites.' : 'No sites have stored cookies.',
+  );
 }
 
 async function loadSiteData() {
   siteData = await browserAPI.getSiteData();
   document.getElementById('sitedata-load').textContent = 'Refresh';
+  listPageState.sitedata = 1;
   renderSiteData();
 }
 document.getElementById('sitedata-load').addEventListener('click', loadSiteData);
-siteDataSearch.addEventListener('input', () => (siteData ? renderSiteData() : loadSiteData()));
+siteDataSearch.addEventListener('input', () => {
+  listPageState.sitedata = 1;
+  if (siteData) renderSiteData();
+  else loadSiteData();
+});
 document.getElementById('sitedata-all').addEventListener('click', async () => {
   if (!confirm('Remove cookies and site data for every site? This signs you out of all sites.')) return;
   await browserAPI.removeAllSiteData();
   loadSiteData();
 });
 
-// ---- search engines and keywords
+// ---- search engines and keywords (paginated)
 function renderEngines(engines) {
   const box = document.getElementById('engines');
-  box.textContent = '';
-  for (const e of engines) {
-    const row = document.createElement('div');
-    row.className = 'row';
-    const main = document.createElement('div');
-    main.className = 'main t';
-    main.textContent = e.name;
-    const kw = document.createElement('code');
-    kw.textContent = e.keyword;
-    kw.style.marginLeft = '8px';
-    main.append(kw);
-    main.title = e.url;
-    row.append(main);
-    if (e.custom) {
-      const remove = document.createElement('button');
-      remove.textContent = 'Remove';
-      remove.addEventListener('click', async () => {
-        await browserAPI.removeSearchEngine(e.keyword);
-        loadSettings();
-      });
-      row.append(remove);
-    }
-    box.append(row);
-  }
+  renderPaginatedList(
+    box,
+    engines || [],
+    6,
+    (e) => {
+      const row = document.createElement('div');
+      row.className = 'row';
+      const main = document.createElement('div');
+      main.className = 'main t';
+      main.textContent = e.name;
+      const kw = document.createElement('code');
+      kw.textContent = e.keyword;
+      kw.style.marginLeft = '8px';
+      main.append(kw);
+      main.title = e.url;
+      row.append(main);
+      if (e.custom) {
+        const remove = document.createElement('button');
+        remove.textContent = 'Remove';
+        remove.addEventListener('click', async () => {
+          await browserAPI.removeSearchEngine(e.keyword);
+          loadSettings();
+        });
+        row.append(remove);
+      }
+      return row;
+    },
+    'No search engines configured.',
+  );
 }
 
 document.getElementById('engine-add').addEventListener('submit', async (ev) => {
@@ -608,32 +889,31 @@ document.getElementById('engine-add').addEventListener('submit', async (ev) => {
   }
 });
 
-// ---- custom spellcheck dictionary
+// ---- custom spellcheck dictionary (paginated)
 async function loadDictionary() {
   const box = document.getElementById('dictionary');
   const words = await browserAPI.getDictionaryWords();
-  box.textContent = '';
-  if (!words.length) {
-    const empty = document.createElement('div');
-    empty.className = 'empty';
-    empty.textContent = 'No words added yet.';
-    box.append(empty);
-  }
-  for (const word of words) {
-    const row = document.createElement('div');
-    row.className = 'row';
-    const main = document.createElement('div');
-    main.className = 'main t';
-    main.textContent = word;
-    const remove = document.createElement('button');
-    remove.textContent = 'Remove';
-    remove.addEventListener('click', async () => {
-      await browserAPI.removeDictionaryWord(word);
-      loadDictionary();
-    });
-    row.append(main, remove);
-    box.append(row);
-  }
+  renderPaginatedList(
+    box,
+    words || [],
+    8,
+    (word) => {
+      const row = document.createElement('div');
+      row.className = 'row';
+      const main = document.createElement('div');
+      main.className = 'main t';
+      main.textContent = word;
+      const remove = document.createElement('button');
+      remove.textContent = 'Remove';
+      remove.addEventListener('click', async () => {
+        await browserAPI.removeDictionaryWord(word);
+        loadDictionary();
+      });
+      row.append(main, remove);
+      return row;
+    },
+    'No words added yet.',
+  );
 }
 loadDictionary();
 
@@ -647,7 +927,6 @@ document.getElementById('proxy-mode').addEventListener('change', async (e) => {
   const mode = e.target.value;
   document.getElementById('proxy-manual').hidden = mode !== 'manual';
   document.getElementById('proxy-pac').hidden = mode !== 'pac';
-  // manual/PAC take effect once an address is saved
   if (mode === 'system' || mode === 'direct') {
     await browserAPI.setSetting('proxyMode', mode);
     proxySaved();
@@ -689,39 +968,38 @@ for (const k of ['history', 'downloads', 'cookies', 'cache']) {
   });
 }
 
-// ---- addresses (autofill)
+// ---- addresses (autofill, paginated)
 const ADDRESS_KEYS = ['name', 'organization', 'street', 'street2', 'city', 'region', 'postal', 'country', 'email', 'phone'];
 let editingAddress = null;
-function renderAddresses(list) {
+function renderAddresses(addrList) {
   const box = document.getElementById('addresses');
-  box.textContent = '';
-  if (!list.length) {
-    const empty = document.createElement('div');
-    empty.className = 'empty';
-    empty.textContent = 'No saved addresses.';
-    box.append(empty);
-  }
-  for (const a of list) {
-    const row = document.createElement('div');
-    row.className = 'row';
-    const main = document.createElement('div');
-    main.className = 'main';
-    const t = document.createElement('div');
-    t.className = 't';
-    t.textContent = a.name;
-    const u = document.createElement('div');
-    u.className = 'u';
-    u.textContent = [a.street, a.city, a.country, a.email, a.phone].filter(Boolean).join(' · ');
-    main.append(t, u);
-    const edit = document.createElement('button');
-    edit.textContent = 'Edit';
-    edit.addEventListener('click', () => openAddressForm(a));
-    const remove = document.createElement('button');
-    remove.textContent = 'Remove';
-    remove.addEventListener('click', async () => renderAddresses(await browserAPI.removeAddress(a.id)));
-    row.append(main, edit, remove);
-    box.append(row);
-  }
+  renderPaginatedList(
+    box,
+    addrList || [],
+    6,
+    (a) => {
+      const row = document.createElement('div');
+      row.className = 'row';
+      const main = document.createElement('div');
+      main.className = 'main';
+      const t = document.createElement('div');
+      t.className = 't';
+      t.textContent = a.name;
+      const u = document.createElement('div');
+      u.className = 'u';
+      u.textContent = [a.street, a.city, a.country, a.email, a.phone].filter(Boolean).join(' · ');
+      main.append(t, u);
+      const edit = document.createElement('button');
+      edit.textContent = 'Edit';
+      edit.addEventListener('click', () => openAddressForm(a));
+      const remove = document.createElement('button');
+      remove.textContent = 'Remove';
+      remove.addEventListener('click', async () => renderAddresses(await browserAPI.removeAddress(a.id)));
+      row.append(main, edit, remove);
+      return row;
+    },
+    'No saved addresses.',
+  );
 }
 function openAddressForm(a) {
   editingAddress = a ? a.id : null;
@@ -742,10 +1020,10 @@ document.getElementById('address-form').addEventListener('submit', async (e) => 
 browserAPI.getAddresses().then(renderAddresses);
 
 // ---- profiles
-function renderProfiles({ list, current, colors }) {
+function renderProfiles({ list: profList, current, colors }) {
   const box = document.getElementById('profile-list');
   box.textContent = '';
-  for (const p of list) {
+  for (const p of profList) {
     const row = document.createElement('div');
     row.className = 'row profile-row';
     const dot = document.createElement('button');

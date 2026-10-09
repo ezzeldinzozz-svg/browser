@@ -171,6 +171,8 @@ if (location.protocol === 'browser:' && window === window.top) {
     removeProtocolHandler: call('protocol:remove'),
     removeInstalledApp: call('apps:remove'),
     openInstalledApp: call('apps:open'),
+    openPage: call('nav:open-page'),
+    toolbarMenu: call('toolbar:menu'),
   });
 }
 

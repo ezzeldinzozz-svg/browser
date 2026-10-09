@@ -56,6 +56,8 @@ Edit freely: move lines between sections, delete what you don't want, add your o
 - [x] Per-site autoplay exceptions
 - [x] Energy saver on battery (idle tabs sleep after 10 minutes; Settings → Performance)
 - [x] Accent color choice; compact mode
+- [x] Customizable toolbar buttons (Settings icon + toggleable Split View, Screenshot, Translate, Read Aloud, Bookmarks, History, Downloads, Profile, Star, Shield, Home via right-click or Settings)
+- [x] Tabbed Settings dashboard with card layout and list pagination
 - [x] Keyboard shortcut customization
 - [x] Install a site as an app (PWA windows)
 - [x] Websites registering as handlers for link types (`navigator.registerProtocolHandler`)

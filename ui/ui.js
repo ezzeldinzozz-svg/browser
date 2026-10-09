@@ -295,6 +295,7 @@ function renderTab(t, isActive, groupColor) {
 function render(state) {
   const active = state.tabs.find((t) => t.id === state.activeId);
   document.body.classList.toggle('private', state.private);
+  const tb = (state.uiPrefs && state.uiPrefs.toolbarButtons) || {};
   if (state.uiPrefs) {
     document.documentElement.dataset.accent = state.uiPrefs.accentColor || 'violet';
     document.body.classList.toggle('compact', !!state.uiPrefs.compactMode);
@@ -318,7 +319,7 @@ function render(state) {
   $('private-badge').hidden = !state.private;
 
   const shield = state.shield;
-  $('shield').hidden = !shield.available;
+  $('shield').hidden = !shield.available || tb.shield === false;
   $('shield').classList.toggle('off', !shield.on);
   $('shield-count').textContent = shield.on && shield.blocked ? String(shield.blocked) : '';
   $('shield').title = $('shield').ariaLabel = shield.on
@@ -359,8 +360,19 @@ function render(state) {
   $('reader').hidden = !state.reader;
   $('reader').classList.toggle('on', state.reader === 'on');
   $('reader').title = state.reader === 'on' ? 'Leave reader mode' : 'Reader mode';
+  $('star').hidden = tb.star === false;
   $('star').disabled = !state.canBookmark;
   $('star').classList.toggle('on', state.bookmarked);
+  $('split-btn').hidden = !tb.split;
+  $('split-btn').classList.toggle('on', !!state.splitId);
+  $('screenshot-btn').hidden = !tb.screenshot;
+  $('translate-btn').hidden = !tb.translate;
+  $('readaloud-btn').hidden = !tb.readAloud;
+  $('bookmarks-btn').hidden = !tb.bookmarks;
+  $('history-btn').hidden = !tb.history;
+  $('downloads').hidden = tb.downloads === false;
+  $('profile').hidden = tb.profile === false;
+  $('settings-btn').hidden = tb.settings === false;
 
   renderBookmarkBar(state.bookmarkBar);
   const cap = state.capture;
@@ -380,7 +392,7 @@ function render(state) {
   renderSiteButton(state.security);
 
   $('restorebar').hidden = !state.restoreOffer;
-  $('home').hidden = !state.showHome;
+  $('home').hidden = !(tb.home !== undefined ? tb.home : state.showHome);
 
   currentWarning = state.downloadWarning;
   $('dlwarn').hidden = !currentWarning;
@@ -490,6 +502,18 @@ $('forward').addEventListener('click', () => api.forward());
 $('reload').addEventListener('click', () => api.reload());
 $('star').addEventListener('click', () => api.starPage());
 $('reader').addEventListener('click', () => api.toggleReader());
+$('split-btn').addEventListener('click', () => api.toggleSplit());
+$('screenshot-btn').addEventListener('click', () => api.takeScreenshot('visible'));
+$('translate-btn').addEventListener('click', () => api.translatePage());
+$('readaloud-btn').addEventListener('click', () => api.readAloud());
+$('bookmarks-btn').addEventListener('click', () => api.openPage('bookmarks'));
+$('history-btn').addEventListener('click', () => api.openPage('history'));
+$('settings-btn').addEventListener('click', () => api.openPage('settings'));
+$('toolbar').addEventListener('contextmenu', (e) => {
+  if (e.target.closest('#omnibox, #back, #forward, browser-action-list')) return;
+  e.preventDefault();
+  api.toolbarMenu();
+});
 
 // ---- overlay: the toolbar view stretches over the page while a dropdown or popup is open
 
