@@ -4171,8 +4171,32 @@ app.whenReady().then(() => {
       { program: process.execPath, arguments: '--private-window', iconPath: process.execPath, iconIndex: 0, title: 'New Private Window', description: 'Open a private window' },
     ]);
   }
-  updater.start(sendAll);
+  updater.start(onUpdateState);
 });
+
+// A critical (security) update: ask to restart now; restart by itself 10 minutes later.
+let criticalPrompted = false;
+function onUpdateState() {
+  sendAll();
+  const state = updater.getState();
+  if (state.status !== 'ready' || !state.critical || criticalPrompted) return;
+  criticalPrompted = true;
+  const parent = focusedWindow()?.win;
+  dialog
+    .showMessageBox(parent, {
+      type: 'warning',
+      message: 'Important security update',
+      detail: `Operecs ${state.version} fixes a security problem. Restart now to install it; otherwise Operecs restarts by itself in 10 minutes, so save anything you are writing.`,
+      buttons: ['Restart Now', 'In 10 Minutes'],
+      defaultId: 0,
+      cancelId: 1,
+    })
+    .then(({ response }) => {
+      if (response === 0) restartToUpdate();
+      else setTimeout(restartToUpdate, 10 * 60 * 1000).unref();
+    })
+    .catch(() => {});
+}
 
 // ---------------------------------------------------------------- extensions
 

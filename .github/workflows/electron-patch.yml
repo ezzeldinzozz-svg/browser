@@ -1,0 +1,56 @@
+name: Electron security patch
+
+# Every Monday: if a newer patch of our Electron major version exists (security fixes from
+# Chromium and Node land there), open a pull request that bumps the pinned version. The normal
+# CI run on that pull request builds and tests it; merge it and release (`npm run release`).
+# For a fix to an actively exploited bug, release it with `npm run release -- X.Y.Z --critical`.
+
+on:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write # start the build workflow on the new branch
+
+jobs:
+  bump:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Look for a newer Electron patch
+        id: check
+        run: |
+          current=$(node -p "require('./package.json').devDependencies.electron.replace(/^[~^]/, '')")
+          major=${current%%.*}
+          latest=$(npm view "electron@^${major}.0.0" version --json | node -e "const v = JSON.parse(require('fs').readFileSync(0, 'utf8')); const list = Array.isArray(v) ? v : [v]; console.log(list.filter((x) => !x.includes('-')).pop())")
+          echo "current=$current latest=$latest"
+          echo "current=$current" >> "$GITHUB_OUTPUT"
+          echo "latest=$latest" >> "$GITHUB_OUTPUT"
+      - name: Open a pull request
+        if: steps.check.outputs.latest != steps.check.outputs.current
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LATEST: ${{ steps.check.outputs.latest }}
+          CURRENT: ${{ steps.check.outputs.current }}
+        run: |
+          branch="electron-$LATEST"
+          if git ls-remote --exit-code --heads origin "$branch" >/dev/null; then
+            echo "A pull request for $LATEST already exists"; exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -b "$branch"
+          npm install --save-dev --save-exact "electron@$LATEST" --ignore-scripts
+          sed -i "s/Electron is pinned (currently $CURRENT)/Electron is pinned (currently $LATEST)/" HANDOFF.md || true
+          git commit -am "Electron $LATEST (security patch)"
+          git push origin "$branch"
+          # pull requests opened with GITHUB_TOKEN don't trigger workflows by themselves
+          gh workflow run build.yml --ref "$branch"
+          gh pr create --title "Electron $LATEST" --body "Weekly security patch: Electron $CURRENT → $LATEST (same major). CI below builds and tests it. Merge, then release with \`npm run release\`. Release notes: https://releases.electronjs.org/release/v$LATEST"

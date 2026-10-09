@@ -73,6 +73,8 @@ function main() {
   const args = process.argv.slice(2);
   // Focus is Apple silicon Mac (see CLAUDE.md); --all-platforms also ships Intel Mac, Windows and Linux.
   const ALL = args.includes('--all-platforms');
+  // --critical: a security fix; installed copies ask to restart now and restart by themselves soon
+  const CRITICAL = args.includes('--critical');
   const version = nextVersion(pkg.version, args.find((a) => !a.startsWith('--')));
   const tag = `v${version}`;
   const env = { ...process.env, GH_TOKEN: out('gh', ['auth', 'token', '--user', OWNER]) };
@@ -91,6 +93,8 @@ function main() {
   fs.rmSync(dist, { recursive: true, force: true });
   sh('npm', ['run', 'build']);
   sh('npx', ['electron-builder', '--mac', ...(ALL ? [] : ['--arm64']), '--publish', 'never']);
+  // CI doesn't build the Mac app, so check it here before anything is published.
+  sh('node', ['scripts/smoke-test.js', path.join(dist, 'mac-arm64', 'Operecs.app', 'Contents', 'MacOS', 'Operecs')]);
 
   // 3. Windows and Linux packages from CI (only with --all-platforms)
   const ciDir = path.join(dist, 'ci');
@@ -130,6 +134,7 @@ function main() {
       data: fs.readFileSync(file),
       privateKey,
       legacySignature,
+      critical: CRITICAL,
     });
     const target = path.join(dist, name);
     fs.writeFileSync(target, JSON.stringify(manifest, null, 2));

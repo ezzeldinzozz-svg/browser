@@ -11,7 +11,7 @@ function signedPayload(platformKey, version, file, data) {
 }
 
 // manifest for one platform; legacySignature: also sign the raw bytes (macOS copies before v0.11)
-function signManifest({ platformKey, version, file, data, privateKey, legacySignature = false }) {
+function signManifest({ platformKey, version, file, data, privateKey, legacySignature = false, critical = false }) {
   const manifest = {
     version,
     file,
@@ -19,6 +19,9 @@ function signManifest({ platformKey, version, file, data, privateKey, legacySign
     date: new Date().toISOString(),
   };
   if (legacySignature) manifest.signature = crypto.sign(null, data, privateKey).toString('base64');
+  // A security fix: the browser asks to restart right away and restarts by itself after a
+  // short delay. (Not part of the signature: it can only make a genuine update more urgent.)
+  if (critical) manifest.critical = true;
   return manifest;
 }
 

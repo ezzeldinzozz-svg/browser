@@ -18,7 +18,7 @@ Edit freely: move lines between sections, delete what you don't want, add your o
 - [ ] Check by hand: media keys / Now Playing control the playing tab
 - [x] Storage: history in SQLite (History.sqlite; bookmarks stay in JSON — small and written rarely)
 - [x] Full-text history search (FTS5; every word as a prefix)
-- [ ] Security routine: weekly Electron patch update; a way to force an update for critical fixes
+- [x] Security routine: weekly GitHub Action opens a pull request for a newer Electron patch (with CI); `npm run release -- X.Y.Z --critical` makes installed copies restart for the update within 10 minutes
 - [ ] Mixed content: show when a secure page loads insecure content; block insecure (http) form submissions from https pages
 - [ ] Ask before closing a window or quitting when a page has unsaved changes (tabs already ask)
 

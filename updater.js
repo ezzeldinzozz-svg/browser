@@ -229,7 +229,7 @@ async function check() {
     if (process.platform === 'darwin') ready = await prepareMac(data, manifest);
     else if (process.platform === 'win32') ready = prepareWindows(data, manifest);
     else ready = prepareLinux(data, manifest);
-    setState({ status: 'ready', version });
+    setState({ status: 'ready', version, critical: manifest.critical === true });
   } catch (err) {
     setState({ status: 'error', error: err.message });
   }
