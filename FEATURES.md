@@ -335,8 +335,9 @@ Ordered by priority, then by what unblocks what.
 - [ ] **P2** Drag links/images out of pages; verify dragging files into upload fields
 - [x] Dock menu (macOS): New Window, New Private Window
 - [ ] **P1** Jump List (Windows) with the same items
-- [ ] **P1** Share menu (macOS `ShareMenu`, Windows share) for the current page
-- [ ] **P1** Handoff / continuity on macOS (`app.setUserActivity` with the current URL)
+- [x] **P1** Share menu on macOS (`ShareMenu`: File → Share…, page right-click)
+- [ ] **P2** Windows share sheet
+- [x] **P1** Handoff on macOS (`app.setUserActivity` with the focused window's page; never private). May need a Developer ID-signed build to appear on other devices
 - [ ] **P1** Web app protocol handlers (`navigator.registerProtocolHandler`)
 - [ ] **P2** Install site as app (PWA) / web app windows
 - [ ] **P2** Touch Bar / system services (look up, share) extras

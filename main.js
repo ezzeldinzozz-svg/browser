@@ -13,6 +13,7 @@ const {
   dialog,
   ipcMain,
   Menu,
+  ShareMenu,
   protocol,
   screen,
   session,
@@ -415,7 +416,31 @@ function canGo(wc, dir) {
   return dir === 'back' ? nav.canGoBack() : nav.canGoForward();
 }
 
+// macOS share sheet (Mail, Messages, AirDrop, Notes…) for the page.
+function sharePage(w, tab) {
+  if (!tab || !isWeb(tab.wc.getURL())) return;
+  new ShareMenu({ urls: [tab.wc.getURL()] }).popup({ window: w.win });
+}
+
+// Handoff: the focused window's page shows up on the user's iPhone/iPad (and other Macs) to
+// continue in their browser there. Never for private windows.
+let handoffUrl = null;
+function updateHandoff(w) {
+  if (!isMac || w !== focusedWindow()) return;
+  const tab = activeTab(w);
+  const url = tab && !w.private && !tab.wc.isDestroyed() && isWeb(tab.wc.getURL()) ? tab.wc.getURL() : null;
+  if (url === handoffUrl) return;
+  handoffUrl = url;
+  try {
+    if (url) app.setUserActivity('NSUserActivityTypeBrowsingWeb', {}, url);
+    else app.invalidateCurrentActivity();
+  } catch {
+    // not available on this system
+  }
+}
+
 function sendTabs(w) {
+  updateHandoff(w);
   if (!liveWindow(w) || w.chromeView.webContents.isDestroyed()) return;
   const current = activeTab(w);
   const currentUrl = current ? current.wc.getURL() : '';
@@ -602,6 +627,7 @@ function createWindow({ private: isPrivate = false, session: saved = null, ses: 
   win.on('focus', () => {
     if (lastFocused !== w) rebuildMenuSoon(); // History → Recently Closed is per window
     lastFocused = w;
+    updateHandoff(w);
   });
   win.on('resize', () => {
     layout(w);
@@ -2122,6 +2148,7 @@ function showPageMenu(tab, params) {
     ]);
     groups.push([
       { label: 'Print…', click: () => printTab(tab) },
+      ...(isMac && isWeb(wc.getURL()) ? [{ label: 'Share…', click: () => sharePage(w, tab) }] : []),
       ...(isWeb(wc.getURL())
         ? [{ label: 'View Page Source', click: () => createTab(w, `view-source:${wc.getURL()}`, { after: tab }) }]
         : []),
@@ -3237,6 +3264,7 @@ function buildMenu() {
         { type: 'separator' },
         { label: 'Save Page As…', accelerator: 'CmdOrCtrl+S', click: inWindow(savePageAs) },
         { label: 'Print…', accelerator: 'CmdOrCtrl+P', click: inWindow((w) => printTab(activeTab(w))) },
+        ...(isMac ? [{ label: 'Share…', click: inWindow((w) => sharePage(w, activeTab(w))) }] : []),
         { type: 'separator' },
         { label: 'Settings', accelerator: 'CmdOrCtrl+,', click: open('settings') },
         { label: 'Extensions', click: open('extensions') },
