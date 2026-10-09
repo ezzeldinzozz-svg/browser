@@ -30,6 +30,7 @@
     <button id="downloads" title="Downloads" aria-label="Downloads">&#8615;</button>
     <button id="update" hidden>Restart to update</button>
   </div>
+  <div id="bmbar" role="toolbar" aria-label="Bookmarks bar" hidden></div>
   <div id="dlwarn" class="bar" hidden>
     <span id="dlwarn-text"></span>
     <button id="dlwarn-discard" class="primary">Discard</button>
@@ -58,6 +59,15 @@
   <div id="backdrop" hidden></div>
   <div id="sitepopup" hidden></div>
   <div id="dlpanel" hidden></div>
+  <form id="bmpopup" hidden>
+    <div class="bm-title" id="bm-heading"></div>
+    <label>Name <input id="bm-name" type="text" spellcheck="false" autocomplete="off"></label>
+    <label id="bm-folder-row">Folder <select id="bm-folder"></select></label>
+    <div class="bm-actions">
+      <button id="bm-remove" type="button">Remove</button>
+      <button id="bm-done" type="submit" class="primary">Done</button>
+    </div>
+  </form>
   <div id="screenpicker" hidden>
     <div class="sp-box">
       <div class="sp-title" id="sp-title"></div>

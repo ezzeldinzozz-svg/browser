@@ -7,9 +7,19 @@
   <link rel="stylesheet" href="page.css">
 </head>
 <body>
-  <main>
+  <main class="wide">
     <h1>Bookmarks</h1>
-    <div id="list"></div>
+    <div class="bar">
+      <input id="q" type="search" placeholder="Search bookmarks" autocomplete="off">
+      <button id="new-folder">New folder</button>
+      <select id="import"><option value="">Import…</option></select>
+      <button id="export">Export…</button>
+    </div>
+    <p id="notice" class="hint" hidden></p>
+    <div class="manager">
+      <nav id="folders" aria-label="Folders"></nav>
+      <section id="list" aria-live="polite"></section>
+    </div>
   </main>
   <script src="bookmarks.js"></script>
 </body>

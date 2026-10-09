@@ -3,7 +3,7 @@
 Everything needed to pick this project up on any device. **Keep this file current:** update it
 in the same commit as any change to features, architecture, setup, or plans.
 
-_Last updated: 2026-10-09 · Current release: v0.5.0_
+_Last updated: 2026-10-09 · Current release: v0.6.0_
 
 ## What this is
 
@@ -16,6 +16,7 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 - Tabs, address bar (URL or search with the chosen engine: DuckDuckGo default, Google, Bing, Brave, Ecosia, Kagi, Startpage), back/forward/reload/stop, keyboard shortcuts
 - Tab strip: drag to reorder, pinned tabs (kept left, restored), audio indicator with click-to-mute, right-click menu (new tab to the right, reload, duplicate, pin, mute, move to new window, close / others / to the right, reopen closed)
 - Bookmarks, history, downloads page, find in page, new-tab page, settings page
+- Bookmarks are a tree (`bookmarks.js`, stored as `bookmarkTree` with fixed roots `bar` and `other`; v0.5 flat lists migrate into the bar). Star opens an edit popup (name, folder, Remove); bookmarks bar under the toolbar (Cmd/Ctrl+Shift+B) with native folder menus, right-click menus and drag-and-drop; manager page with folders, search, edit/move/delete; import from Chromium browsers' `Bookmarks` JSON or any bookmarks HTML; export to HTML
 - Toolbar polish: unfocused address shows `site.com/path` with the site highlighted; link-hover URL bubble bottom-left (a small `statusView` per window, `ui/status.html`); tab strip scrolls when full; downloads panel from the ↓ button
 - Page robustness: crash page with Reload, "Page unresponsive" (Wait / Exit Page), "Leave site?" on navigation for pages with unsaved changes
 - Back/forward history list (right-click or long-press), per-site zoom remembered (badge in the address bar resets it), window size/position remembered
@@ -54,8 +55,8 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 
 The full prioritized checklist is in `FEATURES.md` (P0/P1/P2). Short version:
 
-1. Bookmarks bar and folders, import from other browsers
-2. Camera/mic in-use indicators, first-run welcome (default browser, import, search engine)
+1. Camera/mic in-use indicators, first-run welcome (default browser, import, search engine)
+2. Notification permission state, permission defaults per type, third-party cookie blocking
 3. Windows/Linux builds + their updaters (electron-updater works unsigned there)
 4. Name + icon
 5. Storage: JSON file → SQLite (before passwords and sync)
@@ -68,6 +69,7 @@ See `research/browser-lessons.md` for the full research on how Brave and others 
 | File | Role |
 |---|---|
 | `main.js` | Main process: windows (normal/private), tabs (one `WebContentsView` each), layout, permissions, downloads, find, menu, IPC, `browser://` protocol, session restore |
+| `bookmarks.js` | Bookmark tree (folders, bar/other roots), migration from the flat v0.5 list, Chromium JSON and HTML import, HTML export |
 | `adblock.js` | Ad/tracker blocking: loads/caches the Ghostery engine, hooks it into each session's `webRequest`, serves cosmetic filters to its preload |
 | `preload.js` | Exposes `window.browserAPI` only to `browser://` pages; main re-checks every IPC sender |
 | `updater.js` | macOS self-updater (see Releases below) |

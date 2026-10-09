@@ -139,6 +139,7 @@ function render(state) {
   $('star').classList.toggle('on', state.bookmarked);
   $('star').textContent = state.bookmarked ? '★' : '☆';
 
+  renderBookmarkBar(state.bookmarkBar);
   $('zoom').hidden = state.zoom === 100;
   $('zoom').textContent = `${state.zoom}%`;
 
@@ -251,13 +252,13 @@ $('newtab').addEventListener('click', () => api.newTab());
 $('back').addEventListener('click', () => api.back());
 $('forward').addEventListener('click', () => api.forward());
 $('reload').addEventListener('click', () => api.reload());
-$('star').addEventListener('click', () => api.toggleBookmark());
+$('star').addEventListener('click', () => api.starPage());
 
 // ---- overlay: the toolbar view stretches over the page while a dropdown or popup is open
 
 let overlayOpen = false;
 function setOverlay() {
-  const open = !$('suggest').hidden || !$('sitepopup').hidden || !$('screenpicker').hidden || !$('dlpanel').hidden;
+  const open = ['suggest', 'sitepopup', 'screenpicker', 'dlpanel', 'bmpopup'].some((id) => !$(id).hidden);
   if (open !== overlayOpen) {
     overlayOpen = open;
     api.setOverlay(open);
@@ -702,4 +703,122 @@ api.onDownloadStarted(() => {
   b.classList.remove('pulse');
   void b.offsetWidth; // restart the animation
   b.classList.add('pulse');
+});
+
+// ---- bookmarks bar
+
+let bmDragId = null;
+let lastBarJson = '';
+
+function renderBookmarkBar(items) {
+  const bar = $('bmbar');
+  bar.hidden = !items;
+  if (!items) return;
+  const json = JSON.stringify(items);
+  if (json === lastBarJson) return; // don't rebuild under the cursor on every tab update
+  lastBarJson = json;
+  bar.textContent = '';
+  if (items.length === 0) {
+    bar.append(el('span', 'hint', 'Bookmarks you add to the bookmarks bar appear here.'));
+  }
+  items.forEach((b, i) => {
+    const item = el('button', 'bm');
+    item.title = b.type === 'folder' ? b.title : `${b.title}\n${b.url}`;
+    item.draggable = true;
+    item.dataset.id = b.id;
+    item.append(el('span', 'ic', b.type === 'folder' ? '▸' : '★'), el('span', '', b.title));
+    item.addEventListener('mousedown', (e) => {
+      if (e.button === 1 && b.type === 'bookmark') {
+        e.preventDefault();
+        api.openBookmark(b.id, 'background');
+      }
+    });
+    item.addEventListener('click', (e) => {
+      if (b.type === 'folder') return api.bookmarkFolderMenu(b.id);
+      api.openBookmark(b.id, e.metaKey || e.ctrlKey ? 'background' : e.shiftKey ? 'window' : 'current');
+    });
+    item.addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      api.bookmarkContextMenu(b.id);
+    });
+    // drag to reorder, or drop onto a folder's middle to move it inside
+    item.addEventListener('dragstart', (e) => {
+      bmDragId = b.id;
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    item.addEventListener('dragend', () => {
+      bmDragId = null;
+      for (const x of bar.querySelectorAll('.bm')) x.classList.remove('drop-before', 'drop-after', 'drop-into');
+    });
+    item.addEventListener('dragover', (e) => {
+      if (!bmDragId || bmDragId === b.id) return;
+      e.preventDefault();
+      const r = e.offsetX / item.offsetWidth;
+      const into = b.type === 'folder' && r > 0.25 && r < 0.75;
+      item.classList.toggle('drop-into', into);
+      item.classList.toggle('drop-before', !into && r <= 0.5);
+      item.classList.toggle('drop-after', !into && r > 0.5);
+    });
+    item.addEventListener('dragleave', () => item.classList.remove('drop-before', 'drop-after', 'drop-into'));
+    item.addEventListener('drop', (e) => {
+      e.preventDefault();
+      if (!bmDragId || bmDragId === b.id) return;
+      if (item.classList.contains('drop-into')) api.moveBookmark(bmDragId, b.id);
+      else api.moveBookmark(bmDragId, 'bar', i + (item.classList.contains('drop-after') ? 1 : 0));
+    });
+    bar.append(item);
+  });
+}
+$('bmbar').addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  api.bookmarkContextMenu(null);
+});
+
+// ---- star / edit bookmark popup
+
+let bmEditing = null;
+
+function showBookmarkPopup(info) {
+  if (!info) return;
+  bmEditing = info;
+  $('bm-heading').textContent = info.isNew ? 'Bookmark added' : info.type === 'folder' ? 'Edit folder' : 'Edit bookmark';
+  $('bm-name').value = info.title;
+  const select = $('bm-folder');
+  select.textContent = '';
+  for (const f of info.folders) select.append(new Option(' '.repeat(f.depth) + f.title, f.id));
+  select.value = info.parentId || 'bar';
+  $('bm-folder-row').hidden = !info.parentId;
+  $('bm-remove').textContent = info.type === 'folder' ? 'Delete' : 'Remove';
+  $('bmpopup').hidden = false;
+  $('backdrop').hidden = false;
+  setOverlay();
+  $('bm-name').focus();
+  $('bm-name').select();
+}
+
+function closeBookmarkPopup(save) {
+  if (bmEditing && save) {
+    api.updateBookmark(bmEditing.id, { title: $('bm-name').value, parentId: $('bm-folder').value });
+  }
+  bmEditing = null;
+  $('bmpopup').hidden = true;
+  $('backdrop').hidden = $('sitepopup').hidden && $('dlpanel').hidden;
+  setOverlay();
+}
+
+api.onBookmarkEdit(showBookmarkPopup);
+$('bmpopup').addEventListener('submit', (e) => {
+  e.preventDefault();
+  closeBookmarkPopup(true);
+});
+$('bm-remove').addEventListener('click', () => {
+  if (bmEditing) api.removeBookmarkNode(bmEditing.id);
+  closeBookmarkPopup(false);
+});
+$('backdrop').addEventListener('mousedown', () => {
+  if (!$('bmpopup').hidden) closeBookmarkPopup(true); // clicking away keeps the changes, like other browsers
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && !$('bmpopup').hidden) closeBookmarkPopup(false);
 });

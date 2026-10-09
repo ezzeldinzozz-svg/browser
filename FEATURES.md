@@ -24,7 +24,7 @@ Ordered by priority, then by what unblocks what.
 10. ~~Tab drag-to-reorder, audio indicator~~ done in v0.5.0
 11. ~~Dangerous download warning~~ done in v0.5.0 ("always ask where to save" still open)
 12. ~~Open links from other apps / default browser~~ done in v0.5.0 (Windows registry registration still open)
-13. **P0** Bookmarks bar, bookmark folders, edit bookmark dialog, import from Chrome/Safari/Firefox (bookmarks + history)
+13. ~~Bookmarks bar, folders, edit popup, import~~ done in v0.7.0 (history import still open)
 14. **P0** Windows/Linux builds tested, with their own updaters; macOS Developer ID signing + notarization
 15. ~~Screen-sharing picker~~ done in v0.5.0; **P0** camera/mic-in-use indicators still open
 
@@ -96,15 +96,17 @@ Ordered by priority, then by what unblocks what.
 ## 4. Bookmarks
 
 - [x] Bookmark this page (star button, Cmd/Ctrl+D) and remove; star shows state
-- [x] Bookmarks page (`browser://bookmarks`) with remove
+- [x] Bookmark manager (`browser://bookmarks`): folder tree, search, edit, move, delete, import/export
 - [x] New tab page shows the first 12 bookmarks
-- [ ] **P0** Edit dialog on save (name, folder) and edit existing bookmarks
-- [ ] **P0** Folders (create, rename, nest, move)
-- [ ] **P0** Bookmarks bar (toggle Cmd/Ctrl+Shift+B), with folder dropdowns and drag-and-drop
-- [ ] **P0** Import from Chrome, Safari, Firefox, Edge, Brave, Arc, and from bookmarks HTML
-- [ ] **P1** Export to standard bookmarks HTML
-- [ ] **P1** Search bookmarks; sort; drag to reorder in the manager
-- [ ] **P1** "Bookmark all tabs" / open all in folder
+- [x] Edit popup on save (name, folder, Remove) and edit existing bookmarks (bar menu, manager)
+- [x] Folders (create, rename, nest, move; a folder can't be moved into itself)
+- [x] Bookmarks bar (toggle Cmd/Ctrl+Shift+B), folder menus, right-click menus, drag to reorder / drop into folders
+- [x] Import from Chrome, Brave, Edge, Vivaldi, Arc (auto-detected) and from a bookmarks HTML file (Safari, Firefox, …)
+- [x] Export to standard bookmarks HTML
+- [x] Search bookmarks; drag to reorder or into folders in the manager
+- [ ] **P2** Sort bookmarks
+- [x] Open all in folder
+- [ ] **P1** "Bookmark all tabs"
 - [ ] **P2** Bookmarks menu in the menu bar listing bookmarks and folders
 - [ ] **P2** Favicons stored for bookmarks
 
@@ -266,7 +268,8 @@ Ordered by priority, then by what unblocks what.
 
 ## 15. Import, profiles & sync
 
-- [ ] **P0** Import from Chrome, Safari, Firefox, Edge, Brave, Arc: bookmarks, history, (passwords via CSV), search engine
+- [x] Import bookmarks from Chromium browsers and HTML files
+- [ ] **P1** Import history (needs reading the other browser's SQLite file), passwords (CSV), search engine
 - [ ] **P1** Profiles: separate persistent partitions per profile (data, cookies, permissions), profile switcher, per-profile window color
 - [ ] **P1** Export all data (bookmarks HTML, passwords CSV) as the interim "sync"
 - [ ] **P2** End-to-end encrypted sync (own server or file-based) for bookmarks, history, passwords, open tabs *(Electron limit: no Google Sync)*

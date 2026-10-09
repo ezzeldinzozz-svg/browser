@@ -10,6 +10,8 @@ browserAPI.getSettings().then((s) => {
 });
 
 browserAPI.getBookmarks().then((list) => {
+  // bookmarks only (folders are skipped), most recently added first
+  list = list.filter((b) => b.type !== 'folder');
   const sites = document.getElementById('sites');
   for (const b of list.slice(0, 12)) {
     const a = document.createElement('a');

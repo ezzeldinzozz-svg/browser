@@ -20,8 +20,10 @@ const {
 } = require('electron');
 const updater = require('./updater');
 const adblock = require('./adblock');
+const bookmarks = require('./bookmarks');
 
 const CHROME_H = 80; // tab strip (36) + toolbar (44)
+const BOOKMARKS_BAR_H = 30;
 const BAR_H = 44; // optional bars under the toolbar: permission prompt, sign-in, find
 const UI_DIR = path.join(__dirname, 'ui');
 const PAGES_DIR = path.join(__dirname, 'pages');
@@ -75,7 +77,6 @@ class Store {
   constructor(file) {
     this.file = file;
     this.data = {
-      bookmarks: [],
       history: [],
       permissions: {},
       downloads: [],
@@ -94,6 +95,7 @@ class Store {
       restoreSession: true,
       adblock: true,
       searchEngine: 'duckduckgo',
+      showBookmarksBar: true,
       askDownloadLocation: false,
       downloadDir: null, // null = the OS Downloads folder
       ...this.data.settings,
@@ -218,7 +220,8 @@ function sendTabs(w) {
   w.chromeView.webContents.send('tabs:update', {
     activeId: w.activeId,
     private: w.private,
-    bookmarked: store.data.bookmarks.some((b) => b.url === currentUrl),
+    bookmarked: !!bookmarks.findByUrl(currentUrl),
+    bookmarkBar: store.data.settings.showBookmarksBar ? bookmarks.tree().bar.children.map(bookmarks.summary) : null,
     canBookmark: isWeb(currentUrl),
     prompt: prompt
       ? {
@@ -273,10 +276,10 @@ const sendAll = () => windows.forEach(sendTabs);
 
 function chromeHeight(w) {
   const tab = activeTab(w);
-  if (!tab) return CHROME_H;
+  if (!tab) return CHROME_H + (store.data.settings.showBookmarksBar ? BOOKMARKS_BAR_H : 0);
   if (tab.fullscreen) return 0;
   const bars = [w.downloadWarnings.length, tab.prompts.length, tab.auth.length, tab.find.open].filter(Boolean).length;
-  return CHROME_H + bars * BAR_H;
+  return CHROME_H + (store.data.settings.showBookmarksBar ? BOOKMARKS_BAR_H : 0) + bars * BAR_H;
 }
 
 const STATUS_H = 24;
@@ -798,17 +801,174 @@ function cycleTab(w, step) {
   selectTab(w, w.tabs[(idx + step + w.tabs.length) % w.tabs.length].id);
 }
 
-function toggleBookmark(w) {
+// Star / Cmd+D: bookmarks the page (into the bookmarks bar) if needed, then the toolbar shows the
+// edit popup for it (name, folder, Remove).
+function starPage(w) {
   const tab = activeTab(w);
   if (!tab) return;
   const url = tab.wc.getURL();
   if (!isWeb(url)) return;
-  const list = store.data.bookmarks;
-  const idx = list.findIndex((b) => b.url === url);
-  if (idx >= 0) list.splice(idx, 1);
-  else list.unshift({ url, title: tab.wc.getTitle() || url, added: Date.now() });
+  const existing = bookmarks.findByUrl(url);
+  const node = existing || bookmarks.add({ url, title: tab.wc.getTitle() || url, parentId: 'bar' });
+  w.chromeView.webContents.send('bookmark-edit', bookmarkEditInfo(node.id, !existing));
+  w.chromeView.webContents.focus();
+}
+
+function bookmarkEditInfo(id, isNew = false) {
+  const f = bookmarks.find(id);
+  if (!f) return null;
+  return {
+    id,
+    isNew,
+    type: f.node.type,
+    title: f.node.title,
+    url: f.node.url || '',
+    parentId: f.parent ? f.parent.id : null,
+    folders: bookmarks.folders().filter((x) => f.node.type !== 'folder' || x.id !== id),
+  };
+}
+
+function openBookmarkUrl(w, url, where) {
+  if (!url) return;
+  if (where === 'window' || where === 'private') return openInNewWindow(url, where === 'private');
+  if (where === 'tab' || where === 'background') return void createTab(w, url, { background: where === 'background' });
+  const tab = activeTab(w);
+  if (tab) tab.wc.loadURL(url).catch(() => {});
+  else createTab(w, url);
+}
+
+function openAllInFolder(w, folderId) {
+  const f = bookmarks.find(folderId);
+  if (!f || f.node.type !== 'folder') return;
+  const urls = [];
+  const collect = (n) => (n.type === 'folder' ? n.children.forEach(collect) : urls.push(n.url));
+  collect(f.node);
+  urls.slice(0, 30).forEach((url, i) => createTab(w, url, { background: i > 0 }));
+}
+
+// A folder in the bookmarks bar opens as a native menu (nested folders become submenus).
+function folderMenuTemplate(w, folder) {
+  const items = folder.children.map((n) =>
+    n.type === 'folder'
+      ? { label: trimLabel(n.title, 50), submenu: folderMenuTemplate(w, n) }
+      : { label: trimLabel(n.title || n.url, 50), click: () => openBookmarkUrl(w, n.url, 'current') },
+  );
+  if (items.length === 0) return [{ label: '(empty)', enabled: false }];
+  return [...items, { type: 'separator' }, { label: 'Open All in Tabs', click: () => openAllInFolder(w, folder.id) }];
+}
+
+function showBookmarkMenu(w, id) {
+  const f = id ? bookmarks.find(id) : null;
+  const edit = (targetId) => w.chromeView.webContents.send('bookmark-edit', bookmarkEditInfo(targetId));
+  const common = [
+    { type: 'separator' },
+    {
+      label: 'Add Folder…',
+      click: () => {
+        const parent = f && f.node.type === 'folder' ? f.node.id : f && f.parent ? f.parent.id : 'bar';
+        edit(bookmarks.addFolder('New folder', parent).id);
+      },
+    },
+    { label: 'Bookmark Manager', click: () => openInternalPage(w, 'bookmarks') },
+    { label: 'Hide Bookmarks Bar', click: () => setBookmarksBar(false) },
+  ];
+  let template;
+  if (f && f.node.type === 'bookmark') {
+    template = [
+      { label: 'Open in New Tab', click: () => openBookmarkUrl(w, f.node.url, 'background') },
+      { label: 'Open in New Window', click: () => openBookmarkUrl(w, f.node.url, 'window') },
+      { label: 'Open in Private Window', click: () => openBookmarkUrl(w, f.node.url, 'private') },
+      { type: 'separator' },
+      { label: 'Edit…', click: () => edit(f.node.id) },
+      { label: 'Delete', click: () => bookmarks.remove(f.node.id) },
+      ...common,
+    ];
+  } else if (f && f.node.type === 'folder' && f.parent) {
+    template = [
+      { label: 'Open All in Tabs', click: () => openAllInFolder(w, f.node.id) },
+      { type: 'separator' },
+      { label: 'Rename…', click: () => edit(f.node.id) },
+      { label: 'Delete', click: () => bookmarks.remove(f.node.id) },
+      ...common,
+    ];
+  } else {
+    template = common.slice(1);
+  }
+  Menu.buildFromTemplate(template).popup({ window: w.win });
+}
+
+function setBookmarksBar(show) {
+  store.data.settings.showBookmarksBar = show;
   store.save();
-  sendAll();
+  windows.forEach((w) => {
+    layout(w);
+    sendTabs(w);
+  });
+  buildMenu();
+}
+
+// Chrome-family browsers keep bookmarks in a JSON file in their profile folder.
+function importSources() {
+  const home = app.getPath('home');
+  const base = isMac
+    ? path.join(home, 'Library', 'Application Support')
+    : process.platform === 'win32'
+      ? process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local')
+      : path.join(home, '.config');
+  const userData = process.platform === 'win32' ? 'User Data' : '';
+  const candidates = isMac
+    ? [
+        ['Google Chrome', 'Google/Chrome'],
+        ['Brave', 'BraveSoftware/Brave-Browser'],
+        ['Microsoft Edge', 'Microsoft Edge'],
+        ['Vivaldi', 'Vivaldi'],
+        ['Arc', 'Arc/User Data'],
+      ]
+    : process.platform === 'win32'
+      ? [
+          ['Google Chrome', 'Google/Chrome'],
+          ['Brave', 'BraveSoftware/Brave-Browser'],
+          ['Microsoft Edge', 'Microsoft/Edge'],
+          ['Vivaldi', 'Vivaldi'],
+        ]
+      : [
+          ['Google Chrome', 'google-chrome'],
+          ['Chromium', 'chromium'],
+          ['Brave', 'BraveSoftware/Brave-Browser'],
+          ['Microsoft Edge', 'microsoft-edge'],
+          ['Vivaldi', 'vivaldi'],
+        ];
+  return candidates
+    .map(([name, dir]) => ({ name, file: path.join(base, dir, userData, 'Default', 'Bookmarks') }))
+    .filter((c) => fs.existsSync(c.file));
+}
+
+async function importBookmarks(w, source) {
+  if (source === 'html') {
+    const { canceled, filePaths } = await dialog.showOpenDialog(w.win, {
+      title: 'Import bookmarks from an HTML file',
+      filters: [{ name: 'Bookmarks HTML', extensions: ['html', 'htm'] }],
+      properties: ['openFile'],
+    });
+    if (canceled || !filePaths[0]) return null;
+    const html = await fs.promises.readFile(filePaths[0], 'utf8');
+    return { count: bookmarks.importHtml(html, `Imported from ${path.basename(filePaths[0])}`), from: path.basename(filePaths[0]) };
+  }
+  const src = importSources().find((c) => c.name === source);
+  if (!src) return null;
+  const json = JSON.parse(await fs.promises.readFile(src.file, 'utf8'));
+  return { count: bookmarks.importChromeJson(json, `Imported from ${src.name}`), from: src.name };
+}
+
+async function exportBookmarks(w) {
+  const { canceled, filePath } = await dialog.showSaveDialog(w.win, {
+    title: 'Export bookmarks',
+    defaultPath: path.join(app.getPath('documents'), 'bookmarks.html'),
+    filters: [{ name: 'Bookmarks HTML', extensions: ['html'] }],
+  });
+  if (canceled || !filePath) return null;
+  await fs.promises.writeFile(filePath, bookmarks.exportHtml());
+  return filePath;
 }
 
 function focusAddress(w) {
@@ -1570,7 +1730,7 @@ function suggestions(text) {
     }
     pages.set(h.url, p);
   }
-  for (const b of store.data.bookmarks) {
+  for (const b of bookmarks.all()) {
     const p = pages.get(b.url) || { url: b.url, title: b.title, visits: 0, last: 0 };
     p.bookmarked = true;
     p.title = p.title || b.title;
@@ -1747,7 +1907,7 @@ function setupIpc() {
     if (t.wc.isLoading()) t.wc.stop();
     else t.wc.reload();
   });
-  handle('bookmark:toggle', fromChrome, (w) => toggleBookmark(w));
+  handle('bookmark:toggle', fromChrome, (w) => starPage(w));
   handle('permission:respond', fromChrome, (w, promptId, decision) => {
     if (['allow', 'block', 'dismiss'].includes(decision)) resolvePrompt(w, promptId, decision);
   });
@@ -1860,12 +2020,34 @@ function setupIpc() {
     store.data.history = [];
     store.save();
   });
-  handle('data:bookmarks', fromInternal, () => store.data.bookmarks);
-  handle('data:bookmark-remove', fromInternal, (_tab, url) => {
-    store.data.bookmarks = store.data.bookmarks.filter((b) => b.url !== url);
-    store.save();
-    sendAll();
+  handle('data:bookmarks', fromInternal, () => bookmarks.all().map(bookmarks.summary));
+
+  // Bookmark editing is shared by the toolbar (star popup, bar) and the bookmark manager page.
+  const fromToolbarOrPage = (e) => fromChrome(e) || fromInternal(e)?.w || null;
+  handle('bm:tree', fromInternal, () => bookmarks.tree());
+  handle('bm:edit-info', fromToolbarOrPage, (_w, id) => bookmarkEditInfo(String(id)));
+  handle('bm:update', fromToolbarOrPage, (_w, id, changes = {}) => {
+    const f = bookmarks.find(String(id));
+    if (!f) return;
+    bookmarks.update(f.node.id, { title: changes.title, url: changes.url });
+    if (changes.parentId && f.parent && changes.parentId !== f.parent.id) bookmarks.move(f.node.id, String(changes.parentId));
   });
+  handle('bm:move', fromToolbarOrPage, (_w, id, parentId, index) => bookmarks.move(String(id), String(parentId), index));
+  handle('bm:remove', fromToolbarOrPage, (_w, id) => bookmarks.remove(String(id)));
+  handle('bm:add-folder', fromInternal, (_tab, title, parentId) => bookmarks.addFolder(String(title || ''), String(parentId || 'bar')).id);
+  handle('bm:import-sources', fromInternal, () => importSources().map((c) => c.name));
+  handle('bm:import', fromInternal, (tab, source) => importBookmarks(tab.w, String(source)));
+  handle('bm:export', fromInternal, (tab) => exportBookmarks(tab.w));
+  handle('bm:star', fromChrome, (w) => starPage(w));
+  handle('bm:open', fromChrome, (w, id, where) => {
+    const f = bookmarks.find(String(id));
+    if (f && f.node.type === 'bookmark') openBookmarkUrl(w, f.node.url, where);
+  });
+  handle('bm:folder-menu', fromChrome, (w, id) => {
+    const f = bookmarks.find(String(id));
+    if (f && f.node.type === 'folder') Menu.buildFromTemplate(folderMenuTemplate(w, f.node)).popup({ window: w.win });
+  });
+  handle('bm:context', fromChrome, (w, id) => showBookmarkMenu(w, id ? String(id) : null));
 }
 
 // ---------------------------------------------------------------- menu
@@ -1990,8 +2172,15 @@ function buildMenu() {
     {
       label: 'Bookmarks',
       submenu: [
-        { label: 'Bookmark This Page', accelerator: 'CmdOrCtrl+D', click: inWindow(toggleBookmark) },
-        { label: 'Show Bookmarks', accelerator: 'CmdOrCtrl+Shift+O', click: open('bookmarks') },
+        { label: 'Bookmark This Page…', accelerator: 'CmdOrCtrl+D', click: inWindow(starPage) },
+        {
+          label: 'Show Bookmarks Bar',
+          type: 'checkbox',
+          checked: !!(store && store.data.settings.showBookmarksBar),
+          accelerator: 'CmdOrCtrl+Shift+B',
+          click: (item) => setBookmarksBar(item.checked),
+        },
+        { label: 'Bookmark Manager', accelerator: 'CmdOrCtrl+Shift+O', click: open('bookmarks') },
       ],
     },
     {
@@ -2071,6 +2260,10 @@ app.whenReady().then(() => {
   if (!isPrimaryInstance) return;
   protocol.handle(SCHEME, serveInternal);
   store = new Store(path.join(app.getPath('userData'), 'browser-data.json'));
+  bookmarks.init(store.data, () => {
+    store.save();
+    sendAll();
+  });
   // Downloads still running when the app last quit can't be resumed.
   for (const d of store.data.downloads) if (d.state === 'progressing') d.state = 'interrupted';
   nextDownloadId = store.data.downloads.reduce((max, d) => Math.max(max, d.id), 0) + 1;
