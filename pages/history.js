@@ -26,7 +26,6 @@ function render() {
     main.className = 'main';
     const a = document.createElement('a');
     a.className = 't';
-    a.style.display = 'block';
     a.href = h.url;
     a.textContent = h.title || h.url;
     const u = document.createElement('div');

@@ -7,10 +7,11 @@
   <link rel="stylesheet" href="page.css">
 </head>
 <body>
-  <main style="padding-top: 14vh;">
-    <h1>This page can't be reached</h1>
-    <p id="url" style="word-break: break-all;"></p>
-    <p id="desc" style="color: var(--dim);"></p>
+  <main class="error">
+    <h1 id="heading">This page can't be reached</h1>
+    <p id="detail"></p>
+    <p id="url" class="error-url"></p>
+    <p id="desc" class="error-code"></p>
     <button id="retry">Try again</button>
   </main>
   <script src="error.js"></script>

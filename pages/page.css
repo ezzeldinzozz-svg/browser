@@ -45,3 +45,16 @@ button:hover { border-color: var(--accent); }
 .row .time { color: var(--dim); font-size: 12px; flex: none; }
 .bar { display: flex; gap: 12px; margin-bottom: 16px; }
 .empty { color: var(--dim); padding: 24px 0; }
+h2 { font-size: 16px; font-weight: 500; }
+.hint { color: var(--dim); margin-top: 0; }
+.row a.t { display: block; }
+.row .t.muted { color: var(--dim); }
+
+main.newtab { padding-top: 14vh; text-align: center; }
+main.newtab h1 { font-size: 40px; font-weight: 300; margin-bottom: 28px; }
+#sites { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 36px; text-align: left; }
+#sites a { display: block; padding: 12px; background: var(--card); border-radius: 10px; color: var(--fg); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+main.error { padding-top: 14vh; }
+.error-url { word-break: break-all; }
+.error-code { color: var(--dim); font-size: 12px; }

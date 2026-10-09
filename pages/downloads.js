@@ -56,7 +56,7 @@ async function refresh() {
     const t = document.createElement('div');
     t.className = 't';
     t.textContent = d.filename;
-    if (d.state !== 'completed') t.style.color = 'var(--dim)';
+    if (d.state !== 'completed') t.classList.add('muted');
     const u = document.createElement('div');
     u.className = 'u';
     u.textContent = `${status(d)} · ${d.url}`;

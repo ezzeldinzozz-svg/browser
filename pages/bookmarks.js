@@ -20,7 +20,6 @@ async function load() {
     main.className = 'main';
     const a = document.createElement('a');
     a.className = 't';
-    a.style.display = 'block';
     a.href = b.url;
     a.textContent = b.title || b.url;
     const u = document.createElement('div');

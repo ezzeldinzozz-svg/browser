@@ -2,9 +2,9 @@
 
 const { contextBridge, ipcRenderer } = require('electron');
 
-// Only the browser's own file:// pages (toolbar UI + internal pages) get the API.
+// Only the browser's own browser:// pages (toolbar UI + internal pages) get the API.
 // The main process re-checks the sender on every call, so websites never reach it.
-if (location.protocol === 'file:') {
+if (location.protocol === 'browser:' && window === window.top) {
   const call = (channel) => (...args) => ipcRenderer.invoke(channel, ...args);
   const on = (channel) => (cb) => ipcRenderer.on(channel, (_e, payload) => cb(payload));
 

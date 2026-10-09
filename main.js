@@ -2,22 +2,26 @@
 
 const path = require('path');
 const fs = require('fs');
-const { pathToFileURL } = require('url');
-const { app, BaseWindow, WebContentsView, ipcMain, Menu, session, shell } = require('electron');
+const { app, BaseWindow, WebContentsView, ipcMain, Menu, protocol, session, shell } = require('electron');
 
 const CHROME_H = 80; // tab strip (36) + toolbar (44)
 const BAR_H = 44; // optional bars under the toolbar: permission prompt, find
+const UI_DIR = path.join(__dirname, 'ui');
 const PAGES_DIR = path.join(__dirname, 'pages');
-const PAGES_BASE = pathToFileURL(PAGES_DIR).href + '/';
 const PRELOAD = path.join(__dirname, 'preload.js');
-const INTERNAL = {
-  newtab: 'newtab.html',
-  history: 'history.html',
-  bookmarks: 'bookmarks.html',
-  downloads: 'downloads.html',
-  settings: 'settings.html',
-  error: 'error.html',
+// The browser's own pages live at browser://<name>/ and are served from pages/<name>.html.
+// The toolbar is browser://ui/. Only these origins may call the privileged IPC API.
+const SCHEME = 'browser';
+const INTERNAL = new Set(['newtab', 'history', 'bookmarks', 'downloads', 'settings', 'error']);
+const UI_URL = `${SCHEME}://ui/`;
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.svg': 'image/svg+xml',
+  '.png': 'image/png',
 };
+const FAVICON_MAX_BYTES = 256 * 1024;
 const SEARCH_URL = 'https://duckduckgo.com/?q=';
 const HISTORY_LIMIT = 5000;
 const DOWNLOADS_LIMIT = 200;
@@ -77,20 +81,28 @@ let nextId = 1;
 // ---------------------------------------------------------------- urls
 
 function internalURL(name, query) {
-  const u = new URL(PAGES_BASE + INTERNAL[name]);
+  const u = new URL(`${SCHEME}://${name}/`);
   if (query) for (const [k, v] of Object.entries(query)) u.searchParams.set(k, v);
   return u.href;
 }
 
-function displayUrl(u) {
-  if (u.startsWith(PAGES_BASE)) {
+// An internal page that a tab may show (the toolbar UI is not one of them).
+function internalName(u) {
+  try {
     const url = new URL(u);
-    const file = path.basename(url.pathname);
-    const name = Object.keys(INTERNAL).find((k) => INTERNAL[k] === file);
-    if (name === 'newtab') return '';
-    if (name === 'error') return url.searchParams.get('url') || '';
-    if (name) return `browser://${name}`;
+    return url.protocol === `${SCHEME}:` && INTERNAL.has(url.host) ? url.host : null;
+  } catch {
+    return null;
   }
+}
+
+const isInternalScheme = (u) => String(u).toLowerCase().startsWith(`${SCHEME}:`);
+
+function displayUrl(u) {
+  const name = internalName(u);
+  if (name === 'newtab') return '';
+  if (name === 'error') return new URL(u).searchParams.get('url') || '';
+  if (name) return `${SCHEME}://${name}`;
   return u;
 }
 
@@ -98,7 +110,7 @@ function resolveInput(raw) {
   const text = String(raw || '').trim();
   if (!text) return null;
   const internal = text.match(/^browser:\/\/(\w+)\/?$/i);
-  if (internal) return INTERNAL[internal[1].toLowerCase()] ? internalURL(internal[1].toLowerCase()) : null;
+  if (internal) return INTERNAL.has(internal[1].toLowerCase()) ? internalURL(internal[1].toLowerCase()) : null;
   if (/^(https?|file):\/\//i.test(text)) return text;
   if (!/\s/.test(text)) {
     if (/^(localhost|(\d{1,3}\.){3}\d{1,3})(:\d+)?([/?#].*)?$/i.test(text)) return 'http://' + text;
@@ -438,7 +450,8 @@ function createTab(url) {
     id: nextId++,
     view,
     wc,
-    favicon: '',
+    favicon: '', // data: URL shown in the tab strip
+    faviconSrc: '', // the page's icon URL being fetched
     prompts: [],
     fullscreen: false,
     find: { open: false, text: '', active: 0, matches: 0 },
@@ -448,23 +461,28 @@ function createTab(url) {
   win.contentView.addChildView(view);
 
   wc.setWindowOpenHandler(({ url: target }) => {
-    const resolved = resolveInput(target);
-    if (resolved) createTab(resolved);
+    if (!isBlockedNavigation(wc.getURL(), target)) {
+      const resolved = resolveInput(target);
+      if (resolved) createTab(resolved);
+    }
     return { action: 'deny' };
   });
+  // Websites (in any frame, or via redirect) may never load the browser's own pages.
+  const guard = (e) => {
+    if (isBlockedNavigation(wc.getURL(), e.url)) e.preventDefault();
+  };
+  wc.on('will-frame-navigate', guard);
+  wc.on('will-redirect', guard);
 
   wc.on('page-title-updated', () => {
     updateHistoryTitle(tab);
     sendTabs();
   });
-  wc.on('page-favicon-updated', (_e, favicons) => {
-    tab.favicon = favicons[0] || '';
-    sendTabs();
-  });
+  wc.on('page-favicon-updated', (_e, favicons) => loadFavicon(tab, favicons[0]));
   wc.on('did-start-loading', sendTabs);
   wc.on('did-stop-loading', sendTabs);
   wc.on('did-navigate', (_e, u) => {
-    tab.favicon = '';
+    tab.favicon = tab.faviconSrc = '';
     dismissPrompts(tab); // a prompt must never carry over to a different page
     tab.find.active = tab.find.matches = 0;
     recordHistory(tab, u);
@@ -491,7 +509,7 @@ function createTab(url) {
     sendTabs();
   });
   wc.on('did-fail-load', (_e, code, desc, failedUrl, isMainFrame) => {
-    if (!isMainFrame || code === -3 /* aborted */ || failedUrl.startsWith(PAGES_BASE)) return;
+    if (!isMainFrame || code === -3 /* aborted */ || isInternalScheme(failedUrl)) return;
     wc.loadURL(internalURL('error', { url: failedUrl, desc })).catch(() => {});
   });
 
@@ -499,6 +517,31 @@ function createTab(url) {
   wc.loadURL(url).catch(() => {});
   selectTab(tab.id);
   return tab;
+}
+
+function isBlockedNavigation(fromUrl, toUrl) {
+  if (!isInternalScheme(toUrl)) return false;
+  return !internalName(fromUrl); // only internal pages may link to other internal pages
+}
+
+// The toolbar never loads remote images: the tab's own session fetches the icon
+// and hands the toolbar a size-limited data: URL.
+async function loadFavicon(tab, url) {
+  tab.faviconSrc = url || '';
+  tab.favicon = '';
+  sendTabs();
+  if (!url || !/^https?:\/\//i.test(url)) return;
+  try {
+    const res = await tab.wc.session.fetch(url, { credentials: 'omit' });
+    const type = (res.headers.get('content-type') || '').split(';')[0].trim();
+    if (!res.ok || !type.startsWith('image/')) return;
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length > FAVICON_MAX_BYTES || tab.faviconSrc !== url || tab.wc.isDestroyed()) return;
+    tab.favicon = `data:${type};base64,${buf.toString('base64')}`;
+    sendTabs();
+  } catch {
+    // no icon is fine
+  }
 }
 
 function selectTab(id) {
@@ -564,7 +607,7 @@ const fromChrome = (e) => chromeView && e.sender === chromeView.webContents;
 const fromInternal = (e) =>
   !!e.senderFrame &&
   e.senderFrame === e.sender.mainFrame &&
-  e.senderFrame.url.startsWith(PAGES_BASE) &&
+  !!internalName(e.senderFrame.url) &&
   tabs.some((t) => t.wc === e.sender);
 
 function handle(channel, guard, fn) {
@@ -753,7 +796,7 @@ function createWindow() {
   const cwc = chromeView.webContents;
   cwc.setWindowOpenHandler(() => ({ action: 'deny' }));
   cwc.on('will-navigate', (e) => e.preventDefault());
-  cwc.loadFile(path.join(__dirname, 'ui', 'index.html'));
+  cwc.loadURL(UI_URL);
   cwc.once('did-finish-load', sendTabs);
 
   win.on('resize', layout);
@@ -765,7 +808,50 @@ function createWindow() {
   createTab(internalURL('newtab'));
 }
 
+// Serves browser://ui/* from ui/ and browser://<page>/* from pages/ (index = <page>.html).
+async function serveInternal(request) {
+  const { host, pathname } = new URL(request.url);
+  let dir;
+  let rel = decodeURIComponent(pathname).replace(/^\/+/, '');
+  if (host === 'ui') {
+    dir = UI_DIR;
+    rel ||= 'index.html';
+  } else if (INTERNAL.has(host)) {
+    dir = PAGES_DIR;
+    rel ||= `${host}.html`;
+  } else {
+    return new Response('Not found', { status: 404 });
+  }
+  const file = path.resolve(dir, rel);
+  const type = MIME[path.extname(file)];
+  if (!file.startsWith(dir + path.sep) || !type) return new Response('Not found', { status: 404 });
+  try {
+    return new Response(await fs.promises.readFile(file), { headers: { 'content-type': type } });
+  } catch {
+    return new Response('Not found', { status: 404 });
+  }
+}
+
+// Every renderer is sandboxed, including any created by Electron internals.
+app.enableSandbox();
+protocol.registerSchemesAsPrivileged([{ scheme: SCHEME, privileges: { standard: true, secure: true } }]);
+
+// One running copy: opening the app again focuses the existing window.
+const isPrimaryInstance = app.requestSingleInstanceLock();
+if (!isPrimaryInstance) app.quit();
+app.on('second-instance', () => {
+  if (!win || win.isDestroyed()) return;
+  if (win.isMinimized()) win.restore();
+  win.focus();
+});
+
+app.on('web-contents-created', (_e, contents) => {
+  contents.on('will-attach-webview', (e) => e.preventDefault());
+});
+
 app.whenReady().then(() => {
+  if (!isPrimaryInstance) return;
+  protocol.handle(SCHEME, serveInternal);
   store = new Store(path.join(app.getPath('userData'), 'browser-data.json'));
   // Downloads still running when the app last quit can't be resumed.
   for (const d of store.data.downloads) if (d.state === 'progressing') d.state = 'interrupted';
