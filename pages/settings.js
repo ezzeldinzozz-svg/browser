@@ -24,6 +24,8 @@ async function loadSettings() {
   document.getElementById('startup-pages').value = (s.startupPages || []).join('\n');
   document.getElementById('show-home').checked = s.showHomeButton;
   document.getElementById('theme').value = s.theme || 'system';
+  document.getElementById('history-keep').value = String(s.historyKeepDays || 0);
+  for (const k of ['history', 'downloads', 'cookies', 'cache']) document.getElementById(`quit-${k}`).checked = !!(s.clearOnQuit && s.clearOnQuit[k]);
   const uiSelect = document.getElementById('ui-language');
   if (uiSelect.options.length === 1) for (const l of s.uiLanguages) uiSelect.append(new Option(l.name, l.id));
   uiSelect.value = s.uiLanguage || 'auto';
@@ -568,3 +570,13 @@ document.getElementById('ui-language').addEventListener('change', async (e) => {
   document.getElementById('ui-language-restart').hidden = false;
 });
 document.getElementById('ui-language-restart-now').addEventListener('click', () => browserAPI.relaunch());
+
+// ---- history retention and clear on quit
+document.getElementById('history-keep').addEventListener('change', (e) => browserAPI.setSetting('historyKeepDays', Number(e.target.value)));
+for (const k of ['history', 'downloads', 'cookies', 'cache']) {
+  document.getElementById(`quit-${k}`).addEventListener('change', () => {
+    const value = {};
+    for (const x of ['history', 'downloads', 'cookies', 'cache']) value[x] = document.getElementById(`quit-${x}`).checked;
+    browserAPI.setSetting('clearOnQuit', value);
+  });
+}

@@ -155,6 +155,13 @@ function removeWhere(test) {
   return urls.length;
 }
 
+function removeBefore(time) {
+  transaction(() => {
+    db.prepare('DELETE FROM visits WHERE time < ?').run(time);
+    rebuildPages();
+  });
+}
+
 function removeSince(time) {
   transaction(() => {
     db.prepare('DELETE FROM visits WHERE time >= ?').run(time);
@@ -204,4 +211,4 @@ const all = () => q.all.all();
 const count = () => q.count.get().n;
 const close = () => db && db.close();
 
-module.exports = { open, addVisit, updateTitle, list, pagesMatching, topPages, recentPages, removeUrl, removeWhere, removeSince, clear, importVisits, all, count, close };
+module.exports = { open, addVisit, updateTitle, list, pagesMatching, topPages, recentPages, removeUrl, removeWhere, removeBefore, removeSince, clear, importVisits, all, count, close };

@@ -155,6 +155,8 @@ function defaultSettings() {
     proxyBypass: '', // e.g. "<local>;*.example.com"
     proxyPac: '', // PAC script address
     uiLanguage: 'auto', // 'auto' (the system's) | 'en' | 'ar'
+    historyKeepDays: 0, // 0 = forever; else visits older than this are deleted
+    clearOnQuit: { history: false, cookies: false, cache: false, downloads: false },
     theme: 'system', // 'system' | 'light' | 'dark' (browser UI, internal pages, and sites that follow it)
   };
 }
@@ -2070,6 +2072,12 @@ function exitFullscreen(tab) {
 
 // ---------------------------------------------------------------- history
 
+// Settings → Clear browsing data → "Keep history for": drop older visits.
+function pruneOldHistory() {
+  const days = store.data.settings.historyKeepDays;
+  if (days > 0) historyDb.removeBefore(Date.now() - days * 86400000);
+}
+
 function recordHistory(tab, url) {
   if (tab.w.private || !isWeb(url)) return;
   historyDb.addVisit(url, tab.wc.getTitle() || url);
@@ -3718,6 +3726,8 @@ function setupIpc() {
       (key === 'startup' && ['continue', 'newtab', 'pages'].includes(value)) ||
       (key === 'autoplay' && ['block-audible', 'allow'].includes(value)) ||
       (key === 'theme' && ['system', 'light', 'dark'].includes(value)) ||
+      (key === 'historyKeepDays' && [0, 7, 30, 90, 365].includes(value)) ||
+      (key === 'clearOnQuit' && value && typeof value === 'object' && ['history', 'cookies', 'cache', 'downloads'].every((k) => typeof value[k] === 'boolean')) ||
       (key === 'uiLanguage' && (value === 'auto' || Object.hasOwn(UI_LANGUAGES, value))) ||
       (key === 'proxyMode' && ['system', 'direct', 'manual', 'pac'].includes(value)) ||
       (key === 'proxyServer' && typeof value === 'string' && value.length <= 300 && /^[\w.:\-\[\]=;/ ]*$/.test(value)) ||
@@ -3736,6 +3746,7 @@ function setupIpc() {
     store.save();
     if (key === 'dns' || key === 'dnsCustom') applyDns();
     if (key === 'theme') nativeTheme.themeSource = value;
+    if (key === 'historyKeepDays') pruneOldHistory();
     if (key.startsWith('proxy')) {
       applyProxy(session.defaultSession);
       windows.filter((w) => w.private).forEach((w) => applyProxy(w.ses));
@@ -4245,6 +4256,8 @@ app.whenReady().then(() => {
   nativeTheme.themeSource = store.data.settings.theme || 'system';
   setupUiLanguage();
   historyDb.open(path.join(app.getPath('userData'), 'History.sqlite'));
+  pruneOldHistory();
+  setInterval(pruneOldHistory, 6 * 60 * 60 * 1000).unref();
   // v1 profiles kept history in browser-data.json; move it into the database once
   if (store.data.history && store.data.history.length) {
     historyDb.importVisits(store.data.history);
@@ -4544,6 +4557,7 @@ async function checkForUpdatesManually() {
   }
 }
 
+let clearedOnQuit = false;
 app.on('before-quit', (e) => {
   const openTabs = windows.reduce((n, w) => n + w.tabs.length, 0);
   // Only when the user quits from our menu / Cmd+Q: shutdown and signals must never be held up.
@@ -4557,6 +4571,25 @@ app.on('before-quit', (e) => {
       else if (store.data.settings.confirmClose && openTabs > 1) ok = await confirmClosing(focusedWindow()?.win, `Quit with ${openTabs} tabs open?`, 'Quit');
       if (!ok) return;
       quitConfirmed = true;
+      app.quit();
+    })();
+    return;
+  }
+  // Settings → "Clear when Operecs quits": wipe what was chosen, then quit for real.
+  const onQuit = store && store.data.settings.clearOnQuit;
+  if (onQuit && !clearedOnQuit && (onQuit.history || onQuit.cookies || onQuit.cache || onQuit.downloads)) {
+    e.preventDefault();
+    clearedOnQuit = true;
+    (async () => {
+      try {
+        if (onQuit.history) historyDb.clear();
+        if (onQuit.downloads) store.data.downloads = store.data.downloads.filter((d) => d.state === 'progressing');
+        const ses = session.defaultSession;
+        if (onQuit.cookies) await ses.clearStorageData({ storages: ['cookies', 'localstorage', 'indexdb', 'serviceworkers', 'cachestorage', 'filesystem', 'websql'] });
+        if (onQuit.cache) await ses.clearCache();
+      } catch (err) {
+        console.warn('Clear on quit:', err.message);
+      }
       app.quit();
     })();
     return;
