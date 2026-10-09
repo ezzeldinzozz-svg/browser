@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>New Tab</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src data:">
+  <link rel="stylesheet" href="page.css">
+  <style>
+    main { padding-top: 14vh; text-align: center; }
+    h1 { font-size: 40px; font-weight: 300; margin-bottom: 28px; }
+    #sites { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 36px; text-align: left; }
+    #sites a { display: block; padding: 12px; background: var(--card); border-radius: 10px; color: var(--fg); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Browser</h1>
+    <form id="f"><input id="q" type="search" placeholder="Search or enter address" autofocus autocomplete="off"></form>
+    <div id="sites"></div>
+  </main>
+  <script src="newtab.js"></script>
+</body>
+</html>

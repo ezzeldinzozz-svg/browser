@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; img-src * data:">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="tabstrip">
+    <div id="tablist"></div>
+    <button id="newtab" title="New tab">+</button>
+  </div>
+  <div id="toolbar">
+    <button id="back" title="Back" disabled>&#8249;</button>
+    <button id="forward" title="Forward" disabled>&#8250;</button>
+    <button id="reload" title="Reload">&#8635;</button>
+    <input id="address" type="text" spellcheck="false" autocomplete="off" placeholder="Search or enter address">
+    <button id="star" title="Bookmark this page" disabled>&#9734;</button>
+    <button id="downloads" title="Downloads">&#8615;</button>
+  </div>
+  <div id="prompt" hidden>
+    <span id="prompt-text"></span>
+    <button id="prompt-allow" class="primary">Allow</button>
+    <button id="prompt-block">Block</button>
+    <button id="prompt-close" class="close" title="Not now">&times;</button>
+  </div>
+  <div id="findbar" hidden>
+    <input id="find-input" type="text" spellcheck="false" autocomplete="off" placeholder="Find in page">
+    <span id="find-count"></span>
+    <button id="find-prev" title="Previous match">&#8963;</button>
+    <button id="find-next" title="Next match">&#8964;</button>
+    <button id="find-close" class="close" title="Close">&times;</button>
+  </div>
+  <script src="ui.js"></script>
+</body>
+</html>

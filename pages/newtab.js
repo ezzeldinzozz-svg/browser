@@ -1,0 +1,17 @@
+'use strict';
+
+document.getElementById('f').addEventListener('submit', (e) => {
+  e.preventDefault();
+  browserAPI.go(document.getElementById('q').value);
+});
+
+browserAPI.getBookmarks().then((list) => {
+  const sites = document.getElementById('sites');
+  for (const b of list.slice(0, 12)) {
+    const a = document.createElement('a');
+    a.href = b.url;
+    a.textContent = b.title || b.url;
+    a.title = b.url;
+    sites.append(a);
+  }
+});
