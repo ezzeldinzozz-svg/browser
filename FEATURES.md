@@ -143,7 +143,7 @@ Ordered by priority, then by what unblocks what.
 ## 7. Passwords, autofill & passkeys
 
 - [x] HTTP Basic/Digest sign-in bar, with "not secure" warning on http
-- [ ] **P0** Save-password prompt on form submit, and autofill saved logins (encrypted with `safeStorage` → Keychain / DPAPI / libsecret) *(Electron limit: no built-in password manager; macOS Keychain access needs a signed app)*
+- [ ] **P0** Passwords come only from password-manager extensions (Bitwarden, 1Password, Proton Pass…), by decision: no built-in password manager. Needs Chrome extension support first (see Extensions)
 - [ ] **P0** Passkeys / WebAuthn: verify Touch ID / security keys / iCloud Keychain passkeys work (needs signed app + entitlements on macOS) *(Electron limit: platform authenticator support is partial)*
 - [ ] **P1** Password manager page: view (after OS auth), edit, delete, search, export/import CSV
 - [ ] **P1** Strong password generator on sign-up fields

@@ -60,7 +60,8 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 The full prioritized checklist is in `FEATURES.md` (P0/P1/P2). Short version:
 
 1. Windows and Linux builds with their own updaters; Intel/universal Mac build
-2. Passwords and passkeys (need a Developer ID-signed app on macOS)
+2. Chrome extension support, so password-manager extensions work. **Decision: no built-in password manager**; passwords come only from extensions (a built-in one shipped briefly in v0.9.0 and was removed)
+3. Passkeys (need a Developer ID-signed app on macOS)
 3. Windows/Linux builds + their updaters (electron-updater works unsigned there)
 4. Name + icon
 5. Storage: JSON file → SQLite (before passwords and sync)
