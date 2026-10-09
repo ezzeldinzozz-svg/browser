@@ -98,9 +98,13 @@ function main() {
     if (files.length !== 1) throw new Error(`Expected one ${what} in ${dir}, found ${files.length}`);
     return path.join(dir, files[0]);
   };
+  // electron-builder names: Operecs-1.0.0-arm64.dmg / -arm64-mac.zip (Apple silicon) and
+  // Operecs-1.0.0.dmg / -mac.zip (Intel)
   const mac = {
-    zip: find(dist, (f) => f.endsWith('.zip') && f.includes(version), 'Mac zip'),
-    dmg: find(dist, (f) => f.endsWith('.dmg') && f.includes(version), 'Mac dmg'),
+    zip: find(dist, (f) => f.endsWith(`${version}-arm64-mac.zip`), 'Apple silicon zip'),
+    dmg: find(dist, (f) => f.endsWith(`${version}-arm64.dmg`), 'Apple silicon dmg'),
+    zipX64: find(dist, (f) => f.endsWith(`${version}-mac.zip`) && !f.includes('arm64'), 'Intel Mac zip'),
+    dmgX64: find(dist, (f) => f.endsWith(`${version}.dmg`) && !f.includes('arm64'), 'Intel Mac dmg'),
   };
   const win = find(path.join(ciDir, 'browser-windows'), (f) => f.endsWith('.exe') && f.includes(version), 'Windows installer');
   const appImage = find(path.join(ciDir, 'browser-linux'), (f) => f.endsWith('.AppImage') && f.includes(version), 'AppImage');
@@ -109,6 +113,7 @@ function main() {
   // 4. update manifests, signed here
   const manifests = [
     ['latest-mac.json', 'mac-arm64', mac.zip, true],
+    ['latest-mac-x64.json', 'mac-x64', mac.zipX64, false],
     ['latest-win.json', 'win-x64', win, false],
     ['latest-linux.json', 'linux-x64', appImage, false],
   ].map(([name, platformKey, file, legacySignature]) => {
@@ -126,7 +131,7 @@ function main() {
   });
 
   // 5. publish
-  const assets = [mac.dmg, mac.zip, win, appImage, deb, ...manifests];
+  const assets = [mac.dmg, mac.zip, mac.dmgX64, mac.zipX64, win, appImage, deb, ...manifests];
   console.log(`\nUploading ${assets.length} files (this can take a while)…`);
   try {
     sh('gh', ['release', 'create', tag, '--repo', REPO, '--title', tag, '--generate-notes', ...assets], { env });

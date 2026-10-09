@@ -393,7 +393,7 @@ Ordered by priority, then by what unblocks what.
 - [x] Release script: build, sign zip, tag, publish GitHub release
 - [x] Separate dev profile (`Browser Dev`) so testing never touches real data
 - [ ] **P0** macOS Developer ID signing + notarization + hardened runtime with entitlements (removes the "Open Anyway" step; needed for Keychain, passkeys)
-- [ ] **P0** Universal or x64 macOS build for Intel Macs
+- [x] **P0** x64 macOS build for Intel Macs (separate dmg/zip + `latest-mac-x64.json`; built and checked, not run — no Intel Mac/Rosetta here)
 - [x] Windows NSIS build (per-user, one-click) built and smoke-tested on GitHub Actions for every push
 - [ ] **P1** Windows code signing (SignPath for OSS, or Azure Artifact Signing / OV) to avoid SmartScreen warnings
 - [x] Linux AppImage + .deb built and smoke-tested (sandbox on) on GitHub Actions for every push; `.desktop` file with http/https/HTML MIME types
