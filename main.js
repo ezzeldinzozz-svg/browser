@@ -2364,6 +2364,8 @@ function showPageMenu(tab, params) {
       { label: 'Paste', enabled: f.canPaste, click: () => wc.paste() },
       { label: 'Select All', enabled: f.canSelectAll, click: () => wc.selectAll() },
     ]);
+    if (isMac || process.platform === 'win32') groups.push([{ label: 'Emoji & Symbols', click: () => app.showEmojiPanel() }]);
+    if (isMac && params.selectionText.trim()) groups.push(macTextItems(wc, params));
   } else if (params.selectionText.trim()) {
     groups.push([
       { label: 'Copy', click: () => wc.copy() },
@@ -2372,6 +2374,7 @@ function showPageMenu(tab, params) {
         click: () => createTab(w, searchUrl(params.selectionText.trim()), { after: tab }),
       },
     ]);
+    if (isMac) groups.push(macTextItems(wc, params));
   }
   if (groups.length === 0) {
     groups.push([
@@ -2393,6 +2396,14 @@ function showPageMenu(tab, params) {
 
   const template = groups.flatMap((g, i) => (i ? [{ type: 'separator' }, ...g] : g));
   Menu.buildFromTemplate(template).popup({ window: w.win });
+}
+
+// macOS: Look Up (dictionary panel) and Speech for selected text, as in Safari and Chrome.
+function macTextItems(wc, params) {
+  return [
+    { label: `Look Up “${trimLabel(params.selectionText, 20)}”`, click: () => wc.showDefinitionForSelection() },
+    { label: 'Speech', submenu: [{ role: 'startSpeaking' }, { role: 'stopSpeaking' }] },
+  ];
 }
 
 // The toolbar's own text fields (address bar, find, sign-in) get a plain edit menu.
@@ -3139,6 +3150,8 @@ function setupIpc() {
   });
   handle('reader:exit', fromInternal, (tab) => exitReader(tab));
   handle('reader:toggle', fromChrome, (w) => toggleReader(w));
+  handle('dictionary:list', fromInternal, async () => (await session.defaultSession.listWordsInSpellCheckerDictionary()).sort((a, b) => a.localeCompare(b)));
+  handle('dictionary:remove', fromInternal, (_tab, word) => session.defaultSession.removeWordFromSpellCheckerDictionary(String(word || '')));
   handle('data:site-data', fromInternal, (tab) => siteDataList(tab.w));
   handle('data:site-data-remove', fromInternal, (tab, site) => removeSiteData(tab.w, String(site || '')));
   handle('data:site-data-remove-all', fromInternal, async (tab) => {

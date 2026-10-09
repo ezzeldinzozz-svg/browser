@@ -234,9 +234,10 @@ Ordered by priority, then by what unblocks what.
 - [x] Spellcheck in editable fields with suggestions and Add to Dictionary
 - [x] Edit menu (undo/redo/cut/copy/paste/select all) and page text context menu (copy, search for selection)
 - [x] Spellcheck on/off; languages follow the preferred-language list (Windows/Linux; macOS uses the system checker)
-- [ ] **P1** Manage custom dictionary words
+- [x] **P1** Manage custom dictionary words (Settings → Languages)
 - [x] Preferred languages for websites (`Accept-Language`), defaulting to the system's
-- [ ] **P1** Context menu: "Look Up" / dictionary (macOS `showDefinitionForSelection`), Speech, emoji & symbols, writing direction
+- [x] **P1** Context menu: "Look Up" (macOS `showDefinitionForSelection`), Speech (macOS), Emoji & Symbols (macOS/Windows)
+- [ ] **P2** Context menu: writing direction
 - [ ] **P2** Paste as plain text (Cmd/Ctrl+Shift+V)
 
 ## 12. Accessibility

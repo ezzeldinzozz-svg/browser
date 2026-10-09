@@ -51,6 +51,8 @@ if (location.protocol === 'browser:' && window === window.top) {
     respondPermission: call('permission:respond'),
     getPermissions: call('data:permissions'),
     getSiteData: call('data:site-data'),
+    getDictionaryWords: call('dictionary:list'),
+    removeDictionaryWord: call('dictionary:remove'),
     getReaderArticle: call('reader:article'),
     setReaderPrefs: call('reader:prefs'),
     exitReader: call('reader:exit'),

@@ -488,3 +488,32 @@ document.getElementById('engine-add').addEventListener('submit', async (ev) => {
     loadSettings();
   }
 });
+
+// ---- custom spellcheck dictionary
+async function loadDictionary() {
+  const box = document.getElementById('dictionary');
+  const words = await browserAPI.getDictionaryWords();
+  box.textContent = '';
+  if (!words.length) {
+    const empty = document.createElement('div');
+    empty.className = 'empty';
+    empty.textContent = 'No words added yet.';
+    box.append(empty);
+  }
+  for (const word of words) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    const main = document.createElement('div');
+    main.className = 'main t';
+    main.textContent = word;
+    const remove = document.createElement('button');
+    remove.textContent = 'Remove';
+    remove.addEventListener('click', async () => {
+      await browserAPI.removeDictionaryWord(word);
+      loadDictionary();
+    });
+    row.append(main, remove);
+    box.append(row);
+  }
+}
+loadDictionary();
