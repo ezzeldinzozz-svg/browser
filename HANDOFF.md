@@ -3,9 +3,9 @@
 Everything needed to pick this project up on any device. **Keep this file current:** update it
 in the same commit as any change to features, architecture, setup, or plans.
 
-_Last updated: 2026-10-09 · Current release: v0.18.0 (all platforms)_
+_Last updated: 2026-10-09 · Current release: v0.19.0 (all platforms)_
 
-**On `main` but not released yet** (release with `npm run release -- 0.19.0`): theme setting (system/dark/light), notification permission fix + quieter prompts, tab tear-off / drag between windows, media hub.
+**v0.19.0 added:** theme setting (system/dark/light), notification permission fix + quieter prompts, tab tear-off / drag between windows, media hub.
 
 ## What this is
 
