@@ -1,7 +1,7 @@
 {
   "name": "browser",
   "productName": "Browser",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "A basic cross-platform browser built on Electron",
   "main": "main.js",
   "scripts": {
@@ -22,7 +22,7 @@
   "build": {
     "appId": "com.ezzeddinmagdy.browser",
     "productName": "Browser",
-    "copyright": "Copyright \u00a9 2026 ezzeddinmagdy",
+    "copyright": "Copyright © 2026 ezzeddinmagdy",
     "files": [
       "main.js",
       "preload.js",
