@@ -1,7 +1,7 @@
 {
   "name": "browser",
   "productName": "Browser",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "description": "A basic cross-platform browser built on Electron",
   "main": "main.js",
   "scripts": {
