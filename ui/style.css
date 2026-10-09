@@ -583,3 +583,5 @@ browser-action-list::part(badge) { font-size: 9px; }
 [dir=rtl] #bmbar .bm span, [dir=rtl] .media-title, [dir=rtl] #dlpanel .nm, [dir=rtl] .sg .tt { unicode-bidi: plaintext; }
 .wordmark { direction: ltr; unicode-bidi: isolate; }
 :lang(ar) h2, :lang(ar) .section-label, :lang(ar) .sec-title, :lang(ar) #private-badge, :lang(ar) .dp-status { font-family: inherit; text-transform: none; }
+
+#site.mixed { color: #e8a33d; }

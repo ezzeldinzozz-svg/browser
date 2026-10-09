@@ -19,7 +19,7 @@ Edit freely: move lines between sections, delete what you don't want, add your o
 - [x] Storage: history in SQLite (History.sqlite; bookmarks stay in JSON — small and written rarely)
 - [x] Full-text history search (FTS5; every word as a prefix)
 - [x] Security routine: weekly GitHub Action opens a pull request for a newer Electron patch (with CI); `npm run release -- X.Y.Z --critical` makes installed copies restart for the update within 10 minutes
-- [ ] Mixed content: show when a secure page loads insecure content; block insecure (http) form submissions from https pages
+- [x] Mixed content: lock turns to a warning when a secure page actually loads something over http (Chromium upgrades/blocks most); insecure form submissions from https pages ask first (with HTTPS-Only on they're upgraded)
 - [ ] Ask before closing a window or quitting when a page has unsaved changes (tabs already ask)
 
 ## To do — should have

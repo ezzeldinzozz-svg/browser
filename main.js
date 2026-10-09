@@ -606,7 +606,9 @@ function sendTabs(w) {
     capture: current ? captureState(current) : null,
     // lock icon in the address bar
     security: /^https:/i.test(currentUrl)
-      ? 'secure'
+      ? current && current.mixedContent
+        ? 'mixed'
+        : 'secure'
       : /^http:/i.test(currentUrl)
         ? 'insecure'
         : internalName(currentUrl) && internalName(currentUrl) !== 'newtab'
@@ -1225,6 +1227,7 @@ function createTab(w, url, { background = false, after = null, history = null, l
       tab.blocked = 0;
       tab.blockedHosts.clear();
       tab.readerable = false;
+      tab.mixedContent = false;
       if (tab.media) setMediaState(tab, null);
     }
   });
@@ -1304,6 +1307,13 @@ function createTab(w, url, { background = false, after = null, history = null, l
   wc.on('zoom-changed', (_e, direction) => zoom(tab.w, direction === 'in' ? 0.5 : -0.5, tab));
   wc.on('did-fail-load', (_e, code, desc, failedUrl, isMainFrame) => {
     if (!isMainFrame || code === -3 /* aborted */ || isInternalScheme(failedUrl)) return;
+    if (tab.heldForm === failedUrl) {
+      // an insecure form we stopped to ask about: Chromium shows its blocked page, so go back to
+      // the form (fields usually keep what was typed)
+      tab.heldForm = null;
+      if (tab.wc.getURL() === failedUrl && tab.wc.navigationHistory.canGoBack()) tab.wc.navigationHistory.goBack();
+      return;
+    }
     const upgrade = tab.httpsUpgrade;
     tab.httpsUpgrade = null;
     if (upgrade && /^https:/i.test(failedUrl) && new URL(failedUrl).host === upgrade.host) {
@@ -2420,6 +2430,63 @@ function localHost(host) {
 // Reloading a page that was the result of a form (POST): Chromium asks the embedder to confirm
 // and Electron silently cancels, so Reload did nothing. We remember the form data of each tab's
 // last main-frame POST and, after "Resubmit?", send it again.
+// ---------------------------------------------------------------- mixed content / insecure forms
+
+// A secure (https) page loading something over plain http. Chromium upgrades or blocks most of
+// it; what still goes out unencrypted marks the page "not fully secure".
+function noteMixedContent(details) {
+  if (details.resourceType === 'mainFrame' || !details.webContentsId || !/^http:/i.test(details.url)) return;
+  let host;
+  try {
+    host = new URL(details.url).hostname;
+  } catch {
+    return;
+  }
+  if (localHost(host)) return;
+  const tab = allTabs().find((t) => !t.wc.isDestroyed() && t.wc.id === details.webContentsId);
+  if (!tab || tab.mixedContent || !/^https:/i.test(tab.wc.getURL())) return;
+  tab.mixedContent = true;
+  if (tab.id === tab.w.activeId) sendTabs(tab.w);
+}
+
+// A form on an https page sending its data over plain http. With HTTPS-Only on, the request is
+// upgraded instead (upgradeToHttps). Otherwise: stop it and ask; "Send Anyway" re-sends it.
+const insecureFormsAllowed = new Set();
+function checkInsecureForm(details) {
+  if (details.resourceType !== 'mainFrame' || details.method !== 'POST' || !/^http:/i.test(details.url)) return null;
+  if (store.data.settings.httpsOnly) return null;
+  let target;
+  try {
+    target = new URL(details.url);
+  } catch {
+    return null;
+  }
+  if (localHost(target.hostname)) return null;
+  const tab = allTabs().find((t) => !t.wc.isDestroyed() && t.wc.id === details.webContentsId);
+  if (!tab || !/^https:/i.test(tab.wc.getURL())) return null;
+  if (insecureFormsAllowed.delete(details.url)) return null;
+  tab.heldForm = details.url;
+  const data = (details.uploadData || []).map((part) => (part.bytes ? { type: 'rawData', bytes: part.bytes } : part.file ? { type: 'file', filePath: part.file } : null)).filter(Boolean);
+  // the body of a multipart form starts with its boundary line
+  const first = data[0] && data[0].bytes ? Buffer.from(data[0].bytes).subarray(0, 200).toString('latin1') : '';
+  const boundary = first.startsWith('--') ? first.slice(2).split(/\r?\n/)[0] : null;
+  const contentType = boundary ? `multipart/form-data; boundary=${boundary}` : 'application/x-www-form-urlencoded';
+  setImmediate(async () => {
+    const { response } = await dialog.showMessageBox(tab.w.win, {
+      type: 'warning',
+      message: 'This form is not secure',
+      detail: `The information you entered would be sent to ${target.host} without encryption, so others on your network could see or change it.`,
+      buttons: ['Go Back', 'Send Anyway'],
+      defaultId: 0,
+      cancelId: 0,
+    });
+    if (response !== 1 || tab.wc.isDestroyed()) return;
+    insecureFormsAllowed.add(details.url);
+    tab.wc.loadURL(details.url, { postData: data, extraHeaders: `Content-Type: ${contentType}` }).catch(() => {});
+  });
+  return { cancel: true };
+}
+
 function rememberMainFrameRequest(details) {
   if (details.resourceType !== 'mainFrame' || !details.webContentsId) return;
   const tab = allTabs().find((t) => !t.wc.isDestroyed() && t.wc.id === details.webContentsId);
@@ -3271,6 +3338,7 @@ function siteInfo(w) {
     origin,
     host: parsed.host,
     secure: parsed.protocol === 'https:',
+    mixedContent: !!tab.mixedContent,
     certificate: cert,
     permissions: SITE_PERMISSIONS.map((key) => ({ key, name: PERMISSION_NAMES[key], value: decisions[key] || 'ask' })),
     adblock: { available: store.data.settings.adblock, on: blockingOnFor(w, site), blocked: tab.blocked },
@@ -4115,7 +4183,8 @@ app.whenReady().then(() => {
     onBlocked,
     beforeRequest: (details) => {
       rememberMainFrameRequest(details);
-      return upgradeToHttps(details);
+      noteMixedContent(details);
+      return checkInsecureForm(details) || upgradeToHttps(details);
     },
   });
   applyDns();

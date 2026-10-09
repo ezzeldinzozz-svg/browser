@@ -518,14 +518,18 @@ const INFO =
 function renderSiteButton(security) {
   const btn = $('site');
   const omni = $('omnibox');
-  const show = security === 'secure' || security === 'insecure' || security === 'internal';
+  const show = security === 'secure' || security === 'mixed' || security === 'insecure' || security === 'internal';
   btn.hidden = !show;
   omni.classList.toggle('has-site', show);
   omni.classList.toggle('insecure', security === 'insecure');
   btn.classList.toggle('insecure', security === 'insecure');
+  btn.classList.toggle('mixed', security === 'mixed');
   if (security === 'secure') {
     btn.innerHTML = LOCK;
     btn.title = 'Connection is secure. Click for site settings.';
+  } else if (security === 'mixed') {
+    btn.innerHTML = INFO;
+    btn.title = 'Parts of this page are not secure. Click for details.';
   } else if (security === 'insecure') {
     btn.innerHTML = INFO + '<span>Not secure</span>';
     btn.title = 'Connection is not secure. Click for site settings.';
@@ -561,6 +565,7 @@ async function openSitePopup() {
     if (info.secure) {
       const cert = info.certificate;
       pop.append(el('div', cert && !cert.ok ? 'line bad' : 'line', cert && !cert.ok ? 'Certificate problem' : 'Connection is secure'));
+      if (info.mixedContent) pop.append(el('div', 'line bad', 'Parts of this page (such as images or media) were loaded without encryption, so others on your network could see or change them.'));
       if (cert) {
         pop.append(
           el('div', 'line', `Certificate issued by ${cert.issuer}`),
