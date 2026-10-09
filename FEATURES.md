@@ -82,7 +82,7 @@ Ordered by priority, then by what unblocks what.
 - [x] Edit context menu (cut/copy/paste/select all) in toolbar fields
 - [x] Autocomplete dropdown from history and bookmarks (frequency + recency ranking, inline completion, arrow keys, Esc)
 - [x] Search engine choice in Settings: DuckDuckGo, Google, Bing, Brave Search, Ecosia, Kagi, Startpage
-- [ ] **P1** Search engine choice in onboarding; custom engines
+- [x] **P1** Search engine choice in onboarding (welcome page); custom engines (Settings)
 - [x] Security indicator: lock for https, "Not secure" for http (certificate failures already stop the page)
 - [x] Show URL without noise when unfocused (hide `https://`, `www.`), full URL on focus; site highlighted (anti-spoofing)
 - [x] **P1** Search suggestions from the chosen engine (opt-in for privacy)
@@ -149,8 +149,8 @@ Ordered by priority, then by what unblocks what.
 - [x] HTTP Basic/Digest sign-in bar, with "not secure" warning on http
 - [x] Passwords come only from password-manager extensions (Bitwarden, Proton Pass…), by decision: no built-in password manager. Bitwarden installs, shows its toolbar button and popup (sign-in/autofill to be verified with a real account)
 - [ ] **P0** Passkeys / WebAuthn: verify Touch ID / security keys / iCloud Keychain passkeys work (needs signed app + entitlements on macOS) *(Electron limit: platform authenticator support is partial)*
-- [ ] **P1** Password manager page: view (after OS auth), edit, delete, search, export/import CSV
-- [ ] **P1** Strong password generator on sign-up fields
+- [ ] ~~**P1** Password manager page~~ — won't do: the user wants no built-in password manager (extensions only)
+- [ ] ~~**P1** Strong password generator~~ — won't do (password manager extensions provide it)
 - [ ] **P1** Compatibility with 1Password/Bitwarden desktop apps (they need a supported browser or extension) *(Electron limit)*
 - [ ] **P1** Address & contact form autofill
 - [x] **P1** Proxy authentication (today proxy auth is cancelled)
@@ -260,13 +260,13 @@ Ordered by priority, then by what unblocks what.
 - [x] Make this my default browser button + status in Settings (macOS confirms; Windows opens Default apps settings)
 - [x] Search engine setting
 - [x] Privacy & security in Settings: clear data, ad/tracker blocking, third-party cookies, permission defaults and exceptions
-- [ ] **P1** HTTPS-only mode, safe browsing (needs a provider); DNS over HTTPS is done
+- [x] **P1** HTTPS-only mode and DNS over HTTPS (safe browsing: see Security, blocked)
 - [x] On startup: continue where you left off / New Tab page / specific pages (with "Use current pages")
 - [x] **P1** Appearance: light/dark/system theme (Settings → Appearance; `nativeTheme.themeSource`), show bookmarks bar, show home button
 - [ ] **P2** Accent color choice
 - [x] **P1** Home page / new-tab page choice
 - [x] **P1** Downloads location + ask where to save
-- [ ] **P1** Languages (UI language, website languages, spellcheck)
+- [x] **P1** Languages (UI language with Arabic, website languages, spellcheck + custom dictionary)
 - [x] Search within settings
 - [x] Reset settings to defaults
 - [ ] **P2** Custom themes / colors per profile; compact mode

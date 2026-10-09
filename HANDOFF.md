@@ -7,6 +7,8 @@ _Last updated: 2026-10-09 · Current release: v0.19.0 (all platforms)_
 
 **v0.19.0 added:** theme setting (system/dark/light), notification permission fix + quieter prompts, tab tear-off / drag between windows, media hub.
 
+**On `main`, not released yet** (planned as 1.0): context menu Look Up / Speech / Emoji, custom dictionary list, extension on/off + hide buttons, form-resubmit on reload, proxy settings, offline / Wi-Fi sign-in error pages, device chooser (HID/Serial/USB/Bluetooth), Windows Default-apps registration + Jump List, history import + data export, Intel Mac build, accessibility labels, Arabic interface + right-to-left.
+
 ## What this is
 
 **Operecs** (renamed from "Browser" after v0.13.0): a basic cross-platform web browser (macOS, Windows, Linux) built on Electron. Goal right now: a
@@ -101,23 +103,19 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 
 ## Roadmap (next, in order)
 
-The full prioritized checklist is in `FEATURES.md` (P0/P1/P2). Work was going through the
-remaining basics one at a time, aiming at "ready to be a daily driver". Next, in order:
+The full prioritized checklist is in `FEATURES.md` (P0/P1/P2). Goal: release **1.0** ready for
+daily use. Done since v0.19.0 is listed at the top of this file. Still open, roughly in order:
 
-1. Context menu extras: macOS Look Up (`wc.showDefinitionForSelection`), Speech (`startSpeaking`/`stopSpeaking` roles), Emoji & Symbols (`app.showEmojiPanel`); custom spellcheck dictionary list in Settings (`ses.listWordsInSpellCheckerDictionary` / `removeWordFromSpellCheckerDictionary`)
-2. Extensions page: pin/hide toolbar buttons, enable/disable without removing (keep a disabled list, unload/load)
-3. Form re-submission warning on reload after POST (remember the main-frame method per tab via `webRequest`, confirm before `reload`)
-4. Proxy settings (system by default; manual / PAC via `ses.setProxy`)
-5. Offline page copy for `ERR_INTERNET_DISCONNECTED`; captive-portal hint ("Sign in to the network" opening `http://neverssl.com`)
-6. Device chooser for WebHID / Web Serial / WebUSB / Web Bluetooth (`select-hid-device`, `select-serial-port`, `select-usb-device`, `select-bluetooth-device`), or deny with a message
-7. Windows Jump List (`app.setUserTasks`: New Window, New Private Window); verify default-browser registration on Windows (registry) and Linux (`x-scheme-handler`) with real builds
-8. Import history from Chrome/Brave/Edge (their `History` SQLite file, via `node:sqlite`); export all data (bookmarks HTML + settings JSON)
-9. Profiles (separate persistent partitions, switcher, per-profile window color)
-10. UI translation layer + Arabic + right-to-left layout; UI language follows the OS with an override
-11. Intel Mac build (x64 or universal; the updater needs a `mac-x64` manifest/platform key)
-12. Accessibility pass (labels on every bar/popup, VoiceOver/NVDA)
-13. Storage: JSON → SQLite (`node:sqlite`), then full-text history search
-14. Weekly Electron patch bump (currently 44.7.0)
+1. Verify by hand before 1.0: Windows install + Default apps registration, Intel Mac build, Serial/Bluetooth device chooser in the packaged app (macOS asks for Bluetooth permission), Arabic interface coverage (add missing strings to `locales/ar.json`), password-manager extensions (Bitwarden, Proton Pass) sign-in + autofill
+2. Profiles: separate persistent partitions per profile (data, cookies, permissions, extensions), profile switcher, per-profile window color
+3. Storage: JSON → SQLite (`node:sqlite`) for history (and bookmarks), then full-text history search
+4. Weekly Electron patch bump routine (currently 44.7.0) + an "update required" switch for critical security fixes
+5. Mixed-content indicator; block insecure (http) form submissions from https pages
+6. Print preview with page range / layout (Windows and Linux have no preview in the system dialog)
+7. Address & contact form autofill (not passwords)
+8. New tab customization: background image/color, show/hide shortcuts
+9. Linux packaging: document the Ubuntu 24.04 AppImage sandbox requirement (or ship an AppArmor profile); Flatpak/rpm; winget and Homebrew listings
+10. Smaller: share a single tab / system audio, `navigator.registerProtocolHandler`, verify drag-a-file-onto-the-window, verify macOS media keys / Now Playing
 
 Blocked or decided against (don't pick up without the user):
 - Passkeys, Developer ID signing/notarization, iCloud Passwords: need the paid Apple Developer Program (the user's enrollment was under review on 2026-10-09). iCloud Passwords also needs Apple to grant `com.apple.developer.web-browser.public-key-credential`
