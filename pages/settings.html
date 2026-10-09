@@ -61,12 +61,22 @@
 
     <h2>Privacy</h2>
     <label class="check"><input id="adblock" type="checkbox"> Block ads and trackers</label>
+    <label class="check"><input id="tpc" type="checkbox"> Block third-party cookies (sites can still ask to use theirs when embedded)</label>
+    <p id="tpc-restart" class="hint" hidden>Takes effect after restarting Browser. <button id="tpc-restart-now">Restart now</button></p>
     <p class="hint">Sites where blocking is turned off (use the shield in the toolbar to change a site):</p>
     <div id="allowlist"></div>
 
     <h2>Site permissions</h2>
-    <p class="hint">Sites you've allowed or blocked. Reset a site to be asked again next time.</p>
+    <p class="hint">What sites may use when they ask. "Ask" shows a prompt; "Block" denies without asking.</p>
+    <div id="perm-defaults" class="perm-grid"></div>
+    <p class="hint">Exceptions for specific sites:</p>
     <div id="list"></div>
+    <form id="perm-add" class="perm-add">
+      <input id="perm-add-site" type="text" placeholder="Site, e.g. meet.example.com" autocomplete="off" spellcheck="false">
+      <select id="perm-add-key"></select>
+      <select id="perm-add-value"><option value="allow">Allow</option><option value="block">Block</option></select>
+      <button type="submit">Add exception</button>
+    </form>
   </main>
   <script src="settings.js"></script>
 </body>

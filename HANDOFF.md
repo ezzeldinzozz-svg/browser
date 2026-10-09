@@ -16,6 +16,8 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 - Tabs, address bar (URL or search with the chosen engine: DuckDuckGo default, Google, Bing, Brave, Ecosia, Kagi, Startpage), back/forward/reload/stop, keyboard shortcuts
 - Tab strip: drag to reorder, pinned tabs (kept left, restored), audio indicator with click-to-mute, right-click menu (new tab to the right, reload, duplicate, pin, mute, move to new window, close / others / to the right, reopen closed)
 - Bookmarks, history, downloads page, find in page, new-tab page, settings page
+- Privacy: third-party cookies blocked by default via Chromium's `--test-third-party-cookie-phaseout` switch (read from the profile before ready; changing it needs a restart); Storage Access API requests go through the permission prompt. Permission defaults per type (Ask/Block) and editable per-site exceptions in Settings
+- Camera/mic/screen in-use: `capture-preload.js` (a session preload in every web frame) wraps getUserMedia/getDisplayMedia via `contextBridge.executeInMainWorld` and reports live tracks; tab dot + "● Camera · Stop" pill. Best effort: the OS indicators are the authoritative ones
 - Bookmarks are a tree (`bookmarks.js`, stored as `bookmarkTree` with fixed roots `bar` and `other`; v0.5 flat lists migrate into the bar). Star opens an edit popup (name, folder, Remove); bookmarks bar under the toolbar (Cmd/Ctrl+Shift+B) with native folder menus, right-click menus and drag-and-drop; manager page with folders, search, edit/move/delete; import from Chromium browsers' `Bookmarks` JSON or any bookmarks HTML; export to HTML
 - Toolbar polish: unfocused address shows `site.com/path` with the site highlighted; link-hover URL bubble bottom-left (a small `statusView` per window, `ui/status.html`); tab strip scrolls when full; downloads panel from the ↓ button
 - Page robustness: crash page with Reload, "Page unresponsive" (Wait / Exit Page), "Leave site?" on navigation for pages with unsaved changes
@@ -42,7 +44,6 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 - Notification permission reads as "denied" (not "default") until a site is allowed/blocked, so some sites hide their "enable notifications" button
 - Proxy sign-in not supported (proxy auth requests are cancelled)
 - Restored tabs may show pages from cache (same as Chrome), including pages that needed a sign-in
-- No camera/mic/screen-sharing in-use indicator on tabs yet
 - Popups that need `window.opener` (some OAuth logins) open as plain tabs
 - Google sign-in may block Electron despite the Chrome user agent
 - No DRM (Netflix/Spotify), no Chrome extensions (Electron limits, see research)
@@ -55,8 +56,8 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 
 The full prioritized checklist is in `FEATURES.md` (P0/P1/P2). Short version:
 
-1. Camera/mic in-use indicators, first-run welcome (default browser, import, search engine)
-2. Notification permission state, permission defaults per type, third-party cookie blocking
+1. Startup options and crash recovery, keyboard access, home button, first-run welcome, privacy policy
+2. Notification permission state (Electron limitation), passwords (needs Developer ID)
 3. Windows/Linux builds + their updaters (electron-updater works unsigned there)
 4. Name + icon
 5. Storage: JSON file → SQLite (before passwords and sync)

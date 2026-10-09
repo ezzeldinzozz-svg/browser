@@ -167,8 +167,9 @@ Ordered by priority, then by what unblocks what.
 - [ ] **P1** Shield popup with details (what was blocked, cookie-banner blocking level)
 - [x] Site info popup (click lock): connection status, certificate issuer/expiry, per-site permissions (Ask/Allow/Block), ad blocking switch, clear cookies and site data
 - [ ] **P2** List of cookies in use per site
-- [ ] **P0** Permission defaults per type (ask/block for all sites) and add/edit exceptions, not just reset
-- [ ] **P0** Block third-party cookies by default (or partition them); cookie settings page with per-site exceptions
+- [x] Permission defaults per type (Ask/Block for all sites) and add/edit per-site exceptions in Settings
+- [x] Block third-party cookies by default (Chromium's own blocking; setting applies after restart); embedded sites can ask via the Storage Access API, which goes through the permission prompt
+- [ ] **P2** Manual per-site cookie exceptions list
 - [x] `file://` policy: typed addresses and files opened from the OS load; web pages can't navigate, redirect, frame or open `file:` URLs
 - [x] External protocol handling (`mailto:`, `zoommtg:`, `slack:`): asks before opening another app (names the link type), remembers per site
 - [ ] **P1** HTTPS-Only / HTTPS-upgrade mode with a "continue to http" interstitial
@@ -191,8 +192,8 @@ Ordered by priority, then by what unblocks what.
 - [x] Camera/mic permission prompts with macOS usage strings (Info.plist)
 - [x] Screen-sharing picker: macOS 15+ system picker; elsewhere our picker of screens/windows with thumbnails
 - [ ] **P1** Share a single tab, system audio (Windows loopback)
-- [ ] **P0** Camera / microphone / screen-sharing in-use indicators on tabs
-- [ ] **P0** Camera / mic / screen-share in-use indicator on the tab and in the address bar, with a stop button
+- [x] Camera / microphone / screen-sharing in-use dot on tabs (best effort: tracks getUserMedia/getDisplayMedia in the page)
+- [x] In-use indicator in the address bar with a Stop button
 - [ ] **P1** Picture-in-picture: verify the video PiP button and `requestPictureInPicture()` work; add a context-menu/toolbar entry
 - [ ] **P1** Autoplay policy setting (block audible autoplay by default, per-site allow)
 - [ ] **P1** Media keys / Now Playing integration on macOS (verify Chromium's hardware media key handling is on)

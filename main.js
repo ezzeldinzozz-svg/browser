@@ -17,6 +17,7 @@ const {
   session,
   shell,
   webContents,
+  webFrameMain,
 } = require('electron');
 const updater = require('./updater');
 const adblock = require('./adblock');
@@ -66,7 +67,13 @@ const PERM_LABELS = {
   midi: 'use your MIDI devices',
   midiSysex: 'fully control your MIDI devices',
   openExternal: 'open an app on your computer',
+  // An embedded site (sign-in widget, video player…) asking for its cookies while third-party
+  // cookies are blocked (Storage Access API).
+  'storage-access': 'use its cookies and site data while embedded on other sites',
+  'top-level-storage-access': 'use its cookies and site data while embedded on other sites',
 };
+// Permission types that can be set to Ask or Block for every site in Settings.
+const PERMISSION_DEFAULT_KEYS = ['camera', 'microphone', 'geolocation', 'notifications', 'clipboard-read', 'openExternal'];
 const PROMPTABLE = new Set(['media', ...Object.keys(PERM_LABELS)]);
 
 const isMac = process.platform === 'darwin';
@@ -93,6 +100,8 @@ class Store {
     }
     this.data.settings = {
       restoreSession: true,
+      blockThirdPartyCookies: true,
+      permissionDefaults: {}, // type -> 'block' (absent = ask)
       adblock: true,
       searchEngine: 'duckduckgo',
       showBookmarksBar: true,
@@ -234,6 +243,7 @@ function sendTabs(w) {
     auth: auth ? { id: auth.id, host: auth.host, realm: auth.realm, insecure: auth.insecure } : null,
     find: current ? current.find : null,
     zoom: current ? Math.round(Math.pow(1.2, current.wc.getZoomLevel()) * 100) : 100,
+    capture: current ? captureState(current) : null,
     // lock icon in the address bar
     security: /^https:/i.test(currentUrl)
       ? 'secure'
@@ -265,6 +275,7 @@ function sendTabs(w) {
         canGoBack: canGo(t.wc, 'back'),
         canGoForward: canGo(t.wc, 'forward'),
         pinned: t.pinned,
+        capture: captureState(t),
         audible: t.wc.isCurrentlyAudible(),
         muted: t.wc.isAudioMuted(),
       };
@@ -298,6 +309,31 @@ function layoutStatus(w) {
   const textWidth = Math.min(Math.round(width * 0.6), 7 * w.statusText.length + 28);
   w.statusView.setBounds({ x: 0, y: height - STATUS_H, width: Math.max(80, textWidth), height: STATUS_H });
   w.statusView.setVisible(!!w.statusText);
+}
+
+// Combined camera/mic/screen use of a tab's frames; null when nothing is being captured.
+// Entries of frames that have gone away are dropped.
+function captureState(tab) {
+  const total = { camera: false, microphone: false, screen: false };
+  for (const [key, state] of tab.capture) {
+    const [processId, routingId] = key.split(':').map(Number);
+    if (!webFrameMain.fromId(processId, routingId)) {
+      tab.capture.delete(key);
+      continue;
+    }
+    for (const k of Object.keys(total)) total[k] ||= state[k];
+  }
+  return total.camera || total.microphone || total.screen ? total : null;
+}
+
+function stopCapture(tab) {
+  for (const frame of tab.wc.mainFrame.framesInSubtree) {
+    try {
+      frame.send('capture:stop');
+    } catch {
+      // frame went away
+    }
+  }
 }
 
 function layout(w) {
@@ -473,6 +509,7 @@ function configureSession(ses) {
   ses.on('will-download', onWillDownload);
   // macOS 15+ shows its own screen/window picker; elsewhere our picker in the toolbar view.
   ses.setDisplayMediaRequestHandler(onDisplayMediaRequest, { useSystemPicker: true });
+  ses.registerPreloadScript({ type: 'frame', filePath: path.join(__dirname, 'capture-preload.js') });
   adblock.attach(ses);
 }
 
@@ -503,6 +540,7 @@ function createTab(w, url, { background = false, after = null, history = null } 
     find: { open: false, text: '', active: 0, matches: 0 },
     fullscreen: false,
     blocked: 0, // ads/trackers blocked on the current page
+    capture: new Map(), // frame key -> { camera, microphone, screen } reported by capture-preload.js
     pinned: !!(history && history.pinned),
     openerId: after ? after.id : null,
   };
@@ -543,6 +581,7 @@ function createTab(w, url, { background = false, after = null, history = null } 
     if (details.isMainFrame && !details.isSameDocument) tab.blocked = 0;
   });
   wc.on('did-navigate', (_e, u) => {
+    tab.capture.clear();
     applySiteZoom(tab);
     tab.favicon = tab.faviconSrc = '';
     dismissPrompts(tab); // a prompt must never carry over to a different page
@@ -1138,6 +1177,7 @@ function promptText(keys) {
 
 // Private windows remember decisions only until they close.
 const permissionStore = (w) => (w && w.private ? w.permissions : store.data.permissions);
+const permissionDefault = (key) => store.data.settings.permissionDefaults[key] || 'ask';
 const decisionFor = (w, origin, key) => (permissionStore(w)[origin] || {})[key];
 const windowOfSession = (ses) => windows.find((w) => w.ses === ses) || null;
 
@@ -1152,7 +1192,8 @@ function onPermissionRequest(wc, permission, callback, details) {
   if (!tab || !origin) return callback(false);
 
   const keys = permissionKeys(permission, details.mediaTypes);
-  const decisions = keys.map((k) => decisionFor(tab.w, origin, k));
+  // A site's own decision wins; otherwise the per-type default from Settings (ask or block).
+  const decisions = keys.map((k) => decisionFor(tab.w, origin, k) || (permissionDefault(k) === 'block' ? 'block' : undefined));
   if (decisions.includes('block')) return callback(false);
   const pending = keys.filter((_k, i) => decisions[i] !== 'allow');
   if (pending.length === 0) return callback(true);
@@ -1776,6 +1817,8 @@ function suggestions(text) {
 
 const SITE_PERMISSIONS = ['camera', 'microphone', 'geolocation', 'notifications', 'clipboard-read', 'openExternal'];
 const PERMISSION_NAMES = {
+  'storage-access': 'Cookies while embedded',
+  'top-level-storage-access': 'Cookies while embedded',
   camera: 'Camera',
   microphone: 'Microphone',
   geolocation: 'Location',
@@ -1836,6 +1879,22 @@ function handle(channel, guard, fn) {
 }
 
 function setupIpc() {
+  // Sent by capture-preload.js in web pages: only ever changes that page's own tab indicator.
+  ipcMain.on('capture:state', (e, state) => {
+    const tab = tabOfWc(e.sender);
+    if (!tab || !e.senderFrame || !state) return;
+    tab.capture.set(`${e.senderFrame.processId}:${e.senderFrame.routingId}`, {
+      camera: state.camera === true,
+      microphone: state.microphone === true,
+      screen: state.screen === true,
+    });
+    sendTabs(tab.w);
+  });
+  handle('capture:stop', fromChrome, (w) => {
+    const tab = activeTab(w);
+    if (tab) stopCapture(tab);
+  });
+
   // nav:go comes from the toolbar (navigates the active tab) or an internal page (navigates itself).
   ipcMain.handle('nav:go', (e, text) => {
     const tab = fromInternal(e) || activeTab(fromChrome(e));
@@ -1967,6 +2026,7 @@ function setupIpc() {
     adblockAllowlist: store.data.adblockAllowlist,
     searchEngines: Object.entries(SEARCH_ENGINES).map(([id, e]) => ({ id, name: e.name })),
     searchEngineName: searchEngine().name,
+    thirdPartyCookiesBlockedNow: thirdPartyCookiesBlocked,
     downloadDirShown: downloadDir(),
   }));
   handle('downloads:choose-folder', fromInternal, async (tab) => {
@@ -1985,7 +2045,7 @@ function setupIpc() {
   });
   handle('data:settings-set', fromInternal, (_tab, key, value) => {
     const valid =
-      (['restoreSession', 'adblock', 'askDownloadLocation'].includes(key) && typeof value === 'boolean') ||
+      (['restoreSession', 'adblock', 'askDownloadLocation', 'blockThirdPartyCookies'].includes(key) && typeof value === 'boolean') ||
       (key === 'searchEngine' && Object.hasOwn(SEARCH_ENGINES, value));
     if (!valid) return;
     store.data.settings[key] = value;
@@ -1999,6 +2059,31 @@ function setupIpc() {
   });
 
   handle('data:permissions', fromInternal, (tab) => permissionStore(tab.w));
+  handle('data:permission-set', fromInternal, (tab, origin, key, value) => {
+    const clean = originOf(String(origin || '').includes('://') ? origin : `https://${origin}`);
+    if (!clean || !PERM_LABELS[key] || !['allow', 'block', 'ask'].includes(value)) return null;
+    const perms = permissionStore(tab.w);
+    const site = (perms[clean] ||= {});
+    if (value === 'ask') delete site[key];
+    else site[key] = value;
+    if (Object.keys(site).length === 0) delete perms[clean];
+    if (!tab.w.private) store.save();
+    return clean;
+  });
+  handle('data:permission-defaults', fromInternal, () => ({
+    keys: PERMISSION_DEFAULT_KEYS.map((key) => ({ key, name: PERMISSION_NAMES[key], value: permissionDefault(key) })),
+    names: PERMISSION_NAMES,
+  }));
+  handle('data:permission-default-set', fromInternal, (_tab, key, value) => {
+    if (!PERMISSION_DEFAULT_KEYS.includes(key) || !['ask', 'block'].includes(value)) return;
+    if (value === 'ask') delete store.data.settings.permissionDefaults[key];
+    else store.data.settings.permissionDefaults[key] = value;
+    store.save();
+  });
+  handle('app:relaunch', fromInternal, () => {
+    app.relaunch();
+    app.quit();
+  });
   handle('data:permission-reset', fromInternal, (tab, origin) => {
     delete permissionStore(tab.w)[origin];
     if (!tab.w.private) store.save();
@@ -2235,6 +2320,21 @@ async function serveInternal(request) {
 // BROWSER_PROFILE_DIR points any build (including a packaged one) at a throwaway profile for testing.
 if (process.env.BROWSER_PROFILE_DIR) app.setPath('userData', path.resolve(process.env.BROWSER_PROFILE_DIR));
 else if (!app.isPackaged) app.setPath('userData', path.join(app.getPath('appData'), 'Browser Dev'));
+
+// Settings that must be applied before Electron starts, read straight from the profile.
+function readEarlySettings() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(path.join(app.getPath('userData'), 'browser-data.json'), 'utf8'));
+    return raw.settings || {};
+  } catch {
+    return {};
+  }
+}
+
+// Third-party cookies: Chromium's own blocking (the same code path as its planned phase-out),
+// on by default like Safari and Brave. Embedded sites can still ask via the Storage Access API.
+const thirdPartyCookiesBlocked = readEarlySettings().blockThirdPartyCookies !== false;
+if (thirdPartyCookiesBlocked) app.commandLine.appendSwitch('test-third-party-cookie-phaseout');
 
 // Every renderer is sandboxed, including any created by Electron internals.
 app.enableSandbox();

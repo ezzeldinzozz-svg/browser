@@ -44,6 +44,12 @@ function renderTab(t, isActive) {
     el.append(title);
   }
 
+  if (t.capture) {
+    const rec = document.createElement('span');
+    rec.className = 'rec';
+    rec.title = 'Using ' + [t.capture.camera && 'camera', t.capture.microphone && 'microphone', t.capture.screen && 'screen'].filter(Boolean).join(', ');
+    el.append(rec);
+  }
   if (t.audible || t.muted) {
     const audio = document.createElement('button');
     audio.className = 'audio' + (t.muted ? ' muted' : '');
@@ -140,6 +146,13 @@ function render(state) {
   $('star').textContent = state.bookmarked ? '★' : '☆';
 
   renderBookmarkBar(state.bookmarkBar);
+  const cap = state.capture;
+  $('capture').hidden = !cap;
+  if (cap) {
+    const what = [cap.camera && 'Camera', cap.microphone && 'Microphone', cap.screen && 'Screen'].filter(Boolean).join(' + ');
+    $('capture').textContent = `\u25CF ${what} \u00B7 Stop`;
+    $('capture').title = `This page is using your ${what.toLowerCase()}. Click to stop.`;
+  }
   $('zoom').hidden = state.zoom === 100;
   $('zoom').textContent = `${state.zoom}%`;
 
@@ -597,6 +610,7 @@ for (const [id, dir] of [['back', 'back'], ['forward', 'forward']]) {
 }
 
 $('zoom').addEventListener('click', () => api.resetZoom());
+$('capture').addEventListener('click', () => api.stopCapture());
 
 // ---- unfocused address bar: show "example.com/path" with the site highlighted
 

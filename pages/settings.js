@@ -24,6 +24,8 @@ async function loadSettings() {
     for (const e of s.searchEngines) engine.append(new Option(e.name, e.id));
   }
   engine.value = s.searchEngine;
+  document.getElementById('tpc').checked = s.blockThirdPartyCookies;
+  document.getElementById('tpc-restart').hidden = s.blockThirdPartyCookies === s.thirdPartyCookiesBlockedNow;
   document.getElementById('download-dir').textContent = s.downloadDirShown;
   document.getElementById('ask-download').checked = s.askDownloadLocation;
   adblock.checked = s.adblock;
@@ -56,44 +58,89 @@ adblock.addEventListener('change', () => browserAPI.setSetting('adblock', adbloc
 engine.addEventListener('change', () => browserAPI.setSetting('searchEngine', engine.value));
 loadSettings();
 
+let permissionNames = NAMES;
+
 async function load() {
-  const sites = await browserAPI.getPermissions();
+  const [sites, defaults] = await Promise.all([browserAPI.getPermissions(), browserAPI.getPermissionDefaults()]);
+  permissionNames = { ...NAMES, ...defaults.names };
+
+  // per-type defaults
+  const grid = document.getElementById('perm-defaults');
+  grid.textContent = '';
+  for (const d of defaults.keys) {
+    const label = document.createElement('label');
+    label.textContent = d.name;
+    const select = document.createElement('select');
+    select.append(new Option('Ask', 'ask'), new Option('Block', 'block'));
+    select.value = d.value;
+    select.addEventListener('change', () => browserAPI.setPermissionDefault(d.key, select.value));
+    label.append(select);
+    grid.append(label);
+  }
+  const addKey = document.getElementById('perm-add-key');
+  if (!addKey.options.length) for (const d of defaults.keys) addKey.append(new Option(d.name, d.key));
+
+  // exceptions: one row per site, one Allow/Block/Ask select per saved permission
   const origins = Object.keys(sites).sort();
   list.textContent = '';
   if (origins.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'empty';
-    empty.textContent = 'No site permissions saved yet.';
+    empty.textContent = 'No exceptions yet.';
     list.append(empty);
-    return;
   }
   for (const origin of origins) {
     const row = document.createElement('div');
-    row.className = 'row';
-
+    row.className = 'row perm-row';
     const main = document.createElement('div');
     main.className = 'main';
     const t = document.createElement('div');
     t.className = 't';
     t.textContent = origin;
-    const u = document.createElement('div');
-    u.className = 'u';
-    u.textContent = Object.entries(sites[origin])
-      .map(([k, v]) => `${NAMES[k] || k}: ${v === 'allow' ? 'Allowed' : 'Blocked'}`)
-      .join(' · ');
-    main.append(t, u);
+    main.append(t);
+    const perms = document.createElement('div');
+    perms.className = 'perm-list';
+    for (const [key, value] of Object.entries(sites[origin])) {
+      const label = document.createElement('label');
+      label.textContent = permissionNames[key] || key;
+      const select = document.createElement('select');
+      select.append(new Option('Allow', 'allow'), new Option('Block', 'block'), new Option('Ask (remove)', 'ask'));
+      select.value = value;
+      select.addEventListener('change', async () => {
+        await browserAPI.setSitePermissionFromSettings(origin, key, select.value);
+        load();
+      });
+      label.append(select);
+      perms.append(label);
+    }
+    main.append(perms);
 
     const reset = document.createElement('button');
-    reset.textContent = 'Reset';
+    reset.textContent = 'Remove all';
     reset.addEventListener('click', async () => {
       await browserAPI.resetPermissions(origin);
       load();
     });
-
     row.append(main, reset);
     list.append(row);
   }
 }
+
+document.getElementById('perm-add').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const site = document.getElementById('perm-add-site');
+  const ok = await browserAPI.setSitePermissionFromSettings(
+    site.value.trim(),
+    document.getElementById('perm-add-key').value,
+    document.getElementById('perm-add-value').value,
+  );
+  if (ok) site.value = '';
+  else site.setCustomValidity('Enter a site like example.com');
+  site.reportValidity();
+  setTimeout(() => site.setCustomValidity(''), 1500);
+  load();
+});
+
 load();
 
 // ---- About / updates
@@ -192,3 +239,11 @@ document.getElementById('download-dir-change').addEventListener('click', async (
 document.getElementById('ask-download').addEventListener('change', (e) =>
   browserAPI.setSetting('askDownloadLocation', e.target.checked),
 );
+
+// ---- Third-party cookies (applied when the browser starts)
+
+document.getElementById('tpc').addEventListener('change', async (e) => {
+  await browserAPI.setSetting('blockThirdPartyCookies', e.target.checked);
+  loadSettings();
+});
+document.getElementById('tpc-restart-now').addEventListener('click', () => browserAPI.relaunch());

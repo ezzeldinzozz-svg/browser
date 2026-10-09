@@ -224,6 +224,15 @@ body.private #site.insecure { color: #ff8a80; }
   font-size: 11px; color: var(--fg-dim); border: 1px solid var(--border);
 }
 #toolbar #zoom[hidden] { display: none; }
+#omnibox:has(#capture:not([hidden])) #zoom { right: auto; position: static; }
+#toolbar #capture {
+  position: absolute; right: 4px; top: 3px; z-index: 1;
+  width: auto; height: 24px; padding: 0 10px; border-radius: 12px;
+  font-size: 11px; background: #d93025; color: #fff;
+}
+#toolbar #capture[hidden] { display: none; }
+#toolbar #capture:hover { filter: brightness(1.1); background: #d93025; }
+.tab .rec { width: 8px; height: 8px; border-radius: 50%; background: #d93025; flex: none; }
 
 #suggest {
   position: absolute; top: 34px; left: 0; right: 0; z-index: 10;
