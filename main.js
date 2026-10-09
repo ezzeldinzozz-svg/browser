@@ -145,6 +145,7 @@ function defaultSettings() {
     downloadDir: null, // null = the OS Downloads folder
     searchSuggestions: false, // send what's typed in the address bar to the search engine (opt-in)
     customEngines: [], // [{ name, keyword, url with %s }]
+    theme: 'system', // 'system' | 'light' | 'dark' (browser UI, internal pages, and sites that follow it)
   };
 }
 
@@ -3210,6 +3211,7 @@ function setupIpc() {
         typeof value === 'boolean') ||
       (key === 'startup' && ['continue', 'newtab', 'pages'].includes(value)) ||
       (key === 'autoplay' && ['block-audible', 'allow'].includes(value)) ||
+      (key === 'theme' && ['system', 'light', 'dark'].includes(value)) ||
       (key === 'memorySaverMinutes' && [15, 30, 60, 120, 240].includes(value)) ||
       (key === 'languages' && Array.isArray(value) && value.length <= 10 && value.every((l) => /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(l))) ||
       (key === 'defaultZoom' && [50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200].includes(value)) ||
@@ -3222,6 +3224,7 @@ function setupIpc() {
     store.data.settings[key] = value;
     store.save();
     if (key === 'dns' || key === 'dnsCustom') applyDns();
+    if (key === 'theme') nativeTheme.themeSource = value;
     if (key === 'languages' || key === 'spellcheck') {
       applyLanguages(session.defaultSession);
       windows.filter((w) => w.private).forEach((w) => applyLanguages(w.ses));
@@ -3280,6 +3283,7 @@ function setupIpc() {
     store.data.settings = defaultSettings();
     store.save();
     applyDns();
+    nativeTheme.themeSource = 'system';
     windows.forEach((w) => {
       layout(w);
       sendTabs(w);
@@ -3666,6 +3670,7 @@ app.whenReady().then(() => {
   if (!isPrimaryInstance) return;
   protocol.handle(SCHEME, serveInternal);
   store = new Store(path.join(app.getPath('userData'), 'browser-data.json'));
+  nativeTheme.themeSource = store.data.settings.theme || 'system';
   app.setAboutPanelOptions({
     applicationName: DISPLAY_NAME,
     applicationVersion: app.getVersion(),

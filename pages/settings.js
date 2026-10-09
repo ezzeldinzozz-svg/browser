@@ -23,6 +23,7 @@ async function loadSettings() {
   document.getElementById('startup-pages-box').hidden = s.startupMode !== 'pages';
   document.getElementById('startup-pages').value = (s.startupPages || []).join('\n');
   document.getElementById('show-home').checked = s.showHomeButton;
+  document.getElementById('theme').value = s.theme || 'system';
   document.getElementById('confirm-close').checked = s.confirmClose;
   document.getElementById('gpc').checked = s.gpc;
   document.getElementById('search-suggestions').checked = s.searchSuggestions;
@@ -294,6 +295,7 @@ document.getElementById('startup-use-current').addEventListener('click', async (
   saveStartupPages();
 });
 document.getElementById('show-home').addEventListener('change', (e) => browserAPI.setSetting('showHomeButton', e.target.checked));
+document.getElementById('theme').addEventListener('change', (e) => browserAPI.setSetting('theme', e.target.value));
 document.getElementById('home-page').addEventListener('change', (e) => {
   let v = e.target.value.trim();
   if (v && !/^[a-z]+:\/\//i.test(v)) v = `https://${v}`;

@@ -261,7 +261,8 @@ Ordered by priority, then by what unblocks what.
 - [x] Privacy & security in Settings: clear data, ad/tracker blocking, third-party cookies, permission defaults and exceptions
 - [ ] **P1** HTTPS-only mode, safe browsing (needs a provider); DNS over HTTPS is done
 - [x] On startup: continue where you left off / New Tab page / specific pages (with "Use current pages")
-- [ ] **P1** Appearance: light/dark/system theme (toolbar and internal pages follow `nativeTheme`), accent color, show bookmarks bar, show home button
+- [x] **P1** Appearance: light/dark/system theme (Settings → Appearance; `nativeTheme.themeSource`), show bookmarks bar, show home button
+- [ ] **P2** Accent color choice
 - [x] **P1** Home page / new-tab page choice
 - [x] **P1** Downloads location + ask where to save
 - [ ] **P1** Languages (UI language, website languages, spellcheck)
