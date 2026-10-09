@@ -3,7 +3,7 @@
 Everything needed to pick this project up on any device. **Keep this file current:** update it
 in the same commit as any change to features, architecture, setup, or plans.
 
-_Last updated: 2026-10-09 · Current release: v0.19.0 (all platforms)_
+_Last updated: 2026-10-09 · Current release: v0.20.0 (Apple silicon Mac; v0.19.0 was the last for Intel, Windows and Linux)_
 
 **v0.19.0 added:** theme setting (system/dark/light), notification permission fix + quieter prompts, tab tear-off / drag between windows, media hub.
 
