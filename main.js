@@ -54,7 +54,7 @@ const PRELOAD = path.join(__dirname, 'gen', 'preload.js'); // bundled from prelo
 // The browser's own pages live at browser://<name>/ and are served from pages/<name>.html.
 // The toolbar is browser://ui/. Only these origins may call the privileged IPC API.
 const SCHEME = 'browser';
-const INTERNAL = new Set(['newtab', 'history', 'bookmarks', 'downloads', 'settings', 'error', 'welcome', 'privacy', 'extensions', 'shortcuts', 'licenses', 'tasks']);
+const INTERNAL = new Set(['newtab', 'history', 'bookmarks', 'downloads', 'settings', 'error', 'welcome', 'privacy', 'extensions', 'shortcuts', 'licenses', 'tasks', 'reader']);
 const UI_URL = `${SCHEME}://ui/`;
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -226,9 +226,79 @@ const isWeb = (u) => /^https?:\/\//i.test(u);
 function displayUrl(u) {
   const name = internalName(u);
   if (name === 'newtab') return '';
-  if (name === 'error') return readableHost(new URL(u).searchParams.get('url') || '');
+  if (name === 'error' || name === 'reader') return readableHost(new URL(u).searchParams.get('url') || '');
   if (name) return `${SCHEME}://${name}`;
   return readableHost(u);
+}
+
+// ---------------------------------------------------------------- reader mode
+
+// Mozilla Readability (the library behind Firefox's Reader View) runs in an isolated world of the
+// page, so the page's own scripts can't see or tamper with it. The article is then shown at
+// browser://reader inside a sandboxed frame without scripts.
+const READABILITY = fs.readFileSync(require.resolve('@mozilla/readability/Readability.js'), 'utf8');
+const READERABLE = fs.readFileSync(require.resolve('@mozilla/readability/Readability-readerable.js'), 'utf8');
+const READER_WORLD = 1201;
+const readerArticles = new Map(); // id -> article (kept for this run only)
+let nextArticleId = 1;
+
+async function checkReaderable(tab) {
+  const url = tab.wc.getURL();
+  if (!isWeb(url) || tab.wc.isDestroyed()) return;
+  try {
+    const ok = await tab.wc.executeJavaScriptInIsolatedWorld(READER_WORLD, [{ code: `${READERABLE}\n;isProbablyReaderable(document)` }]);
+    if (tab.wc.isDestroyed() || tab.wc.getURL() !== url || tab.readerable === !!ok) return;
+    tab.readerable = !!ok;
+    if (tab.id === tab.w.activeId) sendTabs(tab.w);
+  } catch {
+    // page navigated away or crashed meanwhile
+  }
+}
+
+const READER_EXTRACT = `;(() => {
+  const a = new Readability(document.cloneNode(true)).parse();
+  return a && { title: a.title, byline: a.byline, siteName: a.siteName, content: a.content, dir: a.dir,
+    lang: a.lang || document.documentElement.lang, publishedTime: a.publishedTime, length: a.length };
+})()`;
+
+async function toggleReader(w) {
+  const tab = activeTab(w);
+  if (!tab) return;
+  const url = tab.wc.getURL();
+  if (internalName(url) === 'reader') return exitReader(tab);
+  if (!isWeb(url)) return;
+  let article = null;
+  try {
+    article = await tab.wc.executeJavaScriptInIsolatedWorld(READER_WORLD, [{ code: READABILITY + READER_EXTRACT }]);
+  } catch {
+    article = null;
+  }
+  if (!article || !article.content || tab.wc.isDestroyed() || tab.wc.getURL() !== url) {
+    tab.readerable = false;
+    return sendTabs(w);
+  }
+  const id = nextArticleId++;
+  readerArticles.set(id, { ...article, url });
+  if (readerArticles.size > 30) readerArticles.delete(readerArticles.keys().next().value);
+  tab.wc.loadURL(internalURL('reader', { id: String(id), url })).catch(() => {});
+}
+
+function exitReader(tab) {
+  const nav = tab.wc.navigationHistory;
+  if (nav.canGoBack()) return nav.goBack();
+  const original = new URL(tab.wc.getURL()).searchParams.get('url');
+  if (original && isWeb(original)) tab.wc.loadURL(original).catch(() => {});
+}
+
+const READER_PREFS = { size: [14, 16, 18, 20, 22, 24, 26, 28], font: ['serif', 'sans'], theme: ['auto', 'light', 'sepia', 'dark'], width: ['narrow', 'medium', 'wide'] };
+function readerPrefs() {
+  const saved = store.data.settings.reader || {};
+  return {
+    size: READER_PREFS.size.includes(saved.size) ? saved.size : 20,
+    font: READER_PREFS.font.includes(saved.font) ? saved.font : 'serif',
+    theme: READER_PREFS.theme.includes(saved.theme) ? saved.theme : 'auto',
+    width: READER_PREFS.width.includes(saved.width) ? saved.width : 'medium',
+  };
 }
 
 // ---------------------------------------------------------------- cookies and site data
@@ -454,6 +524,7 @@ function sendTabs(w) {
     bookmarked: !!bookmarks.findByUrl(currentUrl),
     bookmarkBar: store.data.settings.showBookmarksBar ? bookmarks.tree().bar.children.map(bookmarks.summary) : null,
     canBookmark: isWeb(currentUrl),
+    reader: current ? (internalName(currentUrl) === 'reader' ? 'on' : current.readerable ? 'available' : null) : null,
     prompt: prompt
       ? {
           id: prompt.id,
@@ -892,9 +963,15 @@ function createTab(w, url, { background = false, after = null, history = null, l
     if (tab.id === tab.w.activeId) showStatus(tab.w, url);
   });
   wc.on('did-start-loading', () => sendTabs(tab.w));
-  wc.on('did-stop-loading', () => sendTabs(tab.w));
+  wc.on('did-stop-loading', () => {
+    sendTabs(tab.w);
+    checkReaderable(tab);
+  });
   wc.on('did-start-navigation', (details) => {
-    if (details.isMainFrame && !details.isSameDocument) tab.blocked = 0;
+    if (details.isMainFrame && !details.isSameDocument) {
+      tab.blocked = 0;
+      tab.readerable = false;
+    }
   });
   // A page may start one download on its own; more need the user's OK unless they clicked or
   // typed in between (like Chrome).
@@ -1601,7 +1678,7 @@ function tabHistory(tab) {
   const nav = tab.wc.navigationHistory;
   let entries = nav.getAllEntries().map((e) => {
     const name = internalName(e.url);
-    if (name === 'error') return { url: new URL(e.url).searchParams.get('url') || '', title: e.title };
+    if (name === 'error' || name === 'reader') return { url: new URL(e.url).searchParams.get('url') || '', title: e.title };
     return { url: e.url, title: e.title };
   });
   let index = nav.getActiveIndex();
@@ -2874,6 +2951,21 @@ function setupIpc() {
     if (Object.keys(site).length === 0) delete perms[origin];
     if (!w.private) store.save();
   });
+  handle('reader:article', fromInternal, (tab) => {
+    const params = new URL(tab.wc.getURL()).searchParams;
+    const original = params.get('url') || '';
+    const article = readerArticles.get(Number(params.get('id')));
+    return { article: article || null, url: isWeb(original) ? original : '', prefs: readerPrefs() };
+  });
+  handle('reader:prefs', fromInternal, (_tab, prefs) => {
+    const next = { ...readerPrefs() };
+    for (const [k, allowed] of Object.entries(READER_PREFS)) if (prefs && allowed.includes(prefs[k])) next[k] = prefs[k];
+    store.data.settings.reader = next;
+    store.save();
+    return next;
+  });
+  handle('reader:exit', fromInternal, (tab) => exitReader(tab));
+  handle('reader:toggle', fromChrome, (w) => toggleReader(w));
   handle('data:site-data', fromInternal, (tab) => siteDataList(tab.w));
   handle('data:site-data-remove', fromInternal, (tab, site) => removeSiteData(tab.w, String(site || '')));
   handle('data:site-data-remove-all', fromInternal, async (tab) => {
@@ -3296,6 +3388,8 @@ function buildMenu() {
           accelerator: 'CmdOrCtrl+Shift+R',
           click: inWindow((w) => activeTab(w)?.wc.reloadIgnoringCache()),
         },
+        { type: 'separator' },
+        { label: 'Reader Mode', accelerator: 'Alt+CmdOrCtrl+R', click: inWindow(toggleReader) },
         { type: 'separator' },
         { label: 'Zoom In', accelerator: 'CmdOrCtrl+Plus', click: inWindow((w) => zoom(w, 0.5)) },
         { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', click: inWindow((w) => zoom(w, -0.5)) },

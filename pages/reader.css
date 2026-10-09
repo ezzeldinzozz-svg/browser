@@ -1,0 +1,14 @@
+@import url('page.css');
+html, body { height: 100%; margin: 0; overflow: hidden; }
+body { display: flex; flex-direction: column; }
+#bar { display: flex; align-items: center; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--border); flex: none; }
+#bar[hidden] { display: none; }
+#bar .spacer { flex: 1; }
+#bar button, #bar select { height: 28px; margin: 0; font-size: 13px; }
+#article { flex: 1; width: 100%; border: 0; }
+#article[hidden] { display: none; }
+#missing { padding: 48px; overflow: auto; }
+body.theme-light { background: #fff; }
+body.theme-sepia { background: #f4ecd8; }
+body.theme-dark { background: #1c1b22; }
+body.theme-sepia #bar { background: #ece2c8; color: #5b4636; }

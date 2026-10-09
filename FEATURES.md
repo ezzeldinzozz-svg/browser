@@ -220,7 +220,7 @@ Ordered by priority, then by what unblocks what.
 - [x] Save as PDF (`printToPDF`) from Save Page As
 - [ ] **P2** Save as PDF from a print preview
 - [ ] **P1** Print preview with page range/layout options (Chrome-style), not just the system dialog
-- [ ] **P1** Reader mode (Mozilla Readability, font/size/theme controls)
+- [x] **P1** Reader mode (Mozilla Readability, font/size/theme/width controls)
 - [x] Default zoom level setting
 - [ ] **P2** Default font and minimum font size
 - [ ] **P2** Translate page (on-device or a privacy-friendly service; no free Google Translate) *(Electron limit)*

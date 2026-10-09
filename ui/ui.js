@@ -151,6 +151,9 @@ function render(state) {
   $('forward').disabled = !active || !active.canGoForward;
   $('reload').textContent = active && active.loading ? '✕' : '↻';
   $('reload').title = active && active.loading ? 'Stop' : 'Reload';
+  $('reader').hidden = !state.reader;
+  $('reader').classList.toggle('on', state.reader === 'on');
+  $('reader').title = state.reader === 'on' ? 'Leave reader mode' : 'Reader mode';
   $('star').disabled = !state.canBookmark;
   $('star').classList.toggle('on', state.bookmarked);
   $('star').textContent = state.bookmarked ? '★' : '☆';
@@ -279,6 +282,7 @@ $('back').addEventListener('click', () => api.back());
 $('forward').addEventListener('click', () => api.forward());
 $('reload').addEventListener('click', () => api.reload());
 $('star').addEventListener('click', () => api.starPage());
+$('reader').addEventListener('click', () => api.toggleReader());
 
 // ---- overlay: the toolbar view stretches over the page while a dropdown or popup is open
 

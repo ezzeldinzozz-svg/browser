@@ -210,7 +210,8 @@ button {
 #toolbar button { width: 30px; height: 30px; border-radius: 50%; font-size: 20px; line-height: 1; }
 #toolbar button:hover:not(:disabled) { background: var(--bg-hover); }
 #toolbar button:disabled { opacity: 0.35; cursor: default; }
-#star.on { color: var(--accent); }
+#star.on, #reader.on { color: var(--accent); }
+#reader[hidden] { display: none; }
 
 #omnibox { position: relative; flex: 1; display: flex; min-width: 0; }
 #site {
