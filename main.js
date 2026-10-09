@@ -928,6 +928,7 @@ function createTab(w, url, { background = false, after = null, history = null, l
     if (response === 1 && !wc.isDestroyed()) wc.forcefullyCrashRenderer();
   });
   wc.on('will-prevent-unload', (e) => {
+    if (tab.closing && tab.w.activeId !== tab.id) selectTab(tab.w, tab.id); // show which tab is asking
     const choice = dialog.showMessageBoxSync(tab.w.win, {
       type: 'question',
       message: 'Leave site?',
@@ -937,6 +938,7 @@ function createTab(w, url, { background = false, after = null, history = null, l
       cancelId: 1,
     });
     if (choice === 0) e.preventDefault(); // preventDefault ignores the page's beforeunload
+    else tab.closing = false; // staying: the tab can be closed again later
   });
   wc.on('zoom-changed', (_e, direction) => zoom(tab.w, direction === 'in' ? 0.5 : -0.5, tab));
   wc.on('did-fail-load', (_e, code, desc, failedUrl, isMainFrame) => {
@@ -1121,22 +1123,41 @@ function closeActiveTabs(w) {
   else closeTab(w, w.activeId);
 }
 
+// A web page gets to run its beforeunload handler first: if it has unsaved changes, the
+// "Leave site?" dialog (will-prevent-unload) decides, and the tab is removed once the page has
+// actually closed.
 function closeTab(w, id) {
-  const idx = w.tabs.findIndex((t) => t.id === id);
+  const tab = getTab(w, id);
+  if (!tab || tab.closing) return;
+  const history = tabHistory(tab); // read now; the page's history is gone after it closes
+  const page = !tab.pending && !tab.wc.isDestroyed() && !tab.wc.isCrashed() && isWeb(tab.wc.getURL());
+  if (!page) return finishCloseTab(tab, history);
+  tab.closing = true;
+  tab.wc.once('destroyed', () => finishCloseTab(tab, history));
+  tab.wc.close({ waitForBeforeUnload: true });
+  // Safety net: a page that neither closes nor asks (hung renderer) mustn't leave a stuck tab.
+  setTimeout(() => {
+    if (tab.closing && !tab.wc.isDestroyed()) finishCloseTab(tab, history);
+  }, 4000);
+}
+
+function finishCloseTab(tab, history) {
+  const { w } = tab;
+  const idx = w.tabs.indexOf(tab);
   if (idx === -1) return;
-  w.multi.delete(id);
-  const [tab] = w.tabs.splice(idx, 1);
-  rememberClosedTab(w, tab, idx);
+  w.multi.delete(tab.id);
+  w.tabs.splice(idx, 1);
+  rememberClosedTab(w, tab, idx, history);
   dismissPrompts(tab);
   cancelAuth(tab);
   exitFullscreen(tab);
-  w.win.contentView.removeChildView(tab.view);
-  tab.wc.close();
+  if (liveWindow(w)) w.win.contentView.removeChildView(tab.view);
+  if (!tab.wc.isDestroyed()) tab.wc.close();
   if (w.tabs.length === 0) {
-    w.win.close();
+    if (liveWindow(w)) w.win.close();
     return;
   }
-  if (id === w.activeId) selectTab(w, w.tabs[Math.min(idx, w.tabs.length - 1)].id);
+  if (tab.id === w.activeId) selectTab(w, w.tabs[Math.min(idx, w.tabs.length - 1)].id);
   else sendTabs(w);
   saveSession();
 }
@@ -1621,8 +1642,7 @@ function savedWindows() {
   return s.tabs && s.tabs.length ? [{ tabs: s.tabs, active: s.active }] : []; // v0.3 format
 }
 
-function rememberClosedTab(w, tab, index) {
-  const history = tabHistory(tab);
+function rememberClosedTab(w, tab, index, history = tabHistory(tab)) {
   if (!history) return;
   w.closedTabs.push({ history, index });
   if (w.closedTabs.length > 25) w.closedTabs.shift();

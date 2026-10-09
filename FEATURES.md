@@ -261,8 +261,8 @@ Ordered by priority, then by what unblocks what.
 - [ ] **P1** HTTPS-only mode, safe browsing (needs a provider); DNS over HTTPS is done
 - [x] On startup: continue where you left off / New Tab page / specific pages (with "Use current pages")
 - [ ] **P1** Appearance: light/dark/system theme (toolbar and internal pages follow `nativeTheme`), accent color, show bookmarks bar, show home button
-- [ ] **P1** Home page / new-tab page choice
-- [ ] **P1** Downloads location + ask where to save
+- [x] **P1** Home page / new-tab page choice
+- [x] **P1** Downloads location + ask where to save
 - [ ] **P1** Languages (UI language, website languages, spellcheck)
 - [x] Search within settings
 - [x] Reset settings to defaults
@@ -377,7 +377,8 @@ Ordered by priority, then by what unblocks what.
 - [x] MIT license file for the project
 - [x] Privacy policy (`PRIVACY.md`, `browser://privacy`) listing everything that goes over the network; linked from Settings and the welcome page
 - [x] Licenses page (`browser://licenses`): npm dependencies (generated at build), Chromium/Electron notices (bundled), filter lists
-- [ ] **P1** Product name + icon (replace placeholder "Browser" and the default Electron icon); trademark check
+- [x] **P1** Product name + icon: Operecs, "O." icon
+- [ ] **P2** Trademark check for the name
 - [ ] **P2** Terms of use / EULA; avoid "Chrome"/"Google" marks
 
 ## 24. Packaging & signing
@@ -392,7 +393,7 @@ Ordered by priority, then by what unblocks what.
 - [x] Linux AppImage + .deb built and smoke-tested (sandbox on) on GitHub Actions for every push; `.desktop` file with http/https/HTML MIME types
 - [ ] **P1** AppImage on Ubuntu 24.04+ needs unprivileged user namespaces (AppArmor) or `--no-sandbox`; document or ship an AppArmor profile
 - [ ] **P1** Flatpak (zypak) / rpm; winget and Homebrew cask listings
-- [ ] **P1** CI builds for all three OSes with a smoke test (launch, open a page, Google sign-in check)
+- [x] **P1** CI builds for Windows and Linux with a smoke test and an update test (Mac builds locally)
 - [ ] **P2** Microsoft Store listing (policy requires staying within 2 Chromium majors) *(Electron limit)*
 
 ## 25. Other expected basics
@@ -400,7 +401,8 @@ Ordered by priority, then by what unblocks what.
 - [x] Home button (optional, Settings → Appearance), configurable home page, Cmd+Shift+H / Alt+Home
 - [x] Status bubble showing the link URL on hover (bottom-left)
 - [x] "Leave site? Changes you made may not be saved" (`will-prevent-unload`) dialog on navigation/reload
-- [ ] **P1** Same prompt when closing a tab or window with unsaved changes
+- [x] **P1** Same prompt when closing a tab with unsaved changes
+- [ ] **P2** Same prompt when closing a whole window or quitting
 - [ ] **P1** JavaScript dialogs styled and tab-modal *(Electron limit: `alert`/`confirm` use native app-modal dialogs and `prompt()` isn't supported; Electron has no hook to replace them)*
 - [ ] **P1** Form re-submission warning on reload after POST
 - [ ] **P1** Proxy settings (system proxy honored by default; manual/PAC option)
