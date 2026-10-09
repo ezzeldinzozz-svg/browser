@@ -1399,6 +1399,43 @@ function moveTabsToNewWindow(tabs) {
   selectTab(target, wasActive.id);
 }
 
+// Dragging a tab out of the tab strip and dropping it elsewhere opens it in a new window at the
+// cursor. (A drop on another window's tab strip arrives as adoptTab instead.)
+function tearOffTab(w, id) {
+  const tab = getTab(w, id);
+  if (!tab || w.tabs.length < 2 || !liveWindow(w)) return;
+  const cursor = screen.getCursorScreenPoint();
+  const b = w.win.getContentBounds();
+  const overStrip = cursor.x >= b.x && cursor.x <= b.x + b.width && cursor.y >= b.y && cursor.y <= b.y + 38;
+  if (overStrip) return;
+  const size = w.win.getSize();
+  moveTabsToNewWindow([tab]);
+  const target = tab.w;
+  if (target !== w && liveWindow(target)) {
+    target.win.setBounds({ x: Math.round(cursor.x - 120), y: Math.round(cursor.y - 20), width: size[0], height: size[1] });
+  }
+}
+
+// A tab dropped onto this window's tab strip from another window (same session only: private
+// windows each have their own).
+function adoptTab(w, id, index) {
+  const tab = allTabs().find((t) => t.id === id);
+  if (!tab || !liveWindow(w)) return;
+  if (tab.w === w) return moveTab(w, id, index);
+  if (tab.w.ses !== w.ses) return;
+  detachTab(tab);
+  tab.w = w;
+  tab.openerId = null;
+  w.tabs.splice(Math.max(0, Math.min(index, w.tabs.length)), 0, tab);
+  w.win.contentView.addChildView(tab.view);
+  if (extensions && !w.private) extensions.addTab(tab.wc, w.win);
+  normalizeOrder(w);
+  layout(w);
+  selectTab(w, tab.id);
+  w.win.focus();
+  saveSession();
+}
+
 function closeTabs(w, keep) {
   for (const t of w.tabs.filter((x) => !keep(x))) closeTab(w, t.id);
 }
@@ -3077,6 +3114,8 @@ function setupIpc() {
     tab.wc.reload();
   });
   handle('tab:move', fromChrome, (w, id, index) => moveTab(w, id, index));
+  handle('tab:tear-off', fromChrome, (w, id) => tearOffTab(w, id));
+  handle('tab:adopt', fromChrome, (w, id, index) => adoptTab(w, Number(id), Number(index)));
   handle('tab:mute', fromChrome, (w, id) => {
     const tab = getTab(w, id);
     if (tab) toggleMute(tab);

@@ -15,6 +15,7 @@ const SPEAKER_MUTED =
   '<svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M3 9v6h4l5 4V5L7 9H3z"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M16 9l5 6M21 9l-5 6"/></svg>';
 
 let dragId = null;
+const TAB_DRAG_TYPE = 'application/x-operecs-tab';
 
 // Stroke icons for the address bar suggestions (same family as the toolbar's).
 const icon = (d) => `<svg class="ico" viewBox="0 0 24 24" aria-hidden="true">${d}</svg>`;
@@ -107,14 +108,26 @@ function renderTab(t, isActive) {
   el.addEventListener('dragstart', (e) => {
     dragId = t.id;
     e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData(TAB_DRAG_TYPE, String(t.id)); // lets another Operecs window take it
     el.classList.add('dragging');
   });
-  el.addEventListener('dragend', () => {
+  el.addEventListener('dragend', (e) => {
+    // dropped where nothing took it (outside the tab strip): open the tab in a new window
+    if (e.dataTransfer.dropEffect === 'none') api.tearOffTab(t.id);
     dragId = null;
     el.classList.remove('dragging');
     for (const x of tablist.querySelectorAll('.drop-before, .drop-after')) x.classList.remove('drop-before', 'drop-after');
   });
   el.addEventListener('dragover', (e) => {
+    if (dragId === null && [...e.dataTransfer.types].includes(TAB_DRAG_TYPE)) {
+      // a tab from another window
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'move';
+      const after = e.offsetX > el.offsetWidth / 2;
+      el.classList.toggle('drop-after', after);
+      el.classList.toggle('drop-before', !after);
+      return;
+    }
     if (dragId === null || dragId === t.id) return;
     e.preventDefault();
     const after = e.offsetX > el.offsetWidth / 2;
@@ -124,6 +137,12 @@ function renderTab(t, isActive) {
   el.addEventListener('dragleave', () => el.classList.remove('drop-before', 'drop-after'));
   el.addEventListener('drop', (e) => {
     e.preventDefault();
+    if (dragId === null && [...e.dataTransfer.types].includes(TAB_DRAG_TYPE)) {
+      const index = [...tablist.children].indexOf(el) + (el.classList.contains('drop-after') ? 1 : 0);
+      el.classList.remove('drop-before', 'drop-after');
+      api.adoptTab(e.dataTransfer.getData(TAB_DRAG_TYPE), index);
+      return;
+    }
     if (dragId === null || dragId === t.id) return;
     const ids = [...tablist.children].map((x) => Number(x.dataset.id));
     const from = ids.indexOf(dragId);
@@ -1024,11 +1043,24 @@ address.addEventListener('contextmenu', (e) => {
 
 // Dropping a link (or text) onto the tab strip opens it in a new tab.
 $('tabstrip').addEventListener('dragover', (e) => {
-  if (dragId !== null) return; // reordering tabs is handled per tab
+  if (dragId !== null) {
+    e.preventDefault(); // dropping on the strip's empty space isn't a tear-off
+    return;
+  }
+  if ([...e.dataTransfer.types].includes(TAB_DRAG_TYPE)) {
+    e.preventDefault(); // another window's tab: goes to the end
+    e.dataTransfer.dropEffect = 'move';
+    return;
+  }
   if ([...e.dataTransfer.types].some((t) => t === 'text/uri-list' || t === 'text/plain')) e.preventDefault();
 });
 $('tabstrip').addEventListener('drop', (e) => {
   if (dragId !== null) return;
+  if ([...e.dataTransfer.types].includes(TAB_DRAG_TYPE)) {
+    e.preventDefault();
+    if (!e.target.closest('.tab')) api.adoptTab(e.dataTransfer.getData(TAB_DRAG_TYPE), tablist.children.length);
+    return;
+  }
   const text = (e.dataTransfer.getData('text/uri-list') || e.dataTransfer.getData('text/plain') || '').split('\n')[0].trim();
   if (!text) return;
   e.preventDefault();

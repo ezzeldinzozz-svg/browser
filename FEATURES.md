@@ -49,7 +49,7 @@ Ordered by priority, then by what unblocks what.
 - [x] Long-press / right-click back and forward buttons for the history list
 - [x] Pin tabs (small, left-aligned, survive restart; Close Other Tabs keeps them)
 - [x] Move tab to new window (context menu; the page keeps running)
-- [ ] **P1** Tear off by dragging a tab out; drag a tab into another window
+- [x] **P1** Tear off by dragging a tab out; drag a tab into another window (same session; private windows each have their own)
 - [x] Tab search (Cmd/Ctrl+Shift+A lists open tabs by window) and "Switch to tab" in the address bar
 - [x] **P1** Close multiple selected tabs (Shift/Cmd-click to select)
 - [x] Sign-in popups (`window.open` with size features) open as real popup windows that keep `window.opener`; the title shows the site

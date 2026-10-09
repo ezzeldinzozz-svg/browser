@@ -38,6 +38,8 @@ if (location.protocol === 'browser:' && window === window.top) {
     setSitePermission: call('site:set-permission'),
     clearSiteData: call('site:clear-data'),
     moveTab: call('tab:move'),
+    tearOffTab: call('tab:tear-off'),
+    adoptTab: call('tab:adopt'),
     muteTab: call('tab:mute'),
     go: call('nav:go'),
     search: call('nav:search'),
