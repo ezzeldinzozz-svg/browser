@@ -123,6 +123,12 @@ function renderTab(t, isActive) {
 function render(state) {
   const active = state.tabs.find((t) => t.id === state.activeId);
   document.body.classList.toggle('private', state.private);
+  // extension buttons follow the active tab; private windows have no extensions
+  const ext = $('extensions');
+  ext.hidden = state.private;
+  if (state.activeWebContentsId && ext.getAttribute('tab') !== String(state.activeWebContentsId)) {
+    ext.setAttribute('tab', String(state.activeWebContentsId));
+  }
   $('private-badge').hidden = !state.private;
 
   const shield = state.shield;

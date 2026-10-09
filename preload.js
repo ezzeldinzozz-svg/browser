@@ -1,6 +1,10 @@
 'use strict';
 
 const { contextBridge, ipcRenderer } = require('electron');
+const { injectBrowserAction } = require('electron-chrome-extensions/browser-action');
+
+// The toolbar shows extension buttons (and their popups) with <browser-action-list>.
+if (location.href === 'browser://ui/') injectBrowserAction();
 
 // Only the browser's own browser:// pages (toolbar UI + internal pages) get the API.
 // The main process re-checks the sender on every call, so websites never reach it.
@@ -73,6 +77,9 @@ if (location.protocol === 'browser:' && window === window.top) {
     onFocusAuth: on('focus-auth'),
     onScreenPicker: on('screen-picker'),
     onStatus: on('status'),
+    listExtensions: call('ext:list'),
+    removeExtension: call('ext:remove'),
+    openWebStore: call('ext:store'),
     onBookmarkEdit: on('bookmark-edit'),
     starPage: call('bm:star'),
     openBookmark: call('bm:open'),

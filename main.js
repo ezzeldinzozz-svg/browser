@@ -22,17 +22,19 @@ const {
 const updater = require('./updater');
 const adblock = require('./adblock');
 const bookmarks = require('./bookmarks');
+const { ElectronChromeExtensions } = require('electron-chrome-extensions');
+const { installChromeWebStore, uninstallExtension } = require('electron-chrome-web-store');
 
 const CHROME_H = 80; // tab strip (36) + toolbar (44)
 const BOOKMARKS_BAR_H = 30;
 const BAR_H = 44; // optional bars under the toolbar: permission prompt, sign-in, find
 const UI_DIR = path.join(__dirname, 'ui');
 const PAGES_DIR = path.join(__dirname, 'pages');
-const PRELOAD = path.join(__dirname, 'preload.js');
+const PRELOAD = path.join(__dirname, 'gen', 'preload.js'); // bundled from preload.js by scripts/build.js
 // The browser's own pages live at browser://<name>/ and are served from pages/<name>.html.
 // The toolbar is browser://ui/. Only these origins may call the privileged IPC API.
 const SCHEME = 'browser';
-const INTERNAL = new Set(['newtab', 'history', 'bookmarks', 'downloads', 'settings', 'error', 'welcome', 'privacy']);
+const INTERNAL = new Set(['newtab', 'history', 'bookmarks', 'downloads', 'settings', 'error', 'welcome', 'privacy', 'extensions']);
 const UI_URL = `${SCHEME}://ui/`;
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -233,6 +235,7 @@ function sendTabs(w) {
   const site = siteOf(currentUrl);
   w.chromeView.webContents.send('tabs:update', {
     activeId: w.activeId,
+    activeWebContentsId: current && !w.private ? current.wc.id : null,
     private: w.private,
     bookmarked: !!bookmarks.findByUrl(currentUrl),
     bookmarkBar: store.data.settings.showBookmarksBar ? bookmarks.tree().bar.children.map(bookmarks.summary) : null,
@@ -558,6 +561,7 @@ function createTab(w, url, { background = false, after = null, history = null } 
   normalizeOrder(w);
   view.setVisible(false);
   w.win.contentView.addChildView(view);
+  if (extensions && !w.private) extensions.addTab(wc, w.win);
 
   wc.setWindowOpenHandler(({ url: target, disposition }) => {
     if (!isBlockedNavigation(wc.getURL(), target)) {
@@ -714,6 +718,7 @@ function selectTab(w, id) {
   for (const t of w.tabs) t.view.setVisible(t.id === id);
   layout(w);
   tab.wc.focus();
+  if (extensions && !w.private) extensions.selectTab(tab.wc);
   sendTabs(w);
   saveSession();
 }
@@ -801,6 +806,7 @@ function moveTabToNewWindow(tab) {
   target.tabs.push(tab);
   normalizeOrder(target);
   target.win.contentView.addChildView(tab.view);
+  if (extensions && !target.private) extensions.addTab(tab.wc, target.win);
   layout(target);
   selectTab(target, tab.id);
 }
@@ -1502,6 +1508,8 @@ function showPageMenu(tab, params) {
         : []),
     ]);
   }
+  const extensionItems = extensions && !w.private ? extensions.getContextMenuItems(wc, params) : [];
+  if (extensionItems.length) groups.push(extensionItems);
   groups.push([{ label: 'Inspect Element', click: () => wc.inspectElement(params.x, params.y) }]);
 
   const template = groups.flatMap((g, i) => (i ? [{ type: 'separator' }, ...g] : g));
@@ -2163,6 +2171,12 @@ function setupIpc() {
     store.data.history = [];
     store.save();
   });
+  handle('ext:list', fromInternal, () => extensionList());
+  handle('ext:remove', fromInternal, async (_tab, id) => {
+    await uninstallExtension(String(id), { session: session.defaultSession });
+    return extensionList();
+  });
+  handle('ext:store', fromInternal, (tab) => createTab(tab.w, 'https://chromewebstore.google.com/') && undefined);
   handle('data:bookmarks', fromInternal, () => bookmarks.all().map(bookmarks.summary));
 
   // Bookmark editing is shared by the toolbar (star popup, bar) and the bookmark manager page.
@@ -2239,6 +2253,7 @@ function buildMenu() {
         { label: 'Print…', accelerator: 'CmdOrCtrl+P', click: inWindow((w) => printTab(activeTab(w))) },
         { type: 'separator' },
         { label: 'Settings', accelerator: 'CmdOrCtrl+,', click: open('settings') },
+        { label: 'Extensions', click: open('extensions') },
         ...(isMac ? [] : [{ type: 'separator' }, { role: 'quit' }]),
       ],
     },
@@ -2435,6 +2450,7 @@ app.whenReady().then(() => {
     onBlocked,
   });
   configureSession(session.defaultSession);
+  setupExtensions();
   app.on('login', onLogin);
 
   setupIpc();
@@ -2479,6 +2495,83 @@ app.whenReady().then(() => {
   }
   updater.start(sendAll);
 });
+
+// ---------------------------------------------------------------- extensions
+
+// Chrome extensions (electron-chrome-extensions, GPL-3.0) in normal windows; private windows
+// have none, like Chrome's default. The Chrome Web Store can install them
+// (electron-chrome-web-store), after the user confirms.
+let extensions = null;
+
+const windowOfBrowserWindow = (win) => windows.find((x) => x.win === win) || null;
+const normalWindow = () => {
+  const normal = windows.filter((x) => !x.private && liveWindow(x));
+  return normal.includes(lastFocused) ? lastFocused : normal[0] || null;
+};
+
+function setupExtensions() {
+  extensions = new ElectronChromeExtensions({
+    license: 'GPL-3.0',
+    session: session.defaultSession,
+    createTab: async (details) => {
+      const w = (details.windowId && windows.find((x) => x.win.id === details.windowId && !x.private)) || normalWindow() || createWindow({ empty: true });
+      const tab = createTab(w, details.url || internalURL('newtab'), { background: details.active === false });
+      return [tab.wc, w.win];
+    },
+    selectTab: (wc) => {
+      const tab = tabOfWc(wc);
+      if (!tab) return;
+      selectTab(tab.w, tab.id);
+      tab.w.win.focus();
+    },
+    removeTab: (wc) => {
+      const tab = tabOfWc(wc);
+      if (tab) closeTab(tab.w, tab.id);
+    },
+    createWindow: async (details) => {
+      const url = Array.isArray(details.url) ? details.url[0] : details.url;
+      const w = createWindow({ empty: !!url });
+      if (url) createTab(w, url);
+      return w.win;
+    },
+    removeWindow: (win) => {
+      const w = windowOfBrowserWindow(win);
+      if (w) w.win.close();
+    },
+  });
+  ElectronChromeExtensions.handleCRXProtocol(session.defaultSession); // icons in the toolbar
+  installChromeWebStore({
+    session: session.defaultSession,
+    beforeInstall: async (details) => {
+      const permissions = [
+        ...(details.manifest.permissions || []),
+        ...(details.manifest.host_permissions || []),
+      ].filter((p) => typeof p === 'string');
+      const parent = details.browserWindow || normalWindow()?.win;
+      const { response } = await dialog.showMessageBox(parent, {
+        type: 'question',
+        icon: details.icon,
+        message: `Add \u201c${details.localizedName}\u201d?`,
+        detail: permissions.length
+          ? `It can:\n\u2022 ${permissions.slice(0, 12).join('\n\u2022 ')}${permissions.length > 12 ? '\n\u2022 \u2026' : ''}`
+          : 'It needs no special permissions.',
+        buttons: ['Add Extension', 'Cancel'],
+        defaultId: 0,
+        cancelId: 1,
+      });
+      return { action: response === 0 ? 'allow' : 'deny' };
+    },
+  }).catch((err) => console.error('Chrome Web Store setup failed:', err));
+}
+
+function extensionList() {
+  return session.defaultSession.extensions.getAllExtensions().map((e) => ({
+    id: e.id,
+    name: e.name,
+    version: e.version,
+    description: e.manifest.description || '',
+  }));
+}
 
 // ---------------------------------------------------------------- links from other apps
 

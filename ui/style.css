@@ -448,3 +448,12 @@ body.private #site.insecure { color: #ff8a80; }
 #findbar button.close { font-size: 18px; color: var(--fg-dim); }
 
 #toolbar #home[hidden] { display: none; }
+
+/* Extension buttons (electron-chrome-extensions' <browser-action-list>) */
+browser-action-list { display: flex; align-items: center; gap: 2px; flex: none; }
+browser-action-list[hidden] { display: none; }
+browser-action-list::part(action) {
+  width: 30px; height: 30px; border-radius: 50%; background-size: 18px; background-position: center;
+}
+browser-action-list::part(action):hover { background-color: var(--bg-hover); }
+browser-action-list::part(badge) { font-size: 9px; }

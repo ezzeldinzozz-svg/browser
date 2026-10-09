@@ -5,18 +5,20 @@
   "description": "A basic cross-platform browser built on Electron",
   "main": "main.js",
   "scripts": {
-    "start": "electron .",
-    "dist:mac": "electron-builder --mac",
-    "dist:win": "electron-builder --win",
-    "dist:linux": "electron-builder --linux",
+    "start": "npm run build && electron .",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:linux": "npm run build && electron-builder --linux",
     "keygen": "node scripts/keygen.js",
-    "release": "node scripts/release.js"
+    "release": "node scripts/release.js",
+    "build": "node scripts/build.js"
   },
-  "license": "MIT",
+  "license": "GPL-3.0-or-later",
   "devDependencies": {
     "@electron/fuses": "2.1.3",
     "electron": "44.7.0",
-    "electron-builder": "26.15.3"
+    "electron-builder": "26.15.3",
+    "esbuild": "0.28.2"
   },
   "author": "ezzeddinmagdy",
   "build": {
@@ -25,7 +27,7 @@
     "copyright": "Copyright © 2026 ezzeddinmagdy",
     "files": [
       "main.js",
-      "preload.js",
+      "gen/preload.js",
       "capture-preload.js",
       "updater.js",
       "adblock.js",
@@ -104,6 +106,8 @@
     ]
   },
   "dependencies": {
-    "@ghostery/adblocker-electron": "2.18.2"
+    "@ghostery/adblocker-electron": "2.18.2",
+    "electron-chrome-extensions": "4.9.0",
+    "electron-chrome-web-store": "0.13.0"
   }
 }

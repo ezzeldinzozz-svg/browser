@@ -46,6 +46,7 @@ function main() {
   sh('npm', ['install', '--package-lock-only', '--silent']);
 
   fs.rmSync(path.join(ROOT, 'dist'), { recursive: true, force: true });
+  sh('npm', ['run', 'build']);
   sh('npx', ['electron-builder', '--mac', '--publish', 'never']);
 
   const dist = path.join(ROOT, 'dist');

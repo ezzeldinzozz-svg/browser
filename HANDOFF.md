@@ -16,6 +16,7 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 - Tabs, address bar (URL or search with the chosen engine: DuckDuckGo default, Google, Bing, Brave, Ecosia, Kagi, Startpage), back/forward/reload/stop, keyboard shortcuts
 - Tab strip: drag to reorder, pinned tabs (kept left, restored), audio indicator with click-to-mute, right-click menu (new tab to the right, reload, duplicate, pin, mute, move to new window, close / others / to the right, reopen closed)
 - Bookmarks, history, downloads page, find in page, new-tab page, settings page
+- Chrome extensions (`electron-chrome-extensions` + `electron-chrome-web-store`): normal-window tabs are registered with the extension system (`extensions.addTab/selectTab`), which calls back into our createTab/selectTab/closeTab/createWindow; `<browser-action-list>` in the toolbar shows extension buttons for the active tab; installing from chromewebstore.google.com asks first (`beforeInstall`); `browser://extensions` lists/removes. Private windows have no extensions. **No built-in password manager, by decision**: passwords come from extensions like Bitwarden
 - Startup: continue where you left off / New Tab page / specific pages (`settings.startup`); `cleanExit` in the store detects crashes and offers "Restore pages" from a snapshot taken before new windows overwrite the session
 - First run (no profile file yet) opens `browser://welcome` (default browser, import, search engine, privacy); `browser://privacy` and `PRIVACY.md` list all network traffic
 - Optional Home button and home page; F6 toolbar ⇄ page; tab strip arrow keys
@@ -60,7 +61,7 @@ solid, safe, daily-usable basic browser. Repo: https://github.com/ezzeldinzozz-s
 The full prioritized checklist is in `FEATURES.md` (P0/P1/P2). Short version:
 
 1. Windows and Linux builds with their own updaters; Intel/universal Mac build
-2. Chrome extension support, so password-manager extensions work. **Decision: no built-in password manager**; passwords come only from extensions (a built-in one shipped briefly in v0.9.0 and was removed)
+2. Verify password-manager extensions end to end (Bitwarden sign-in + autofill), pin/hide extension buttons
 3. Passkeys (need a Developer ID-signed app on macOS)
 3. Windows/Linux builds + their updaters (electron-updater works unsigned there)
 4. Name + icon
@@ -76,7 +77,7 @@ See `research/browser-lessons.md` for the full research on how Brave and others 
 | `main.js` | Main process: windows (normal/private), tabs (one `WebContentsView` each), layout, permissions, downloads, find, menu, IPC, `browser://` protocol, session restore |
 | `bookmarks.js` | Bookmark tree (folders, bar/other roots), migration from the flat v0.5 list, Chromium JSON and HTML import, HTML export |
 | `adblock.js` | Ad/tracker blocking: loads/caches the Ghostery engine, hooks it into each session's `webRequest`, serves cosmetic filters to its preload |
-| `preload.js` | Exposes `window.browserAPI` only to `browser://` pages; main re-checks every IPC sender |
+| `preload.js` | Exposes `window.browserAPI` only to `browser://` pages; main re-checks every IPC sender. Bundled with esbuild into `gen/preload.js` (`npm run build`, run by `npm start`/`dist`/`release`) because it imports the extension toolbar element |
 | `updater.js` | macOS self-updater (see Releases below) |
 | `ui/` | Toolbar UI, served at `browser://ui/` (tab strip, address bar, permission bar, find bar) |
 | `pages/` | Internal pages at `browser://<name>/` → `pages/<name>.html` (newtab, history, bookmarks, downloads, settings, error) |
@@ -85,6 +86,7 @@ See `research/browser-lessons.md` for the full research on how Brave and others 
 | `scripts/keygen.js`, `scripts/release.js` | Release signing key setup, and build+sign+publish |
 
 Key decisions:
+- **License: GPL-3.0-or-later** since v0.10 (required by `electron-chrome-extensions`, which is GPL-3.0; up to v0.9 the project was MIT).
 - **Electron over Rust/system webview:** same Chromium engine on all three OSes; Linux webviews are weak. Revisit only if "lightweight/native" becomes the product's identity.
 - **Security model:** websites never get the IPC API; only `browser://` pages do, checked by sender in main. Websites can't navigate/frame/redirect to `browser://`.
 - **Updates without paying Apple:** our own Ed25519 signature on the zip + bundle id/version/codesign checks; the app swaps itself after quitting. From v0.4.0 the update must also be code-signed by the same certificate as the running app.

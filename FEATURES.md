@@ -143,7 +143,7 @@ Ordered by priority, then by what unblocks what.
 ## 7. Passwords, autofill & passkeys
 
 - [x] HTTP Basic/Digest sign-in bar, with "not secure" warning on http
-- [ ] **P0** Passwords come only from password-manager extensions (Bitwarden, 1Password, Proton Pass…), by decision: no built-in password manager. Needs Chrome extension support first (see Extensions)
+- [x] Passwords come only from password-manager extensions (Bitwarden, Proton Pass…), by decision: no built-in password manager. Bitwarden installs, shows its toolbar button and popup (sign-in/autofill to be verified with a real account)
 - [ ] **P0** Passkeys / WebAuthn: verify Touch ID / security keys / iCloud Keychain passkeys work (needs signed app + entitlements on macOS) *(Electron limit: platform authenticator support is partial)*
 - [ ] **P1** Password manager page: view (after OS auth), edit, delete, search, export/import CSV
 - [ ] **P1** Strong password generator on sign-up fields
@@ -280,8 +280,10 @@ Ordered by priority, then by what unblocks what.
 ## 16. Extensions & developer tools
 
 - [x] DevTools (Alt+Cmd+I / F12) and Inspect Element
-- [ ] **P1** Built-in essentials instead of extensions: content blocking (done), dark-mode-for-sites, password manager
-- [ ] **P2** Limited unpacked extension support (`electron-chrome-extensions`), marked experimental; manage/enable/remove UI *(Electron limit)*
+- [ ] **P2** Built-in dark mode for sites (content blocking is built in; passwords come from extensions)
+- [x] Chrome extensions via `electron-chrome-extensions` (GPL-3.0): toolbar buttons, popups, badges, context menu items, tabs/windows APIs; install from the Chrome Web Store ("Add to Chrome", with a confirmation listing permissions); `browser://extensions` lists and removes them; not in private windows
+- [ ] **P1** Pin/hide extension buttons, per-extension site access, enable/disable without removing
+- [ ] **P1** Verify popular extensions: Bitwarden sign-in + autofill, Proton Pass, 1Password (needs its desktop app), Dark Reader, uBlock Origin Lite
 - [ ] **P2** Chrome Web Store installs *(Electron limit: official non-goal)*
 - [ ] **P2** Userscripts (Min-style) as an extension alternative
 - [ ] **P2** DevTools dock position preference (docked/undocked) and a DevTools toolbar button
