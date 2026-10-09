@@ -3550,6 +3550,15 @@ async function captureFullPage(tab) {
 async function takeScreenshot(w, mode = 'visible') {
   const tab = activeTab(w);
   if (!tab || tab.pending || tab.wc.isDestroyed()) return;
+  if (mode === 'ask' || mode === 'menu') {
+    Menu.buildFromTemplate([
+      { label: 'Capture Current Screen', click: () => takeScreenshot(w, 'visible') },
+      { label: 'Capture Full Page', click: () => takeScreenshot(w, 'full') },
+      { type: 'separator' },
+      { label: 'Capture Selection…', enabled: isWeb(tab.wc.getURL()), click: () => takeScreenshot(w, 'selection') },
+    ]).popup({ window: w.win });
+    return;
+  }
   if (mode === 'selection') {
     if (isWeb(tab.wc.getURL())) tab.wc.mainFrame.send('screenshot:select-start');
     else {
