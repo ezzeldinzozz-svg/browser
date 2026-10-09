@@ -271,10 +271,19 @@ function install(relaunch) {
       ps1,
       [
         'param([int]$ProcessId, [string]$Installer, [int]$Relaunch)',
+        // install-update.log next to the installer, for diagnosing failed updates
+        '$log = Join-Path (Split-Path $Installer) "install-update.log"',
+        'function Log($m) { Add-Content -Path $log -Value "$(Get-Date -Format o) $m" }',
+        'Log "waiting for process $ProcessId to exit"',
         'Wait-Process -Id $ProcessId -ErrorAction SilentlyContinue',
+        'Start-Sleep -Seconds 1',
         '$installArgs = @("/S", "--updated")',
         'if ($Relaunch -eq 1) { $installArgs += "--force-run" }',
-        'Start-Process -FilePath $Installer -ArgumentList $installArgs -Wait',
+        'Log "running $Installer $installArgs"',
+        'try {',
+        '  $p = Start-Process -FilePath $Installer -ArgumentList $installArgs -Wait -PassThru',
+        '  Log "installer exit code $($p.ExitCode)"',
+        '} catch { Log "installer failed: $_" }',
       ].join('\r\n'),
     );
     detached('powershell.exe', [

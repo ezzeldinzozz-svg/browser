@@ -99,6 +99,13 @@ jobs:
           "BROWSER_EXE=$exe" | Out-File -FilePath $env:GITHUB_ENV -Append
       - name: Update from inside the app
         run: node scripts/update-test.js "${{ env.BROWSER_EXE }}" update-server
+      - name: Updater log
+        if: always()
+        shell: pwsh
+        run: |
+          Start-Sleep 20
+          Get-ChildItem $env:TEMP -Filter install-update.log -Recurse -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "== $($_.FullName)"; Get-Content $_.FullName }
+          Get-Process | Where-Object { $_.Path -like '*browser*' -or $_.Name -like '*Browser*' -or $_.Name -like '*Setup*' } | Select-Object Id, Name, Path | Format-Table -AutoSize
       - name: The new version is installed and running
         shell: pwsh
         run: |
