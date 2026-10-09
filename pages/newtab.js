@@ -47,7 +47,13 @@ browserAPI.getBookmarks().then((list) => {
   for (const b of list.slice(0, 12)) {
     const a = document.createElement('a');
     a.href = b.url;
-    a.textContent = b.title || b.url;
+    if (b.icon && /^data:image\//.test(b.icon)) {
+      const img = document.createElement('img');
+      img.src = b.icon;
+      img.alt = '';
+      a.append(img);
+    }
+    a.append(b.title || b.url);
     a.title = b.url;
     sites.append(a);
   }

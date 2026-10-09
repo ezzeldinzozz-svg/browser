@@ -990,7 +990,15 @@ function renderBookmarkBar(items) {
     item.title = b.type === 'folder' ? b.title : `${b.title}\n${b.url}`;
     item.draggable = true;
     item.dataset.id = b.id;
-    item.append(el('span', 'ic', b.type === 'folder' ? '▸' : '★'), el('span', '', b.title));
+    if (b.type !== 'folder' && b.icon && /^data:image\//.test(b.icon)) {
+      const img = document.createElement('img');
+      img.src = b.icon;
+      img.width = img.height = 14;
+      img.alt = '';
+      item.append(img, el('span', '', b.title));
+    } else {
+      item.append(el('span', 'ic', b.type === 'folder' ? '▸' : '★'), el('span', '', b.title));
+    }
     item.addEventListener('mousedown', (e) => {
       if (e.button === 1 && b.type === 'bookmark') {
         e.preventDefault();

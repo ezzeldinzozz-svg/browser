@@ -94,6 +94,13 @@ function renderRow(n, parent, index, searching) {
     main.append(open, el('div', 'u', `${n.children.length} item${n.children.length === 1 ? '' : 's'}`));
   } else {
     const a = el('a', 't', n.title);
+    if (n.icon && /^data:image\//.test(n.icon)) {
+      const img = document.createElement('img');
+      img.src = n.icon;
+      img.alt = '';
+      img.className = 'bm-icon';
+      a.prepend(img);
+    }
     a.href = n.url;
     main.append(a, el('div', 'u', n.url));
   }

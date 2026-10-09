@@ -124,7 +124,23 @@ function remove(id) {
 const summary = (node) =>
   node.type === 'folder'
     ? { id: node.id, type: 'folder', title: node.title, count: node.children.length }
-    : { id: node.id, type: 'bookmark', title: node.title, url: node.url };
+    : { id: node.id, type: 'bookmark', title: node.title, url: node.url, icon: node.icon || '' };
+
+// The site icon (small data: URL) for every bookmark of `url`; returns true if anything changed.
+function setIcon(url, icon) {
+  let touched = false;
+  const visit = (n) => {
+    if (n.type === 'folder') return n.children.forEach(visit);
+    if (n.url === url && n.icon !== icon) {
+      n.icon = icon;
+      touched = true;
+    }
+  };
+  visit(data.bookmarkTree.bar);
+  visit(data.bookmarkTree.other);
+  if (touched) changed();
+  return touched;
+}
 
 function tree() {
   return data.bookmarkTree;
@@ -238,6 +254,7 @@ module.exports = {
   move,
   remove,
   summary,
+  setIcon,
   tree,
   importChromeJson,
   importHtml,

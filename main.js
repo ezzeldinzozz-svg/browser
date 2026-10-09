@@ -15,6 +15,7 @@ const {
   Menu,
   ShareMenu,
   nativeTheme,
+  nativeImage,
   protocol,
   screen,
   session,
@@ -1414,6 +1415,16 @@ function isBlockedNavigation(fromUrl, toUrl) {
 
 // The toolbar never loads remote images: the tab's own session fetches the icon
 // and hands the toolbar a size-limited data: URL.
+// Bookmarks keep a 32px copy of their site's icon (bookmarks bar, menu, manager, new tab).
+function rememberBookmarkIcon(tab) {
+  if (tab.w.private || !tab.favicon) return;
+  const url = tab.wc.getURL();
+  if (!bookmarks.findByUrl(url)) return;
+  const img = nativeImage.createFromDataURL(tab.favicon);
+  if (img.isEmpty()) return;
+  bookmarks.setIcon(url, img.resize({ width: 32, height: 32, quality: 'best' }).toDataURL());
+}
+
 async function loadFavicon(tab, url) {
   tab.faviconSrc = url || '';
   tab.favicon = '';
@@ -1427,6 +1438,7 @@ async function loadFavicon(tab, url) {
     if (buf.length > FAVICON_MAX_BYTES || tab.faviconSrc !== url || tab.wc.isDestroyed()) return;
     tab.favicon = `data:${type};base64,${buf.toString('base64')}`;
     sendTabs(tab.w);
+    rememberBookmarkIcon(tab);
   } catch {
     // no icon is fine
   }
@@ -1765,6 +1777,7 @@ function starPage(w) {
   if (!isWeb(url)) return;
   const existing = bookmarks.findByUrl(url);
   const node = existing || bookmarks.add({ url, title: tab.wc.getTitle() || url, parentId: 'bar' });
+  if (!existing) rememberBookmarkIcon(tab);
   w.chromeView.webContents.send('bookmark-edit', bookmarkEditInfo(node.id, !existing));
   w.chromeView.webContents.focus();
 }
@@ -2731,6 +2744,7 @@ function showPageMenu(tab, params) {
       { label: 'Cut', enabled: f.canCut, click: () => wc.cut() },
       { label: 'Copy', enabled: f.canCopy, click: () => wc.copy() },
       { label: 'Paste', enabled: f.canPaste, click: () => wc.paste() },
+      { label: 'Paste as Plain Text', enabled: f.canPaste, click: () => wc.pasteAndMatchStyle() },
       { label: 'Select All', enabled: f.canSelectAll, click: () => wc.selectAll() },
     ]);
     if (isMac || process.platform === 'win32') groups.push([{ label: 'Emoji & Symbols', click: () => app.showEmojiPanel() }]);
@@ -3928,6 +3942,32 @@ function recentMenuItems(inWindow) {
   ];
 }
 
+const menuIcon = (dataUrl) => {
+  if (!dataUrl) return undefined;
+  const img = nativeImage.createFromDataURL(dataUrl);
+  return img.isEmpty() ? undefined : img.resize({ width: 16, height: 16, quality: 'best' });
+};
+
+// Bookmarks menu: the bookmarks bar's contents and Other Bookmarks, folders as submenus.
+function bookmarkMenuItems(inWindow) {
+  if (!store) return [];
+  const MAX = 60; // per folder; the manager has the rest
+  const toItems = (children, depth) => {
+    const items = children.slice(0, MAX).map((n) =>
+      n.type === 'folder'
+        ? { label: trimLabel(n.title || 'Folder', 50), submenu: depth > 6 || !n.children.length ? [{ label: '(empty)', enabled: false }] : toItems(n.children, depth + 1) }
+        : { label: trimLabel(n.title || displayUrl(n.url), 50), icon: menuIcon(n.icon), click: inWindow((w) => createTab(w, n.url)) },
+    );
+    if (children.length > MAX) items.push({ label: `${children.length - MAX} more in the Bookmark Manager…`, click: inWindow((w) => openInternalPage(w, 'bookmarks')) });
+    return items;
+  };
+  const { bar, other } = bookmarks.tree();
+  const items = [];
+  if (bar.children.length) items.push({ type: 'separator' }, ...toItems(bar.children, 0));
+  if (other.children.length) items.push({ type: 'separator' }, { label: other.title || 'Other Bookmarks', submenu: toItems(other.children, 1) });
+  return items;
+}
+
 function buildMenu() {
   clearTimeout(menuTimer);
   // Menu commands act on the focused browser window, opening one if none is open.
@@ -3988,6 +4028,7 @@ function buildMenu() {
         { role: 'cut' },
         { role: 'copy' },
         { role: 'paste' },
+        { role: 'pasteAndMatchStyle', label: 'Paste as Plain Text', accelerator: 'CmdOrCtrl+Shift+V' },
         { role: 'selectAll' },
         { type: 'separator' },
         { label: 'Find…', accelerator: 'CmdOrCtrl+F', click: inWindow(openFind) },
@@ -4069,6 +4110,7 @@ function buildMenu() {
         },
         { label: 'Bookmark All Tabs…', accelerator: 'CmdOrCtrl+Shift+D', click: inWindow(bookmarkAllTabs) },
         { label: 'Bookmark Manager', accelerator: 'CmdOrCtrl+Shift+O', click: open('bookmarks') },
+        ...bookmarkMenuItems(inWindow),
       ],
     },
     {
@@ -4217,6 +4259,7 @@ app.whenReady().then(() => {
   bookmarks.init(store.data, () => {
     store.save();
     sendAll();
+    rebuildMenuSoon(); // the Bookmarks menu lists them
   });
   // Downloads still running when the app last quit can't be resumed.
   for (const d of store.data.downloads) if (d.state === 'progressing') d.state = 'interrupted';

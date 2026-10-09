@@ -30,10 +30,10 @@ Edit freely: move lines between sections, delete what you don't want, add your o
 - [ ] New tab: background image or color, show/hide shortcuts, favicons on tiles, pin/edit tiles
 - [ ] Resume interrupted downloads where they stopped
 - [ ] Auto-delete history older than N days; "clear on quit" option
-- [ ] Paste as plain text (Cmd+Shift+V)
+- [x] Paste as plain text (Cmd+Shift+V, Edit menu and right-click in text fields)
 - [ ] "What's new" page after an update
-- [ ] Bookmarks menu in the menu bar listing bookmarks and folders
-- [ ] Favicons stored for bookmarks
+- [x] Bookmarks menu in the menu bar listing bookmarks and folders (with icons)
+- [x] Favicons stored for bookmarks (bar, menu, manager, new tab)
 
 ## To do — nice to have
 
