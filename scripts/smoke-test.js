@@ -119,6 +119,17 @@ async function main() {
       await sleep(500);
       return evaluate('browser://ui/', 'document.body.classList.contains("bmbar-hover-mode")');
     });
+    await check('page frame exists in horizontal mode and is removed in vertical mode', async () => {
+      const hasHorizontalFrame = await evaluate('browser://ui/', 'document.querySelectorAll(".page-frame").length > 0');
+      await evaluate((u) => u.startsWith('browser://settings'), 'browserAPI.setSetting("verticalTabs", true)');
+      await sleep(600);
+      const isVertical = await evaluate('browser://ui/', 'document.body.classList.contains("vertical")');
+      const verticalFrameCount = await evaluate('browser://ui/', 'document.querySelectorAll(".page-frame").length');
+      // restore setting
+      await evaluate((u) => u.startsWith('browser://settings'), 'browserAPI.setSetting("verticalTabs", false)');
+      await sleep(400);
+      return hasHorizontalFrame && isVertical && verticalFrameCount === 0;
+    });
     await check('ad-block lists downloaded', async () => {
       for (let i = 0; i < 20; i++) {
         if (fs.existsSync(path.join(profile, 'adblock-engine.bin'))) return true;
