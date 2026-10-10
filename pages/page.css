@@ -192,7 +192,8 @@ button.big { height: 44px; padding: 0 26px; font-size: 15px; margin-top: 10px; }
 
 main.newtab { max-width: 860px; padding-top: 11vh; text-align: center; }
 main.newtab h1 { font-size: 40px; font-weight: 300; margin-bottom: 28px; }
-main.newtab h1.wordmark { font-size: 64px; font-weight: 600; letter-spacing: -0.035em; margin-bottom: 34px; text-shadow: 0 0 60px var(--glow); }
+main.newtab h1.brand { font-size: 64px; margin-bottom: 34px; }
+main.newtab h1.brand .wordmark { filter: drop-shadow(0 0 30px var(--glow)); }
 main.newtab form { position: relative; max-width: 640px; margin: 0 auto; }
 main.newtab #q {
   height: 54px; padding: 0 26px; font-size: 16px;
@@ -230,10 +231,11 @@ main.newtab h2 { max-width: 680px; margin: 44px auto 12px; }
 }
 #sites a:hover { border-color: var(--accent-line); text-decoration: none; }
 
-/* the Operecs wordmark: Outfit, with the lavender period */
-.wordmark { font-family: 'Outfit', -apple-system, sans-serif; font-weight: 600; letter-spacing: -0.02em; }
-.wordmark .dot { color: #c5abfe; }
-@media (prefers-color-scheme: light) { .wordmark .dot { color: #8a5cf6; } }
+/* the Operecs logo: Syne ExtraBold outlines (brand/wordmark.svg), drawn in the text colour with
+   the lavender period, sized like a word of the surrounding text (its baseline sits on the text's) */
+.wordmark { display: inline-block; height: 0.86em; width: auto; vertical-align: -0.2em; overflow: visible; }
+.wordmark .dot { fill: #c5abfe; }
+@media (prefers-color-scheme: light) { .wordmark .dot { fill: #8a5cf6; } }
 
 /* ---- other pages */
 
