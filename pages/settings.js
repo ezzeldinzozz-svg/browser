@@ -25,6 +25,7 @@ const ACCENT_SWATCHES = [
 const TOOLBAR_ICONS = {
   home: '<path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/>',
   shield: '<path d="M12 3l7.5 3v5.8c0 4.7-3.2 8.8-7.5 10.2-4.3-1.4-7.5-5.5-7.5-10.2V6z"/>',
+  extensions: '<path d="M4 6h5a2.5 2.5 0 0 1 5 0h4v5a2.5 2.5 0 0 1 0 5v4H4z"/>',
   reader: '<path d="M5 6h14M5 10h14M5 14h9M5 18h12"/>',
   media: '<path d="M9 18V6l11-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/>',
   star: '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"/>',

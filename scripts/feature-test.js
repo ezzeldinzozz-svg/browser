@@ -169,9 +169,19 @@ const server = http.createServer((req, res) => {
     await go('browser://settings', 1500);
     await evalIn('browser://settings', "browserAPI.saveAddress({ name: 'Test Person', street: '1 Test St', city: 'Testville', email: 't@example.com' })");
     await go('http://localhost:8798/', 2000);
-    await clickIn('http://localhost:8798', '[name=fname]'); // a real click, as a user would
-    await sleep(1200);
-    await evalIn('browser://ui/autofill.html', "document.querySelector('.row') && document.querySelector('.row').click(); 1");
+    // a real click, as a user would. Focus only reaches the page while the test window is the
+    // active one (someone may be using the Mac meanwhile), so bring it forward first; the
+    // suggestion list can take a moment, so wait (and click again) for it.
+    const focusPage = "(() => { const { BaseWindow, webContents } = process.mainModule.require('electron'); BaseWindow.getAllWindows()[0].focus(); const wc = webContents.getAllWebContents().find((w) => w.getURL().startsWith('http://localhost:8798')); wc && wc.focus(); return 1; })()";
+    for (let i = 0; i < 12; i++) {
+      if (i % 4 === 0) {
+        await main(focusPage);
+        await sleep(300);
+        await clickIn('http://localhost:8798', '[name=fname]');
+      }
+      await sleep(500);
+      if ((await evalIn('browser://ui/autofill.html', "document.querySelector('.row') ? (document.querySelector('.row').click(), 'clicked') : 'none'")) === 'clicked') break;
+    }
     await sleep(800);
     const filled = JSON.parse(await evalIn('http://localhost:8798', "JSON.stringify(Object.fromEntries([...document.querySelectorAll('input')].map(e => [e.name, e.value])))"));
     check('address autofill fills, skips the card field', filled.fname === 'Test' && filled.lname === 'Person' && filled.city === 'Testville' && !filled.cardnumber, JSON.stringify(filled));
@@ -188,6 +198,7 @@ const server = http.createServer((req, res) => {
 
     console.log('Pages');
     await go('browser://newtab', 1500);
+    check('extensions button in the toolbar', (await ui("!document.getElementById('extensions-btn').hidden")) === true);
     check('new tab page', (await evalIn('browser://newtab', "document.getElementById('q') ? 'ok' : 'missing'")) === 'ok');
     await go('browser://settings', 1500);
     check('settings page', (await evalIn('browser://settings', 'document.title')) === 'Settings');

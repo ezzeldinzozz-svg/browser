@@ -405,6 +405,7 @@ function render(state) {
   $('readaloud-btn').hidden = !tb.readAloud;
   $('bookmarks-btn').hidden = !tb.bookmarks;
   $('history-btn').hidden = !tb.history;
+  $('extensions-btn').hidden = tb.extensions === false || state.private;
   $('downloads').hidden = tb.downloads === false;
   $('profile').hidden = tb.profile === false;
   $('settings-btn').hidden = tb.settings === false;
@@ -576,6 +577,7 @@ $('translate-btn').addEventListener('click', () => api.translatePage());
 $('readaloud-btn').addEventListener('click', () => api.readAloud());
 $('bookmarks-btn').addEventListener('click', () => api.openPage('bookmarks'));
 $('history-btn').addEventListener('click', () => api.openPage('history'));
+$('extensions-btn').addEventListener('click', () => api.extensionsMenu());
 $('settings-btn').addEventListener('click', () => api.openPage('settings'));
 $('toolbar').addEventListener('contextmenu', (e) => {
   if (e.target.closest('#omnibox, #back, #forward, browser-action-list')) return;
@@ -1599,8 +1601,26 @@ $('tabstrip').addEventListener('dragover', (e) => {
   }
   if ([...e.dataTransfer.types].some((t) => t === 'text/uri-list' || t === 'text/plain')) e.preventDefault();
 });
+
+// Files dragged in from Finder onto the tab strip or toolbar open in new tabs. (Dropped onto a
+// page they open in that tab: navigateOnDragDrop.)
+const hasFiles = (e) => [...e.dataTransfer.types].includes('Files');
+document.addEventListener('dragover', (e) => {
+  if (dragId === null && hasFiles(e)) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }
+});
+document.addEventListener('drop', (e) => {
+  if (dragId !== null || !hasFiles(e)) return;
+  e.preventDefault();
+  for (const file of e.dataTransfer.files) {
+    const url = api.fileUrl(file);
+    if (url) api.openInNewTab(url);
+  }
+});
 $('tabstrip').addEventListener('drop', (e) => {
-  if (dragId !== null) return;
+  if (dragId !== null || hasFiles(e)) return; // files: the document's handler below
   if ([...e.dataTransfer.types].includes(TAB_DRAG_TYPE)) {
     e.preventDefault();
     if (!e.target.closest('.tab')) api.adoptTab(e.dataTransfer.getData(TAB_DRAG_TYPE), tablist.querySelectorAll('.tab').length);

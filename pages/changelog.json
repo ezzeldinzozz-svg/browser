@@ -1,6 +1,9 @@
 {
   "_comment": "Shown on browser://whatsnew after an update. Add user-visible changes to \"next\" as they land; `npm run release` renames \"next\" to the version it releases (and refuses to release without notes).",
-  "next": [],
+  "next": [
+    "Fixed: dragging a file (PDF, image, web page) onto a page opens it, and dropping it onto the tab strip or toolbar opens it in a new tab",
+    "An Extensions button in the toolbar lists your extensions: pin or unpin their buttons, manage them, or get more from the Chrome Web Store"
+  ],
   "0.22.2": [
     "The Operecs logo and app icon now match the brand wordmark (Syne, with the lavender period)"
   ],

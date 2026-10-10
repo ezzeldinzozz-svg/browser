@@ -1,6 +1,6 @@
 'use strict';
 
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 const { injectBrowserAction } = require('electron-chrome-extensions/browser-action');
 
 // The toolbar shows extension buttons (and their popups) with <browser-action-list>.
@@ -19,10 +19,17 @@ if (location.protocol === 'browser:' && window === window.top) {
     tabMenu: call('tab:menu'),
     switchToTab: call('tab:switch'),
     openInNewTab: call('tab:open-url'),
+    // file:// address of a file dragged in from Finder ('' for files that aren't on disk)
+    fileUrl: (file) => {
+      // (the sandboxed preload's url module has no pathToFileURL)
+      const p = webUtils.getPathForFile(file).replace(/\\/g, '/');
+      return p ? 'file://' + (p.startsWith('/') ? '' : '/') + p.split('/').map(encodeURIComponent).join('/').replace(/^(\/[A-Za-z])%3A/, '$1:') : '';
+    },
     removeSuggestion: call('suggest:remove'),
     addressMenu: call('address:menu'),
     setOverlay: call('ui:overlay'),
     historyMenu: call('nav:history-menu'),
+    extensionsMenu: call('ext:menu'),
     resetZoom: call('zoom:reset'),
     stopCapture: call('capture:stop'),
     goHome: call('nav:home'),

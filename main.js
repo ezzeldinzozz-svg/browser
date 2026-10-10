@@ -130,6 +130,7 @@ const GROUP_COLORS = { violet: '#9b6cff', blue: '#4f8cff', emerald: '#2fb67c', a
 const TOOLBAR_BUTTON_DEFAULTS = {
   home: false,
   shield: true,
+  extensions: true,
   reader: false,
   media: true,
   star: true,
@@ -146,6 +147,7 @@ const TOOLBAR_BUTTON_DEFAULTS = {
 const TOOLBAR_BUTTON_LABELS = {
   home: 'Home Button',
   shield: 'Ad & Tracker Shield',
+  extensions: 'Extensions',
   reader: 'Reader Mode',
   media: 'Media Controls',
   star: 'Bookmark Star',
@@ -1439,6 +1441,8 @@ function createTab(w, url, { background = false, after = null, history = null, l
       contextIsolation: true,
       nodeIntegration: false,
       spellcheck: true,
+      // a file or link dropped onto a page that doesn't take it opens there, like in Chrome
+      navigateOnDragDrop: true,
       autoplayPolicy: store.data.settings.autoplay === 'allow' ? 'no-user-gesture-required' : 'document-user-activation-required',
     },
   });
@@ -5529,6 +5533,33 @@ function setupIpc() {
     store.save();
     sendAll();
     return extensionList();
+  });
+  // The toolbar's Extensions button: every extension, pin/unpin its button, manage.
+  handle('ext:menu', fromChrome, (w) => {
+    const list = extensionList().filter((e) => e.enabled);
+    const toggle = (id, show) => {
+      const set = new Set(store.data.settings.hiddenActions || []);
+      if (show) set.delete(id);
+      else set.add(id);
+      store.data.settings.hiddenActions = [...set];
+      store.save();
+      sendAll();
+    };
+    Menu.buildFromTemplate([
+      ...(list.length
+        ? [
+            { label: 'Pinned to the Toolbar', enabled: false },
+            ...list.map((e) =>
+              e.hasAction
+                ? { label: trimLabel(e.name, 50), type: 'checkbox', checked: !e.hidden, click: () => toggle(e.id, e.hidden) }
+                : { label: `${trimLabel(e.name, 50)} (no button)`, enabled: false },
+            ),
+          ]
+        : [{ label: 'No extensions yet', enabled: false }]),
+      { type: 'separator' },
+      { label: 'Manage Extensions', click: () => openInternalPage(w, 'extensions') },
+      { label: 'Get Extensions from the Chrome Web Store', click: () => createTab(w, 'https://chromewebstore.google.com/') },
+    ]).popup({ window: w.win });
   });
   handle('ext:store', fromInternal, (tab) => createTab(tab.w, 'https://chromewebstore.google.com/') && undefined);
   handle('data:bookmarks', fromInternal, () => bookmarks.all().map(bookmarks.summary));

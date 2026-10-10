@@ -12,10 +12,10 @@ Edit freely: move lines between sections, delete what you don't want, add your o
 
 ## To do — must have for 1.0
 
-- [ ] Check by hand: password-manager extensions (Bitwarden, Proton Pass) sign in and autofill
+- [x] Check by hand: password-manager extensions sign in and autofill (Bitwarden confirmed 2026-10-10)
 - [ ] Check by hand: device chooser for Serial / Bluetooth in the installed app (macOS asks for Bluetooth permission)
-- [ ] Check by hand: dragging a file onto the window opens it
-- [ ] Check by hand: media keys / Now Playing control the playing tab
+- [ ] Check by hand: dragging a file onto the window opens it (was broken; fixed 2026-10-10, opens on the page or in a new tab from the toolbar; re-check after the update)
+- [x] Check by hand: media keys / Now Playing control the playing tab (confirmed 2026-10-10)
 - [x] Storage: history in SQLite (History.sqlite; bookmarks stay in JSON — small and written rarely)
 - [x] Full-text history search (FTS5; every word as a prefix)
 - [x] Security routine: weekly GitHub Action opens a pull request for a newer Electron patch (with CI); `npm run release -- X.Y.Z --critical` makes installed copies restart for the update within 10 minutes
