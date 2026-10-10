@@ -3,7 +3,9 @@
 Everything needed to pick this project up on any device. **Keep this file current:** update it
 in the same commit as any change to features, architecture, setup, or plans.
 
-_Last updated: 2026-10-10 · Current release: v0.21.6 (Apple silicon Mac; v0.19.0 was the last for Intel, Windows and Linux)_
+_Last updated: 2026-10-10 · Current release: v0.21.7 (Apple silicon Mac; v0.19.0 was the last for Intel, Windows and Linux)_
+
+**v0.21.7 added:** silky-smooth bookmarks bar hover — hardware-accelerated floating overlay that slides and fades smoothly under the toolbar without resizing or shifting the web page.
 
 **v0.21.6 added:** vertical tabs layout refinement — removed the floating page border frame and insets in vertical tabs so web pages sit flush edge-to-edge against the sidebar and toolbar, while preserving the rounded card border in horizontal tabs mode.
 

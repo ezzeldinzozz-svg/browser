@@ -853,7 +853,8 @@ function chromeHeight(w) {
   const vertical = !!(store && store.data.settings.verticalTabs);
   const tbH = compactTb ? COMPACT_TOOLBAR_ONLY_H : TOOLBAR_ONLY_H;
   const baseH = vertical ? tbH : (compact ? COMPACT_CHROME_H : (compactTb ? (38 + COMPACT_TOOLBAR_ONLY_H) : CHROME_H));
-  const showBm = store && store.data.settings.showBookmarksBar && (!store.data.settings.bookmarksBarHover || w.bookmarksBarHovered);
+  // In hover mode, the bookmarks bar is a smooth floating overlay and does not push the webpage down
+  const showBm = store && store.data.settings.showBookmarksBar && !store.data.settings.bookmarksBarHover;
   const bmH = showBm ? BOOKMARKS_BAR_H : 0;
   const tab = activeTab(w);
   if (!tab) return baseH + bmH;
@@ -5537,12 +5538,7 @@ function setupIpc() {
   });
   handle('bmbar:hover', fromChrome, (w, hovered) => {
     if (!liveWindow(w)) return;
-    const shouldHover = !!hovered;
-    if (w.bookmarksBarHovered === shouldHover) return;
-    if (!shouldHover && w.inBookmarkMenu) return;
-    w.bookmarksBarHovered = shouldHover;
-    layout(w);
-    sendTabs(w);
+    w.bookmarksBarHovered = !!hovered;
   });
   handle('bm:context', fromChrome, (w, id) => showBookmarkMenu(w, id ? String(id) : null));
 }

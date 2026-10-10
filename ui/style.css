@@ -375,7 +375,36 @@ browser-action-list::part(badge) { font-size: 9px; }
   background: var(--canvas); overflow: hidden; box-sizing: border-box;
 }
 #bmbar[hidden] { display: none !important; }
-body.bmbar-hover-mode:not(.bmbar-hovered) #bmbar { display: none !important; }
+
+/* In hover mode, #bmbar floats as a smooth dropdown overlay beneath the toolbar without shifting the page */
+body.bmbar-hover-mode #bmbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 80px;
+  z-index: 25;
+  height: 30px;
+  background: var(--canvas);
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 10px 24px -4px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  will-change: transform, opacity;
+}
+body.compact.bmbar-hover-mode #bmbar { top: 68px; }
+body.compact-toolbar:not(.compact).bmbar-hover-mode #bmbar { top: 74px; }
+body.vertical.bmbar-hover-mode #bmbar { top: 42px; margin-left: 200px; }
+body.compact.vertical.bmbar-hover-mode #bmbar,
+body.compact-toolbar.vertical.bmbar-hover-mode #bmbar { top: 36px; }
+body.vertical.collapsed:not(.sidebar-hover).bmbar-hover-mode #bmbar { margin-left: 52px; }
+
+body.bmbar-hover-mode.bmbar-hovered #bmbar {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
 #bmbar-items {
   display: flex; align-items: center; gap: 2px; flex: 1 1 auto; min-width: 0; overflow: hidden; height: 100%;
 }

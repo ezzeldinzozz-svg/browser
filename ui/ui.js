@@ -320,9 +320,11 @@ function render(state) {
     document.body.classList.toggle('compact', !!state.uiPrefs.compactMode);
     document.body.classList.toggle('compact-toolbar', !!(state.uiPrefs.compactToolbar || state.uiPrefs.compactMode));
     isBookmarksHoverMode = !!state.uiPrefs.bookmarksBarHover;
-    isBookmarksCurrentlyHovered = !!state.uiPrefs.bookmarksBarHovered;
     document.body.classList.toggle('bmbar-hover-mode', isBookmarksHoverMode);
-    document.body.classList.toggle('bmbar-hovered', isBookmarksCurrentlyHovered);
+    if (!isBookmarksHoverMode) {
+      isBookmarksCurrentlyHovered = false;
+      document.body.classList.remove('bmbar-hovered');
+    }
     const vert = !!state.uiPrefs.verticalTabs;
     const collapsed = vert && !!state.uiPrefs.verticalTabsCollapsed;
     const expandHover = state.uiPrefs.verticalTabsExpandOnHover !== false;
@@ -587,6 +589,7 @@ let overlayOpen = false;
 function setOverlay() {
   const open =
     document.body.classList.contains('sidebar-hover') ||
+    document.body.classList.contains('bmbar-hovered') ||
     ['suggest', 'sitepopup', 'screenpicker', 'devicepicker', 'dlpanel', 'bmpopup', 'tabpreview'].some((id) => !$(id).hidden);
   if (open !== overlayOpen) {
     overlayOpen = open;
@@ -1291,6 +1294,7 @@ let lastBarJson = '';
 let isBookmarksHoverMode = false;
 let isBookmarksCurrentlyHovered = false;
 let bmHoverLeaveTimer = null;
+let isBookmarkMenuOpen = false;
 let overflowBookmarkIds = [];
 
 function triggerBookmarksHover(hovered) {
@@ -1299,12 +1303,18 @@ function triggerBookmarksHover(hovered) {
   if (hovered) {
     if (!isBookmarksCurrentlyHovered) {
       isBookmarksCurrentlyHovered = true;
-      api.setBookmarksBarHovered(true);
+      document.body.classList.add('bmbar-hovered');
+      setOverlay();
     }
   } else {
+    if (isBookmarkMenuOpen) return;
     bmHoverLeaveTimer = setTimeout(() => {
+      if (isBookmarkMenuOpen) return;
       isBookmarksCurrentlyHovered = false;
-      api.setBookmarksBarHovered(false);
+      document.body.classList.remove('bmbar-hovered');
+      setTimeout(() => {
+        if (!isBookmarksCurrentlyHovered) setOverlay();
+      }, 180);
     }, 280);
   }
 }
@@ -1363,9 +1373,8 @@ function updateBookmarkOverflow() {
 function renderBookmarkBar(items) {
   const bar = $('bmbar');
   const itemsWrap = $('bmbar-items') || bar;
-  const shouldShow = !!items && (!isBookmarksHoverMode || isBookmarksCurrentlyHovered);
-  bar.hidden = !shouldShow;
-  if (!items || !shouldShow) return;
+  bar.hidden = !items;
+  if (!items) return;
   const json = JSON.stringify(items);
   if (json === lastBarJson) {
     updateBookmarkOverflow();
@@ -1400,13 +1409,19 @@ function renderBookmarkBar(items) {
       }
     });
     item.addEventListener('click', (e) => {
-      if (b.type === 'folder') return api.bookmarkFolderMenu(b.id);
+      if (b.type === 'folder') {
+        isBookmarkMenuOpen = true;
+        setTimeout(() => { isBookmarkMenuOpen = false; }, 1200);
+        return api.bookmarkFolderMenu(b.id);
+      }
       api.openBookmark(b.id, e.metaKey || e.ctrlKey ? 'background' : e.shiftKey ? 'window' : 'current');
     });
     item.addEventListener('contextmenu', (e) => {
       e.preventDefault();
       e.stopPropagation();
+      isBookmarkMenuOpen = true;
       api.bookmarkContextMenu(b.id);
+      setTimeout(() => { isBookmarkMenuOpen = false; }, 1200);
     });
     // drag to reorder, or drop onto a folder's middle to move it inside
     item.addEventListener('dragstart', (e) => {
@@ -1440,13 +1455,16 @@ function renderBookmarkBar(items) {
 
 $('bmbar').addEventListener('contextmenu', (e) => {
   e.preventDefault();
+  isBookmarkMenuOpen = true;
   api.bookmarkContextMenu(null);
+  setTimeout(() => { isBookmarkMenuOpen = false; }, 1200);
 });
 
 $('bmbar-overflow')?.addEventListener('click', (e) => {
   e.stopPropagation();
   if (!overflowBookmarkIds.length) return;
   const rect = $('bmbar-overflow').getBoundingClientRect();
+  isBookmarkMenuOpen = true;
   api.bookmarkOverflowMenu(overflowBookmarkIds, {
     x: rect.left,
     y: rect.top,
@@ -1454,6 +1472,7 @@ $('bmbar-overflow')?.addEventListener('click', (e) => {
     height: rect.height,
     bottom: rect.bottom,
   });
+  setTimeout(() => { isBookmarkMenuOpen = false; }, 1200);
 });
 
 if (window.ResizeObserver && $('bmbar')) {
@@ -1462,14 +1481,22 @@ if (window.ResizeObserver && $('bmbar')) {
 
 $('toolbar').addEventListener('mouseenter', () => triggerBookmarksHover(true));
 $('toolbar').addEventListener('mouseleave', (e) => {
-  if (e.relatedTarget && ($('bmbar').contains(e.relatedTarget) || e.relatedTarget === $('bmbar'))) return;
+  if (e.relatedTarget && ($('bmbar').contains(e.relatedTarget) || e.relatedTarget === $('bmbar') || $('tabstrip').contains(e.relatedTarget))) return;
   triggerBookmarksHover(false);
 });
 
 $('bmbar').addEventListener('mouseenter', () => triggerBookmarksHover(true));
 $('bmbar').addEventListener('mouseleave', (e) => {
-  if (e.relatedTarget && ($('toolbar').contains(e.relatedTarget) || e.relatedTarget === $('toolbar'))) return;
+  if (e.relatedTarget && ($('toolbar').contains(e.relatedTarget) || e.relatedTarget === $('toolbar') || $('tabstrip').contains(e.relatedTarget))) return;
   triggerBookmarksHover(false);
+});
+
+$('tabstrip').addEventListener('mouseenter', () => {
+  if (isBookmarksCurrentlyHovered) triggerBookmarksHover(true);
+});
+$('tabstrip').addEventListener('mouseleave', (e) => {
+  if (e.relatedTarget && ($('toolbar').contains(e.relatedTarget) || $('bmbar').contains(e.relatedTarget))) return;
+  if (isBookmarksCurrentlyHovered) triggerBookmarksHover(false);
 });
 
 // ---- star / edit bookmark popup

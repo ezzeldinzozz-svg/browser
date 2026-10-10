@@ -117,7 +117,15 @@ async function main() {
     await check('settings page can enable bookmarks hover mode', async () => {
       await evaluate((u) => u.startsWith('browser://settings'), 'browserAPI.setSetting("bookmarksBarHover", true)');
       await sleep(500);
-      return evaluate('browser://ui/', 'document.body.classList.contains("bmbar-hover-mode")');
+      const isHoverMode = await evaluate('browser://ui/', 'document.body.classList.contains("bmbar-hover-mode")');
+      const isFixed = await evaluate('browser://ui/', 'getComputedStyle(document.getElementById("bmbar")).position === "fixed"');
+      // trigger hover
+      await evaluate('browser://ui/', 'document.getElementById("toolbar").dispatchEvent(new MouseEvent("mouseenter"))');
+      await sleep(100);
+      const isHovered = await evaluate('browser://ui/', 'document.body.classList.contains("bmbar-hovered")');
+      // leave hover
+      await evaluate('browser://ui/', 'document.getElementById("toolbar").dispatchEvent(new MouseEvent("mouseleave"))');
+      return isHoverMode && isFixed && isHovered;
     });
     await check('page frame exists in horizontal mode and is removed in vertical mode', async () => {
       const hasHorizontalFrame = await evaluate('browser://ui/', 'document.querySelectorAll(".page-frame").length > 0');
