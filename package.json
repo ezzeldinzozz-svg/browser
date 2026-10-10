@@ -1,7 +1,7 @@
 {
   "name": "browser",
   "productName": "Operecs",
-  "version": "0.21.6",
+  "version": "0.21.7",
   "description": "Operecs: a fast, private, cross-platform web browser",
   "main": "main.js",
   "scripts": {
