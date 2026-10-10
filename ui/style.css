@@ -698,7 +698,6 @@ body.bmbar-hover-mode.bmbar-hovered #bmbar {
   border-radius: 12px;
   box-shadow: 0 0 0 1.5px var(--line-strong), 0 8px 24px -8px rgba(0, 0, 0, 0.32);
 }
-body.vertical #page-frames { display: none; }
 
 /* ---------------------------------------------------------------- compact mode & vertical tabs */
 

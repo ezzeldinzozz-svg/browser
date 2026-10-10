@@ -127,16 +127,17 @@ async function main() {
       await evaluate('browser://ui/', 'document.getElementById("toolbar").dispatchEvent(new MouseEvent("mouseleave"))');
       return isHoverMode && isFixed && isHovered;
     });
-    await check('page frame exists in horizontal mode and is removed in vertical mode', async () => {
+    await check('page frame exists with balanced outer frame in both horizontal and vertical modes', async () => {
       const hasHorizontalFrame = await evaluate('browser://ui/', 'document.querySelectorAll(".page-frame").length > 0');
       await evaluate((u) => u.startsWith('browser://settings'), 'browserAPI.setSetting("verticalTabs", true)');
       await sleep(600);
       const isVertical = await evaluate('browser://ui/', 'document.body.classList.contains("vertical")');
       const verticalFrameCount = await evaluate('browser://ui/', 'document.querySelectorAll(".page-frame").length');
+      const verticalFrameLeft = parseInt(await evaluate('browser://ui/', 'document.querySelector(".page-frame")?.style.left || "0"'), 10);
       // restore setting
       await evaluate((u) => u.startsWith('browser://settings'), 'browserAPI.setSetting("verticalTabs", false)');
       await sleep(400);
-      return hasHorizontalFrame && isVertical && verticalFrameCount === 0;
+      return hasHorizontalFrame && isVertical && verticalFrameCount > 0 && verticalFrameLeft >= 208;
     });
     await check('ad-block lists downloaded', async () => {
       for (let i = 0; i < 20; i++) {

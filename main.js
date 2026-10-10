@@ -885,8 +885,9 @@ function layoutStatus(w) {
   const [width, height] = w.win.getContentSize();
   const left = sidebarWidth(w);
   const textWidth = Math.min(Math.round((width - left) * 0.6), 7 * w.statusText.length + 28);
-  const bottomMargin = left > 0 ? 0 : PAGE_INSET;
-  w.statusView.setBounds({ x: (left || PAGE_INSET), y: height - STATUS_H - bottomMargin, width: Math.max(80, textWidth), height: STATUS_H });
+  const bottomMargin = PAGE_INSET;
+  const x0 = left > 0 ? (left + PAGE_INSET) : PAGE_INSET;
+  w.statusView.setBounds({ x: x0, y: height - STATUS_H - bottomMargin, width: Math.max(80, textWidth), height: STATUS_H });
   w.statusView.setVisible(!!w.statusText);
 }
 
@@ -921,10 +922,8 @@ function pageFrames(w) {
   const top = chromeHeight(w);
   if (top <= 0) return [];
   const left = sidebarWidth(w);
-  // When vertical tabs are active, the webpage view sits flush against the sidebar/toolbar with no floating border frame
-  if (left > 0) return [];
   const inset = PAGE_INSET;
-  const x0 = inset;
+  const x0 = left > 0 ? (left + inset) : inset;
   const availW = Math.max(0, width - x0 - inset);
   const availH = Math.max(0, height - top - inset);
   const splitTab = w.splitId && w.splitId !== w.activeId && !(activeTab(w) && activeTab(w).fullscreen) ? getTab(w, w.splitId) : null;
@@ -944,17 +943,16 @@ function layout(w) {
   const [width, height] = w.win.getContentSize();
   const top = chromeHeight(w);
   const left = sidebarWidth(w);
-  const isVertical = left > 0;
   w.chromeView.setVisible(top > 0);
   // The unified shell view covers the whole window behind the page card so the outer frame and page border render seamlessly.
   w.chromeView.setBounds({ x: 0, y: 0, width, height: top > 0 ? height : 0 });
-  const inset = (!isVertical && top > 0) ? PAGE_INSET : 0; // a page in vertical or fullscreen mode fills flush
-  const x0 = isVertical ? left : inset;
-  const availW = Math.max(0, width - x0 - (isVertical ? 0 : inset));
-  const availH = Math.max(0, height - top - (isVertical ? 0 : inset));
+  const inset = top > 0 ? PAGE_INSET : 0;
+  const x0 = left > 0 ? (left + inset) : inset;
+  const availW = Math.max(0, width - x0 - inset);
+  const availH = Math.max(0, height - top - inset);
   const splitTab = w.splitId && w.splitId !== w.activeId && !(activeTab(w) && activeTab(w).fullscreen) ? getTab(w, w.splitId) : null;
   const pair = splitTab ? (w.splitOrder && w.splitOrder.includes(w.activeId) && w.splitOrder.includes(w.splitId) ? w.splitOrder : [w.activeId, w.splitId]) : null;
-  const splitGap = isVertical ? 2 : PAGE_INSET;
+  const splitGap = PAGE_INSET;
   const halfW = splitTab ? Math.max(0, Math.floor((availW - splitGap) / 2)) : availW;
   for (const t of w.tabs) {
     const visible = t.id === w.activeId || (splitTab && t.id === splitTab.id);
@@ -3189,7 +3187,7 @@ function showAutofill(tab, { type, rect }) {
   const top = chromeHeight(w);
   const h = items.length * 46 + 46;
   const left = sidebarWidth(w);
-  const originX = left > 0 ? left : PAGE_INSET;
+  const originX = left > 0 ? (left + PAGE_INSET) : PAGE_INSET;
   let x = Math.round(originX + rect.x);
   let y = Math.round(top + rect.y + rect.height + 4);
   if (y + h > height) y = Math.max(top, Math.round(top + rect.y - h - 4)); // no room below: above the field
