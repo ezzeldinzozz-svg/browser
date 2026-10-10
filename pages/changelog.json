@@ -1,6 +1,7 @@
 {
   "_comment": "Shown on browser://whatsnew after an update. Add user-visible changes to \"next\" as they land; `npm run release` renames \"next\" to the version it releases (and refuses to release without notes).",
-  "next": [
+  "next": [],
+  "0.22.1": [
     "Fixed: sites protected by Cloudflare (such as futbin.com) no longer get stuck on \"Verifying you are human\""
   ],
   "0.22.0": [
