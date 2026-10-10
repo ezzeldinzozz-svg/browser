@@ -15,6 +15,8 @@ Get the latest version from the [releases page](https://github.com/ezzeldinzozz-
 | Windows 10 and 11 (64-bit) | `Operecs-Setup-<version>.exe` |
 | Linux (64-bit) | `Operecs-<version>.AppImage` or `browser_<version>_amd64.deb` |
 
+On a Mac with Homebrew: `brew tap ezzeldinzozz-svg/operecs && brew trust ezzeldinzozz-svg/operecs && brew install --cask operecs`.
+
 Operecs updates itself after that. Using it is covered by the [terms of use](TERMS.md) and the [privacy notes](PRIVACY.md).
 
 ## Features

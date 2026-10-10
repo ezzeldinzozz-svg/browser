@@ -167,7 +167,7 @@ See `research/browser-lessons.md` for the full research on how Brave and others 
 | `pages/` | Internal pages at `browser://<name>/` → `pages/<name>.html` (newtab, history, bookmarks, downloads, settings, error) |
 | `scripts/after-pack.js` | electron-builder afterPack hook: flips fuses (`scripts/fuses.js`), then signs the mac app with our self-signed certificate |
 | `scripts/fuses.js` | Locks down the packaged Electron binary (no RunAsNode, asar-only with integrity check, cookie encryption…) |
-| `packaging/` | Store listing files (Homebrew cask, winget manifests) and how to publish them; versions and checksums are per release |
+| `packaging/` | Homebrew tap is live: `ezzeldinzozz-svg/homebrew-operecs` (install: `brew tap ezzeldinzozz-svg/operecs`, `brew trust …`, `brew install --cask operecs`); `release.js` updates its cask on all-platform releases. Store listing files (Homebrew cask, winget manifests) and how to publish them; versions and checksums are per release |
 | `scripts/keygen.js`, `scripts/release.js` | Release signing key setup, and build+sign+publish |
 
 Key decisions:

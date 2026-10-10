@@ -135,7 +135,7 @@ function updateHomebrewTap(version, mac, env) {
     .replace(/intel: "[0-9a-f]{64}"/, `intel: "${sha(mac.dmgX64)}"`);
   const api = `repos/${TAP}/contents/Casks/operecs.rb`;
   const current = JSON.parse(out('gh', ['api', api], { env }));
-  out('gh', ['api', '-X', 'PUT', api, '-f', `message=operecs ${version}`, '-f', `content=${Buffer.from(cask).toString('base64')}`, '-f', `sha=${current.sha}`], { env });
+  out('gh', ['api', '-X', 'PUT', api, '-f', `message=operecs ${version}`, '-f', `committer[name]=${OWNER}`, '-f', 'committer[email]=282520688+ezzeldinzozz-svg@users.noreply.github.com', '-f', `content=${Buffer.from(cask).toString('base64')}`, '-f', `sha=${current.sha}`], { env });
   console.log(`Homebrew tap ${TAP} now installs ${version}.`);
 }
 
