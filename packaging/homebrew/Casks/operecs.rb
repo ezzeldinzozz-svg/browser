@@ -1,9 +1,9 @@
 cask "operecs" do
   arch arm: "-arm64", intel: ""
 
-  version "0.22.2"
-  sha256 arm:   "609f1d1199277d817e9be8a64544959b2ff4a82c5e7b2568056f00c769125936",
-         intel: "117eac4d2d801ddcb6bbc7ef4549b6e4a850fefcb18562993829c26ccaa77dd8"
+  version "0.22.3"
+  sha256 arm:   "d45640e465823bfbeae4a78cfdf3033e0bcdced27e632f71fbbe49ccec02ddb6",
+         intel: "80f0c30b9003854843723c55fe6c70ba3bff331ce424b9a449b0561f7ce03851"
 
   url "https://github.com/ezzeldinzozz-svg/operecs-browser/releases/download/v#{version}/Operecs-#{version}#{arch}.dmg"
   name "Operecs"

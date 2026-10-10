@@ -123,6 +123,22 @@ function releaseNotes(version, files) {
   ].join('\n');
 }
 
+// Homebrew: our own tap's cask gets this version's number and DMG checksums (template in
+// packaging/homebrew). Not committed here, so the release tree stays clean.
+const TAP = `${OWNER}/homebrew-operecs`;
+function updateHomebrewTap(version, mac, env) {
+  const sha = (file) => require('crypto').createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+  const cask = fs
+    .readFileSync(path.join(ROOT, 'packaging', 'homebrew', 'Casks', 'operecs.rb'), 'utf8')
+    .replace(/version "[^"]+"/, `version "${version}"`)
+    .replace(/sha256 arm:\s+"[0-9a-f]+"/, `sha256 arm:   "${sha(mac.dmg)}"`)
+    .replace(/intel: "[0-9a-f]{64}"/, `intel: "${sha(mac.dmgX64)}"`);
+  const api = `repos/${TAP}/contents/Casks/operecs.rb`;
+  const current = JSON.parse(out('gh', ['api', api], { env }));
+  out('gh', ['api', '-X', 'PUT', api, '-f', `message=operecs ${version}`, '-f', `content=${Buffer.from(cask).toString('base64')}`, '-f', `sha=${current.sha}`], { env });
+  console.log(`Homebrew tap ${TAP} now installs ${version}.`);
+}
+
 function main() {
   if (!fs.existsSync(PRIVATE_KEY)) throw new Error(`Missing signing key ${PRIVATE_KEY}. Run: npm run keygen`);
   if (out('git', ['status', '--porcelain'])) throw new Error('Commit or stash your changes first.');
@@ -209,6 +225,14 @@ function main() {
     throw err;
   }
   console.log(`\nReleased ${tag}: https://github.com/${REPO}/releases/tag/${tag}`);
+  // Homebrew needs both Mac builds, so only all-platform releases update the tap
+  if (ALL) {
+    try {
+      updateHomebrewTap(version, mac, env);
+    } catch (err) {
+      console.error(`Homebrew tap not updated (${err.message}); update ${TAP} by hand from packaging/homebrew.`);
+    }
+  }
 }
 
 try {

@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
 PackageIdentifier: Ezzeddin.Operecs
-PackageVersion: 0.22.2
+PackageVersion: 0.22.3
 InstallerType: nullsoft
 Scope: user
 InstallModes:
@@ -8,7 +8,7 @@ InstallModes:
 UpgradeBehavior: install
 Installers:
   - Architecture: x64
-    InstallerUrl: https://github.com/ezzeldinzozz-svg/operecs-browser/releases/download/v0.22.2/Operecs-Setup-0.22.2.exe
-    InstallerSha256: B8E5A89DFE413211D0A50508C8B91AFC98402A879871957FD19F6763A03AB82F
+    InstallerUrl: https://github.com/ezzeldinzozz-svg/operecs-browser/releases/download/v0.22.3/Operecs-Setup-0.22.3.exe
+    InstallerSha256: 205023C825D12ACFEA3DEF60145CE6C5D2B90622BF28F7045C8979987ACFDB9B
 ManifestType: installer
 ManifestVersion: 1.6.0

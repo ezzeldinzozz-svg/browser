@@ -1,6 +1,6 @@
 # Store listings
 
-Ready-made listing files for v0.22.2. Bump the version, URLs and SHA-256 sums with each release
+Ready-made listing files (currently v0.22.3). Bump the version, URLs and SHA-256 sums with each release
 (`shasum -a 256 dist/Operecs-<v>-arm64.dmg dist/Operecs-<v>.dmg dist/ci/browser-windows/*.exe`).
 
 ## Homebrew (`homebrew/Casks/operecs.rb`)
@@ -8,9 +8,10 @@ Ready-made listing files for v0.22.2. Bump the version, URLs and SHA-256 sums wi
 - The official `homebrew/cask` repo no longer takes apps that fail Gatekeeper (from 2026-09-01),
   and Operecs isn't notarized yet (needs the Apple Developer Program). It also asks for a
   well-known project (stars/forks). So for now: our own tap.
-- Own tap: a public repo `ezzeldinzozz-svg/homebrew-operecs` with `Casks/operecs.rb`. People install
+- Own tap (live): the public repo `ezzeldinzozz-svg/homebrew-operecs` with `Casks/operecs.rb`. People install
   with `brew install --cask ezzeldinzozz-svg/operecs/operecs`. macOS still asks "Open Anyway" on
-  first launch, like the DMG.
+  first launch, like the DMG. `npm run release -- <v> --all-platforms` updates the tap's cask
+  itself (version and checksums, from this file as the template).
 - After notarization: submit to `homebrew/cask` (`brew bump-cask-pr` keeps it current).
 
 ## winget (`winget/manifests/…`)

@@ -57,7 +57,7 @@ const COMPACT_CHROME_H = 68; // compact tab strip (32) + compact toolbar (36)
 const TOOLBAR_ONLY_H = 42;
 const COMPACT_TOOLBAR_ONLY_H = 36;
 const SIDEBAR_W = 200; // vertical tabs sidebar width
-const SIDEBAR_COLLAPSED_W = 52; // collapsed (icons-only) vertical tabs sidebar width
+const SIDEBAR_COLLAPSED_W = 40; // collapsed (icons-only) vertical tabs sidebar width, slim like Brave's
 // Pages sit in a rounded card inset from the window edge (matches the brand's card look).
 const PAGE_INSET = 8;
 const PAGE_RADIUS = 12;

@@ -398,7 +398,7 @@ body.compact-toolbar:not(.compact).bmbar-hover-mode #bmbar { top: 74px; }
 body.vertical.bmbar-hover-mode #bmbar { top: 42px; margin-left: 200px; }
 body.compact.vertical.bmbar-hover-mode #bmbar,
 body.compact-toolbar.vertical.bmbar-hover-mode #bmbar { top: 36px; }
-body.vertical.collapsed:not(.sidebar-hover).bmbar-hover-mode #bmbar { margin-left: 52px; }
+body.vertical.collapsed:not(.sidebar-hover).bmbar-hover-mode #bmbar { margin-left: 40px; }
 
 body.bmbar-hover-mode.bmbar-hovered #bmbar {
   opacity: 1;
@@ -750,15 +750,15 @@ body.vertical #bmbar { margin-left: 200px; }
 body.vertical #prompt, body.vertical #dlwarn, body.vertical #restorebar, body.vertical #authbar, body.vertical #findbar { margin-left: 208px; }
 
 /* Collapsed vertical sidebar (icons-only, expands on hover when enabled) */
-body.vertical.collapsed #bmbar { margin-left: 52px; }
-body.vertical.collapsed #prompt, body.vertical.collapsed #dlwarn, body.vertical.collapsed #restorebar, body.vertical.collapsed #authbar, body.vertical.collapsed #findbar { margin-left: 60px; }
+body.vertical.collapsed #bmbar { margin-left: 40px; }
+body.vertical.collapsed #prompt, body.vertical.collapsed #dlwarn, body.vertical.collapsed #restorebar, body.vertical.collapsed #authbar, body.vertical.collapsed #findbar { margin-left: 48px; }
 body.vertical.collapsed:not(.sidebar-hover) #tabstrip {
-  width: 52px; padding: 4px 8px 8px; align-items: center; border-right: none;
+  width: 40px; padding: 4px 4px 8px; align-items: center; border-right: none;
 }
 body.vertical.collapsed:not(.sidebar-hover) #tablist { align-items: center; padding: 0; }
 body.vertical.collapsed:not(.sidebar-hover) .tab,
 body.vertical.collapsed:not(.sidebar-hover) .tab.pinned {
-  width: 36px; height: 36px; min-width: 36px; padding: 0; justify-content: center;
+  width: 32px; height: 32px; min-width: 32px; padding: 0; justify-content: center;
 }
 body.vertical.collapsed:not(.sidebar-hover) .tab .title,
 body.vertical.collapsed:not(.sidebar-hover) .tab .close,
@@ -769,7 +769,7 @@ body.vertical.collapsed:not(.sidebar-hover) .tab-group input {
   display: none;
 }
 body.vertical.collapsed:not(.sidebar-hover) .tab-group {
-  width: 36px; padding: 0; justify-content: center; margin: 2px 0;
+  width: 32px; padding: 0; justify-content: center; margin: 2px 0;
 }
 body.vertical.collapsed:not(.sidebar-hover) .tab .audio {
   position: absolute; right: 1px; bottom: 1px; width: 14px; height: 14px;
@@ -779,7 +779,7 @@ body.vertical.collapsed:not(.sidebar-hover) .tab .rec {
   position: absolute; right: 3px; top: 3px; width: 7px; height: 7px;
 }
 body.vertical.collapsed:not(.sidebar-hover) #newtab {
-  width: 36px; height: 36px; padding: 0; justify-content: center;
+  width: 32px; height: 32px; padding: 0; justify-content: center;
 }
 body.vertical.collapsed.sidebar-hover #tabstrip {
   width: 200px; background: var(--canvas);

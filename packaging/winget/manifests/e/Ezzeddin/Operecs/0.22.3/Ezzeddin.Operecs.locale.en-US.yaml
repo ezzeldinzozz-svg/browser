@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
 PackageIdentifier: Ezzeddin.Operecs
-PackageVersion: 0.22.2
+PackageVersion: 0.22.3
 PackageLocale: en-US
 Publisher: Ezzeddin Magdy
 PublisherUrl: https://github.com/ezzeldinzozz-svg
@@ -16,6 +16,6 @@ Tags:
   - chromium
   - privacy
   - web-browser
-ReleaseNotesUrl: https://github.com/ezzeldinzozz-svg/operecs-browser/releases/tag/v0.22.2
+ReleaseNotesUrl: https://github.com/ezzeldinzozz-svg/operecs-browser/releases/tag/v0.22.3
 ManifestType: defaultLocale
 ManifestVersion: 1.6.0
