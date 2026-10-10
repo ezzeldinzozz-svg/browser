@@ -3,7 +3,15 @@
 Everything needed to pick this project up on any device. **Keep this file current:** update it
 in the same commit as any change to features, architecture, setup, or plans.
 
-_Last updated: 2026-10-10 · Current release: v0.21.0 (Apple silicon Mac; v0.19.0 was the last for Intel, Windows and Linux)_
+_Last updated: 2026-10-10 · Current release: v0.21.5 (Apple silicon Mac; v0.19.0 was the last for Intel, Windows and Linux)_
+
+**v0.21.5 added:** full Keyboard Shortcuts editor in Settings with 60+ commands, live search, physical ANSI key normalization, conflict detection, ⌫ unassigning, and restore buttons; compact toolbar option; bookmarks bar appear-on-hover mode; bookmarks bar overflow chevron button (») with native dropdown menu.
+
+**v0.21.4 added:** unified container for top toolbar and vertical sidebar with no divider line, rounded viewport frame, removed Default workspace button.
+
+**v0.21.3 added:** vertical tab sidebar with + New Tab button under latest tab, icons-only collapsed sidebar with hover expand.
+
+**v0.21.2 added:** screenshot capture target chooser (Current Screen, Full Page, Selection).
 
 **v0.21.0 added:** quick answers & commands in the address bar, tab groups, vertical tabs, split view, tab hover previews, workspaces, two-finger swipe navigation, cookie banner auto-reject, fingerprinting protection, screenshot tool, read aloud, in-page translation, Picture-in-Picture in media hub, per-site autoplay exceptions, accent colors & compact mode, keyboard shortcut customization, installable web apps (PWA windows), `navigator.registerProtocolHandler`, single-tab screen sharing, client certificate selection, QR code generator, redesigned tabbed Settings dashboard with pagination, Settings toolbar button, and customizable toolbar buttons.
 

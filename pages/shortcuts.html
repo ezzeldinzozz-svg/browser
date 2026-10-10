@@ -3,15 +3,22 @@
 <head>
   <meta charset="utf-8">
   <title>Keyboard Shortcuts</title>
-  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'">
   <link rel="stylesheet" href="page.css">
 </head>
 <body>
   <main>
-    <h1>Keyboard shortcuts</h1>
-    <p class="hint">Click a shortcut badge to record a new key combination. Press <kbd>Esc</kbd> to cancel or <kbd>⌫</kbd> to restore its default.</p>
-    <div id="list"></div>
-    <div class="buttons" style="margin-top: 24px"><button id="reset" hidden>Reset custom shortcuts</button></div>
+    <div class="settings-panel-head shortcuts-panel-head">
+      <div>
+        <h1>Keyboard shortcuts</h1>
+        <p class="hint">Click any shortcut to record a new key combination. Press <kbd>⌫</kbd> while recording to disable a shortcut, or <kbd>Esc</kbd> to cancel. <a href="browser://settings/#shortcuts">Open in Settings →</a></p>
+      </div>
+      <button type="button" id="reset" hidden>Restore all shortcuts</button>
+    </div>
+    <div class="shortcuts-toolbar">
+      <input id="shortcuts-search" aria-label="Find shortcut keys" type="search" placeholder="Find shortcut keys…" autocomplete="off" spellcheck="false">
+    </div>
+    <div id="list" class="shortcuts-list"></div>
   </main>
   <script src="shortcuts.js"></script>
 </body>

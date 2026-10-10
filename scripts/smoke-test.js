@@ -55,7 +55,12 @@ async function check(name, fn) {
 async function main() {
   if (!exe || !fs.existsSync(exe)) throw new Error(`executable not found: ${exe}`);
   console.log(`Smoke test: ${exe}`);
-  const child = spawn(exe, [`--remote-debugging-port=${PORT}`, '--use-mock-keychain'], {
+  const args = [
+    ...(exe.includes('Electron.app') || exe.endsWith('electron') ? [path.join(__dirname, '..')] : []),
+    `--remote-debugging-port=${PORT}`,
+    '--use-mock-keychain',
+  ];
+  const child = spawn(exe, args, {
     env: { ...process.env, BROWSER_PROFILE_DIR: profile },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -97,6 +102,22 @@ async function main() {
       await evaluate('browser://ui/', "browserAPI.go('browser://settings')");
       await sleep(2000);
       return evaluate((u) => u.startsWith('browser://settings'), "document.querySelector('h1').textContent");
+    });
+    await check('bookmarks overflow button is in DOM', () =>
+      evaluate('browser://ui/', '!!document.getElementById("bmbar-overflow") && !!document.getElementById("bmbar-items")'),
+    );
+    await check('settings page has compact toolbar and bookmarks hover options', () =>
+      evaluate((u) => u.startsWith('browser://settings'), '!!document.getElementById("compact-toolbar") && !!document.getElementById("bookmarks-bar-hover")'),
+    );
+    await check('settings page can enable compact toolbar', async () => {
+      await evaluate((u) => u.startsWith('browser://settings'), 'browserAPI.setSetting("compactToolbar", true)');
+      await sleep(500);
+      return evaluate('browser://ui/', 'document.body.classList.contains("compact-toolbar")');
+    });
+    await check('settings page can enable bookmarks hover mode', async () => {
+      await evaluate((u) => u.startsWith('browser://settings'), 'browserAPI.setSetting("bookmarksBarHover", true)');
+      await sleep(500);
+      return evaluate('browser://ui/', 'document.body.classList.contains("bmbar-hover-mode")');
     });
     await check('ad-block lists downloaded', async () => {
       for (let i = 0; i < 20; i++) {

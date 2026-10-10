@@ -137,6 +137,8 @@ if (location.protocol === 'browser:' && window === window.top) {
     starPage: call('bm:star'),
     openBookmark: call('bm:open'),
     bookmarkFolderMenu: call('bm:folder-menu'),
+    bookmarkOverflowMenu: call('bm:overflow-menu'),
+    setBookmarksBarHovered: call('bmbar:hover'),
     bookmarkContextMenu: call('bm:context'),
     bookmarkEditInfo: call('bm:edit-info'),
     updateBookmark: call('bm:update'),
@@ -176,6 +178,7 @@ if (location.protocol === 'browser:' && window === window.top) {
     toggleSidebarCollapse: call('sidebar:toggle-collapse'),
     tabstripMenu: call('tabstrip:menu'),
     onPageFrames: on('page:frames'),
+    setShortcutRecording: call('shortcuts:recording'),
   });
 }
 

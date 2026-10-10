@@ -125,10 +125,11 @@ function renderPaginatedList(container, items, pageSize, renderRow, emptyText, k
 
 // ---- Category Tabs & Tab Footer Pagination
 
-const TAB_ORDER = ['general', 'appearance', 'privacy', 'sites', 'profiles', 'system'];
+const TAB_ORDER = ['general', 'appearance', 'shortcuts', 'privacy', 'sites', 'profiles', 'system'];
 const TAB_TITLES = {
   general: 'General & Search',
   appearance: 'Appearance & Toolbar',
+  shortcuts: 'Keyboard Shortcuts',
   privacy: 'Privacy & Security',
   sites: 'Sites & Permissions',
   profiles: 'Profiles & Autofill',
@@ -138,6 +139,7 @@ let activeTabId = 'general';
 
 function selectSettingsTab(tabId, { scrollTop = true } = {}) {
   if (!TAB_ORDER.includes(tabId)) tabId = 'general';
+  if (typeof stopShortcutRecording === 'function') stopShortcutRecording();
   activeTabId = tabId;
   const searchInput = document.getElementById('settings-search');
   if (searchInput && searchInput.value.trim()) {
@@ -231,6 +233,8 @@ handleHashNavigation();
 
 let latestToolbarButtons = {};
 let latestToolbarDefs = [];
+let latestShortcutGroups = [];
+let customShortcuts = {};
 
 async function loadSettings() {
   const s = await browserAPI.getSettings();
@@ -240,8 +244,11 @@ async function loadSettings() {
   document.getElementById('startup-pages').value = (s.startupPages || []).join('\n');
   document.getElementById('show-home').checked = !!(s.toolbarButtons ? s.toolbarButtons.home : s.showHomeButton);
   document.getElementById('show-bookmarks-bar').checked = s.showBookmarksBar !== false;
+  document.getElementById('bookmarks-bar-hover').checked = !!s.bookmarksBarHover;
+  document.getElementById('bookmarks-bar-hover-wrap').hidden = s.showBookmarksBar === false;
   document.getElementById('theme').value = s.theme || 'system';
   document.getElementById('compact-mode').checked = !!s.compactMode;
+  document.getElementById('compact-toolbar').checked = !!s.compactToolbar;
   document.getElementById('vertical-tabs').checked = !!s.verticalTabs;
   document.getElementById('vertical-tabs-collapsed').checked = !!s.verticalTabsCollapsed;
   document.getElementById('vertical-tabs-hover').checked = s.verticalTabsExpandOnHover !== false;
@@ -252,6 +259,9 @@ async function loadSettings() {
   latestToolbarButtons = s.toolbarButtons || {};
   latestToolbarDefs = s.toolbarButtonDefs || [];
   renderToolbarButtons(latestToolbarDefs, latestToolbarButtons);
+  if (s.shortcutGroups) latestShortcutGroups = s.shortcutGroups;
+  customShortcuts = { ...(s.shortcuts || {}) };
+  renderShortcutsEditor();
   renderProtocolHandlers(s.protocolHandlers || {});
   renderInstalledApps(s.installedApps || []);
   document.getElementById('strip-tracking').checked = s.stripTracking !== false;
@@ -672,8 +682,15 @@ document.getElementById('show-home').addEventListener('change', async (e) => {
   latestToolbarButtons = { ...latestToolbarButtons, home: e.target.checked };
   renderToolbarButtons(latestToolbarDefs, latestToolbarButtons);
 });
-document.getElementById('show-bookmarks-bar').addEventListener('change', (e) =>
-  browserAPI.setSetting('showBookmarksBar', e.target.checked),
+document.getElementById('show-bookmarks-bar').addEventListener('change', (e) => {
+  browserAPI.setSetting('showBookmarksBar', e.target.checked);
+  document.getElementById('bookmarks-bar-hover-wrap').hidden = !e.target.checked;
+});
+document.getElementById('bookmarks-bar-hover').addEventListener('change', (e) =>
+  browserAPI.setSetting('bookmarksBarHover', e.target.checked),
+);
+document.getElementById('compact-toolbar').addEventListener('change', (e) =>
+  browserAPI.setSetting('compactToolbar', e.target.checked),
 );
 document.getElementById('theme').addEventListener('change', (e) => browserAPI.setSetting('theme', e.target.value));
 document.getElementById('home-page').addEventListener('change', (e) => {
@@ -1087,5 +1104,392 @@ document.getElementById('vertical-tabs-hover').addEventListener('change', (e) =>
 document.getElementById('vertical-newtab-under').addEventListener('change', (e) => browserAPI.setSetting('verticalNewTabUnderTabs', e.target.checked));
 document.getElementById('reject-cookies').addEventListener('change', (e) => browserAPI.setSetting('rejectCookies', e.target.checked));
 document.getElementById('fingerprinting-protection').addEventListener('change', (e) => browserAPI.setSetting('fingerprintingProtection', e.target.checked));
-window.addEventListener('focus', loadSettings);
+
+// ---- Keyboard Shortcuts (Phi-style full customizer)
+
+const CODE_TO_SHORTCUT_KEY = {
+  BracketLeft: '[',
+  BracketRight: ']',
+  Backslash: '\\',
+  Semicolon: ';',
+  Quote: "'",
+  Comma: ',',
+  Period: '.',
+  Slash: '/',
+  Backquote: '`',
+  Minus: '-',
+  Equal: '=',
+  Space: 'Space',
+  Tab: 'Tab',
+  Backspace: 'Backspace',
+  Delete: 'Delete',
+  Enter: 'Enter',
+  Escape: 'Esc',
+  ArrowUp: 'Up',
+  ArrowDown: 'Down',
+  ArrowLeft: 'Left',
+  ArrowRight: 'Right',
+  Home: 'Home',
+  End: 'End',
+  PageUp: 'PageUp',
+  PageDown: 'PageDown',
+};
+
+const KEY_SYMBOL_MAP = {
+  LEFT: '←',
+  RIGHT: '→',
+  UP: '↑',
+  DOWN: '↓',
+  BACKSPACE: '⌫',
+  DELETE: '⌦',
+  TAB: '⇥',
+  ENTER: '↩',
+  RETURN: '↩',
+  ESC: '⎋',
+  ESCAPE: '⎋',
+  SPACE: 'Space',
+  PLUS: '+',
+};
+
+function normalizeShortcutAcc(acc) {
+  if (!acc || typeof acc !== 'string') return '';
+  const parts = acc.split('+').map((p) => p.trim()).filter(Boolean);
+  if (!parts.length) return '';
+  let cmd = false;
+  let ctrl = false;
+  let alt = false;
+  let shift = false;
+  let key = '';
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i].toLowerCase();
+    if (p === 'cmdorctrl' || p === 'commandorcontrol' || p === 'cmd' || p === 'command' || p === 'meta' || p === 'super') {
+      cmd = true;
+    } else if (p === 'ctrl' || p === 'control') {
+      ctrl = true;
+    } else if (p === 'alt' || p === 'option') {
+      alt = true;
+    } else if (p === 'shift') {
+      shift = true;
+    } else {
+      key = parts[i];
+    }
+  }
+  if (!key) return '';
+  const ku = key.toUpperCase();
+  if (ku === 'ARROWLEFT') key = 'Left';
+  else if (ku === 'ARROWRIGHT') key = 'Right';
+  else if (ku === 'ARROWUP') key = 'Up';
+  else if (ku === 'ARROWDOWN') key = 'Down';
+  else if (ku === 'ESCAPE') key = 'Esc';
+  else if (ku === 'RETURN') key = 'Enter';
+  else if (ku === 'SPACEBAR' || key === ' ') key = 'Space';
+  else if (ku === 'PLUS') key = '=';
+  else if (key.length === 1) key = key.toUpperCase();
+  const out = [];
+  if (cmd) out.push('Cmd');
+  if (ctrl) out.push('Ctrl');
+  if (alt) out.push('Alt');
+  if (shift) out.push('Shift');
+  out.push(key);
+  return out.join('+');
+}
+
+function formatShortcutBadge(acc) {
+  const norm = normalizeShortcutAcc(acc);
+  if (!norm) return '';
+  const parts = norm.split('+');
+  const key = parts[parts.length - 1];
+  const mods = new Set(parts.slice(0, -1));
+  let out = '';
+  if (mods.has('Ctrl')) out += '⌃';
+  if (mods.has('Alt')) out += '⌥';
+  if (mods.has('Shift')) out += '⇧';
+  if (mods.has('Cmd')) out += '⌘';
+  const keySym = KEY_SYMBOL_MAP[key.toUpperCase()] || key;
+  return out + keySym;
+}
+
+function eventToShortcutAccelerator(e) {
+  if (['Meta', 'Control', 'Alt', 'Shift', 'CapsLock'].includes(e.key)) return null;
+  const parts = [];
+  if (e.metaKey) parts.push('CmdOrCtrl');
+  if (e.ctrlKey) parts.push('Ctrl');
+  if (e.altKey) parts.push('Alt');
+  if (e.shiftKey) parts.push('Shift');
+
+  let key = '';
+  const code = e.code || '';
+  if (/^Key[A-Z]$/.test(code)) {
+    key = code.slice(3);
+  } else if (/^Digit[0-9]$/.test(code)) {
+    key = code.slice(5);
+  } else if (/^F([1-9]|1\d|2[0-4])$/.test(code)) {
+    key = code;
+  } else if (CODE_TO_SHORTCUT_KEY[code]) {
+    key = CODE_TO_SHORTCUT_KEY[code];
+  } else if (e.key && e.key.length === 1) {
+    key = e.key.toUpperCase();
+  } else if (e.key) {
+    key = e.key;
+  }
+  if (!key) return null;
+  if (!parts.length && !/^F([1-9]|1\d|2[0-4])$/.test(key)) return null;
+  parts.push(key);
+  return parts.join('+');
+}
+
+let recordingShortcutId = null;
+let recordingShortcutEl = null;
+
+function stopShortcutRecording() {
+  if (!recordingShortcutId && !recordingShortcutEl) return;
+  recordingShortcutId = null;
+  if (recordingShortcutEl) {
+    recordingShortcutEl.classList.remove('recording');
+    recordingShortcutEl = null;
+  }
+  if (window.browserAPI && browserAPI.setShortcutRecording) {
+    browserAPI.setShortcutRecording(false);
+  }
+}
+
+function startShortcutRecording(el, id) {
+  if (recordingShortcutId === id) {
+    stopShortcutRecording();
+    renderShortcutsEditor();
+    return;
+  }
+  stopShortcutRecording();
+  recordingShortcutId = id;
+  recordingShortcutEl = el;
+  el.classList.add('recording');
+  el.classList.remove('unassigned');
+  el.textContent = 'Press shortcut…';
+  if (window.browserAPI && browserAPI.setShortcutRecording) {
+    browserAPI.setShortcutRecording(true);
+  }
+}
+
+function getEffectiveShortcut(item) {
+  if (Object.prototype.hasOwnProperty.call(customShortcuts, item.id)) {
+    return customShortcuts[item.id] || '';
+  }
+  return item.defaultKey || '';
+}
+
+function renderShortcutsEditor() {
+  const container = document.getElementById('shortcuts-list');
+  const restoreAllBtn = document.getElementById('shortcuts-restore-all');
+  const searchInput = document.getElementById('shortcuts-search');
+  if (!container) return;
+
+  const hasOverrides = Object.keys(customShortcuts).length > 0;
+  if (restoreAllBtn) restoreAllBtn.hidden = !hasOverrides;
+
+  // Build conflict map across all effective shortcuts
+  const byNormKey = new Map();
+  for (const group of latestShortcutGroups) {
+    for (const item of group.items || []) {
+      if (item.fixed) continue;
+      const eff = getEffectiveShortcut(item);
+      const norm = normalizeShortcutAcc(eff);
+      if (!norm) continue;
+      if (!byNormKey.has(norm)) byNormKey.set(norm, []);
+      byNormKey.get(norm).push(item);
+    }
+  }
+
+  const query = (searchInput ? searchInput.value : '').trim().toLowerCase();
+  container.textContent = '';
+  let visibleCount = 0;
+
+  for (const group of latestShortcutGroups) {
+    const matchingItems = (group.items || []).filter((item) => {
+      if (!query) return true;
+      const eff = item.fixed ? item.displayKey : getEffectiveShortcut(item);
+      const badge = item.fixed ? item.displayKey : formatShortcutBadge(eff);
+      const haystack = `${group.title} ${item.label} ${badge} ${eff}`.toLowerCase();
+      return query.split(/\s+/).every((w) => haystack.includes(w));
+    });
+    if (!matchingItems.length) continue;
+    visibleCount += matchingItems.length;
+
+    const card = document.createElement('div');
+    card.className = 'settings-card shortcuts-group-card';
+
+    const h2 = document.createElement('h2');
+    h2.textContent = group.title;
+    card.append(h2);
+
+    const rowsWrap = document.createElement('div');
+    rowsWrap.className = 'shortcuts-rows';
+
+    for (const item of matchingItems) {
+      const row = document.createElement('div');
+      row.className = 'row shortcut-row';
+
+      const main = document.createElement('div');
+      main.className = 'main shortcut-main';
+
+      const title = document.createElement('div');
+      title.className = 't';
+      title.textContent = item.label;
+      main.append(title);
+
+      const actions = document.createElement('div');
+      actions.className = 'shortcut-actions';
+
+      if (item.fixed) {
+        const kbd = document.createElement('kbd');
+        kbd.className = 'shortcut-kbd fixed';
+        kbd.textContent = item.displayKey;
+        kbd.title = 'Built-in system shortcut';
+        actions.append(kbd);
+      } else {
+        const isOverridden = Object.prototype.hasOwnProperty.call(customShortcuts, item.id);
+        const eff = getEffectiveShortcut(item);
+        const norm = normalizeShortcutAcc(eff);
+        const conflicts = norm ? (byNormKey.get(norm) || []).filter((other) => other.id !== item.id) : [];
+
+        if (conflicts.length > 0) {
+          const conflictNote = document.createElement('div');
+          conflictNote.className = 'shortcut-conflict';
+          conflictNote.textContent = `Conflicts with: ${conflicts.map((c) => c.label).join(', ')}`;
+          main.append(conflictNote);
+        }
+
+        if (isOverridden) {
+          const restoreBtn = document.createElement('button');
+          restoreBtn.type = 'button';
+          restoreBtn.className = 'shortcut-restore';
+          restoreBtn.textContent = 'Restore';
+          restoreBtn.title = `Restore default (${formatShortcutBadge(item.defaultKey) || 'None'})`;
+          restoreBtn.addEventListener('click', async () => {
+            stopShortcutRecording();
+            delete customShortcuts[item.id];
+            await browserAPI.setSetting('shortcuts', customShortcuts);
+            renderShortcutsEditor();
+          });
+          actions.append(restoreBtn);
+        }
+
+        const kbd = document.createElement('kbd');
+        kbd.className = 'editable shortcut-kbd';
+        if (!eff) {
+          kbd.classList.add('unassigned');
+          kbd.textContent = 'Add New';
+        } else {
+          kbd.textContent = formatShortcutBadge(eff);
+        }
+        if (conflicts.length > 0) {
+          kbd.classList.add('conflict');
+        }
+        if (recordingShortcutId === item.id) {
+          kbd.classList.add('recording');
+          kbd.classList.remove('unassigned');
+          kbd.textContent = 'Press shortcut…';
+          recordingShortcutEl = kbd;
+        }
+        kbd.tabIndex = 0;
+        kbd.setAttribute('role', 'button');
+        kbd.setAttribute('aria-label', `${item.label} shortcut: ${kbd.textContent}. Click to record new shortcut.`);
+        kbd.title = 'Click to record a new shortcut (⌫ to disable, Esc to cancel)';
+        kbd.addEventListener('click', (e) => {
+          e.stopPropagation();
+          startShortcutRecording(kbd, item.id);
+        });
+        kbd.addEventListener('keydown', (e) => {
+          if (!recordingShortcutId && (e.key === 'Enter' || e.key === ' ')) {
+            e.preventDefault();
+            e.stopPropagation();
+            startShortcutRecording(kbd, item.id);
+          }
+        });
+        actions.append(kbd);
+      }
+
+      row.append(main, actions);
+      rowsWrap.append(row);
+    }
+
+    card.append(rowsWrap);
+    container.append(card);
+  }
+
+  if (visibleCount === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'settings-card empty';
+    empty.textContent = 'No keyboard shortcuts match your search.';
+    container.append(empty);
+  }
+}
+
+document.getElementById('shortcuts-search')?.addEventListener('input', () => {
+  stopShortcutRecording();
+  renderShortcutsEditor();
+});
+
+document.getElementById('shortcuts-restore-all')?.addEventListener('click', async () => {
+  stopShortcutRecording();
+  customShortcuts = {};
+  await browserAPI.setSetting('shortcuts', {});
+  renderShortcutsEditor();
+});
+
+window.addEventListener(
+  'keydown',
+  async (e) => {
+    if (!recordingShortcutId) return;
+    e.preventDefault();
+    e.stopPropagation();
+
+    if (e.key === 'Escape') {
+      stopShortcutRecording();
+      renderShortcutsEditor();
+      return;
+    }
+
+    if ((e.key === 'Backspace' || e.key === 'Delete') && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+      const id = recordingShortcutId;
+      stopShortcutRecording();
+      customShortcuts[id] = '';
+      await browserAPI.setSetting('shortcuts', customShortcuts);
+      renderShortcutsEditor();
+      return;
+    }
+
+    const acc = eventToShortcutAccelerator(e);
+    if (!acc) return;
+    const id = recordingShortcutId;
+    stopShortcutRecording();
+    const groupItem = latestShortcutGroups.flatMap((g) => g.items || []).find((i) => i.id === id);
+    if (groupItem && normalizeShortcutAcc(acc) === normalizeShortcutAcc(groupItem.defaultKey)) {
+      delete customShortcuts[id];
+    } else {
+      customShortcuts[id] = acc;
+    }
+    await browserAPI.setSetting('shortcuts', customShortcuts);
+    renderShortcutsEditor();
+  },
+  true,
+);
+
+window.addEventListener('mousedown', (e) => {
+  if (!recordingShortcutId) return;
+  if (recordingShortcutEl && recordingShortcutEl.contains(e.target)) return;
+  stopShortcutRecording();
+  renderShortcutsEditor();
+});
+
+window.addEventListener('blur', () => {
+  if (recordingShortcutId) {
+    stopShortcutRecording();
+    renderShortcutsEditor();
+  }
+});
+
+window.addEventListener('focus', () => {
+  if (!recordingShortcutId) loadSettings();
+});
+
 

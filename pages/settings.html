@@ -25,6 +25,10 @@
           <svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M3 9h18M9 9v11"/></svg>
           <span>Appearance &amp; Toolbar</span>
         </button>
+        <button type="button" class="settings-tab" role="tab" aria-selected="false" data-tab="shortcuts">
+          <svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="2" y="5" width="20" height="14" rx="2.5"/><path d="M6 9h2M10 9h2M14 9h2M18 9h.01M6 12h.01M10 12h4M18 12h.01M8 15h8"/></svg>
+          <span>Keyboard Shortcuts</span>
+        </button>
         <button type="button" class="settings-tab" role="tab" aria-selected="false" data-tab="privacy">
           <svg class="tab-ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7.5 3v5.8c0 4.7-3.2 8.8-7.5 10.2-4.3-1.4-7.5-5.5-7.5-10.2V6z"/></svg>
           <span>Privacy &amp; Security</span>
@@ -142,7 +146,9 @@
             </div>
           </div>
           <label class="check"><input id="compact-mode" type="checkbox"> Compact mode (slim tab strip and toolbar)</label>
+          <label class="check"><input id="compact-toolbar" type="checkbox"> Compact toolbar (slim buttons and address bar)</label>
           <label class="check"><input id="show-bookmarks-bar" type="checkbox"> Show Bookmarks bar (<kbd>⇧⌘B</kbd>)</label>
+          <label class="check" id="bookmarks-bar-hover-wrap" style="margin-inline-start: 24px;"><input id="bookmarks-bar-hover" type="checkbox"> Show Bookmarks bar only on hover</label>
           <label class="check"><input id="show-home" type="checkbox"> Show Home button in the toolbar</label>
           <div class="homepage">
             <input id="home-page" aria-label="Home page" type="text" placeholder="Home page (empty = New Tab page)" spellcheck="false">
@@ -170,8 +176,25 @@
         <div class="settings-card">
           <h2>Tabs and windows</h2>
           <label class="check"><input id="confirm-close" type="checkbox"> Ask before closing a window or quitting with several tabs open</label>
-          <p class="hint"><a href="browser://shortcuts/">Customize keyboard shortcuts →</a></p>
+          <p class="hint"><a href="#shortcuts">Customize keyboard shortcuts →</a></p>
         </div>
+      </section>
+
+      <!-- ==================== TAB 2B: KEYBOARD SHORTCUTS ==================== -->
+      <section class="settings-panel" data-tab="shortcuts" role="tabpanel" hidden>
+        <div class="settings-panel-head shortcuts-panel-head">
+          <div>
+            <div class="settings-panel-title">Keyboard Shortcuts</div>
+            <div class="settings-panel-desc">Click any shortcut to record a new key combination. Press <kbd>⌫</kbd> while recording to disable a shortcut, or <kbd>Esc</kbd> to cancel.</div>
+          </div>
+          <button type="button" id="shortcuts-restore-all" hidden>Restore all shortcuts</button>
+        </div>
+
+        <div class="shortcuts-toolbar">
+          <input id="shortcuts-search" aria-label="Find shortcut keys" type="search" placeholder="Find shortcut keys…" autocomplete="off" spellcheck="false">
+        </div>
+
+        <div id="shortcuts-list" class="shortcuts-list"></div>
       </section>
 
       <!-- ==================== TAB 3: PRIVACY & SECURITY ==================== -->

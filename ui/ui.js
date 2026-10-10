@@ -318,6 +318,11 @@ function render(state) {
   if (state.uiPrefs) {
     document.documentElement.dataset.accent = state.uiPrefs.accentColor || 'violet';
     document.body.classList.toggle('compact', !!state.uiPrefs.compactMode);
+    document.body.classList.toggle('compact-toolbar', !!(state.uiPrefs.compactToolbar || state.uiPrefs.compactMode));
+    isBookmarksHoverMode = !!state.uiPrefs.bookmarksBarHover;
+    isBookmarksCurrentlyHovered = !!state.uiPrefs.bookmarksBarHovered;
+    document.body.classList.toggle('bmbar-hover-mode', isBookmarksHoverMode);
+    document.body.classList.toggle('bmbar-hovered', isBookmarksCurrentlyHovered);
     const vert = !!state.uiPrefs.verticalTabs;
     const collapsed = vert && !!state.uiPrefs.verticalTabsCollapsed;
     const expandHover = state.uiPrefs.verticalTabsExpandOnHover !== false;
@@ -1283,17 +1288,96 @@ api.onDownloadStarted(() => {
 
 let bmDragId = null;
 let lastBarJson = '';
+let isBookmarksHoverMode = false;
+let isBookmarksCurrentlyHovered = false;
+let bmHoverLeaveTimer = null;
+let overflowBookmarkIds = [];
+
+function triggerBookmarksHover(hovered) {
+  if (!isBookmarksHoverMode) return;
+  clearTimeout(bmHoverLeaveTimer);
+  if (hovered) {
+    if (!isBookmarksCurrentlyHovered) {
+      isBookmarksCurrentlyHovered = true;
+      api.setBookmarksBarHovered(true);
+    }
+  } else {
+    bmHoverLeaveTimer = setTimeout(() => {
+      isBookmarksCurrentlyHovered = false;
+      api.setBookmarksBarHovered(false);
+    }, 280);
+  }
+}
+
+function updateBookmarkOverflow() {
+  const bar = $('bmbar');
+  const itemsWrap = $('bmbar-items');
+  const overflowBtn = $('bmbar-overflow');
+  if (!bar || bar.hidden || !itemsWrap) return;
+
+  const itemEls = Array.from(itemsWrap.children).filter((el) => el.classList.contains('bm'));
+  if (itemEls.length === 0) {
+    if (overflowBtn) overflowBtn.hidden = true;
+    overflowBookmarkIds = [];
+    return;
+  }
+
+  // Restore visibility to measure true widths
+  for (const el of itemEls) el.style.display = '';
+  if (overflowBtn) overflowBtn.hidden = true;
+
+  const availWidth = bar.clientWidth - 16;
+  const totalWidth = itemsWrap.scrollWidth;
+
+  if (totalWidth <= availWidth) {
+    if (overflowBtn) overflowBtn.hidden = true;
+    overflowBookmarkIds = [];
+    return;
+  }
+
+  if (overflowBtn) overflowBtn.hidden = false;
+  const btnWidth = (overflowBtn && overflowBtn.offsetWidth) || 24;
+  const maxW = availWidth - btnWidth - 4;
+
+  let currentW = 0;
+  let overflowing = false;
+  const overflowIds = [];
+
+  for (let i = 0; i < itemEls.length; i++) {
+    const el = itemEls[i];
+    const elW = el.offsetWidth + 2;
+    if (!overflowing && currentW + elW <= maxW) {
+      currentW += elW;
+      el.style.display = '';
+    } else {
+      overflowing = true;
+      el.style.display = 'none';
+      if (el.dataset.id) overflowIds.push(el.dataset.id);
+    }
+  }
+
+  overflowBookmarkIds = overflowIds;
+  if (overflowBtn) overflowBtn.hidden = overflowIds.length === 0;
+}
 
 function renderBookmarkBar(items) {
   const bar = $('bmbar');
-  bar.hidden = !items;
-  if (!items) return;
+  const itemsWrap = $('bmbar-items') || bar;
+  const shouldShow = !!items && (!isBookmarksHoverMode || isBookmarksCurrentlyHovered);
+  bar.hidden = !shouldShow;
+  if (!items || !shouldShow) return;
   const json = JSON.stringify(items);
-  if (json === lastBarJson) return; // don't rebuild under the cursor on every tab update
+  if (json === lastBarJson) {
+    updateBookmarkOverflow();
+    return; // don't rebuild under the cursor on every tab update
+  }
   lastBarJson = json;
-  bar.textContent = '';
+  itemsWrap.textContent = '';
   if (items.length === 0) {
-    bar.append(el('span', 'hint', 'Bookmarks you add to the bookmarks bar appear here.'));
+    itemsWrap.append(el('span', 'hint', 'Bookmarks you add to the bookmarks bar appear here.'));
+    if ($('bmbar-overflow')) $('bmbar-overflow').hidden = true;
+    overflowBookmarkIds = [];
+    return;
   }
   items.forEach((b, i) => {
     const item = el('button', 'bm');
@@ -1331,7 +1415,7 @@ function renderBookmarkBar(items) {
     });
     item.addEventListener('dragend', () => {
       bmDragId = null;
-      for (const x of bar.querySelectorAll('.bm')) x.classList.remove('drop-before', 'drop-after', 'drop-into');
+      for (const x of itemsWrap.querySelectorAll('.bm')) x.classList.remove('drop-before', 'drop-after', 'drop-into');
     });
     item.addEventListener('dragover', (e) => {
       if (!bmDragId || bmDragId === b.id) return;
@@ -1349,12 +1433,43 @@ function renderBookmarkBar(items) {
       if (item.classList.contains('drop-into')) api.moveBookmark(bmDragId, b.id);
       else api.moveBookmark(bmDragId, 'bar', i + (item.classList.contains('drop-after') ? 1 : 0));
     });
-    bar.append(item);
+    itemsWrap.append(item);
   });
+  updateBookmarkOverflow();
 }
+
 $('bmbar').addEventListener('contextmenu', (e) => {
   e.preventDefault();
   api.bookmarkContextMenu(null);
+});
+
+$('bmbar-overflow')?.addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (!overflowBookmarkIds.length) return;
+  const rect = $('bmbar-overflow').getBoundingClientRect();
+  api.bookmarkOverflowMenu(overflowBookmarkIds, {
+    x: rect.left,
+    y: rect.top,
+    width: rect.width,
+    height: rect.height,
+    bottom: rect.bottom,
+  });
+});
+
+if (window.ResizeObserver && $('bmbar')) {
+  new ResizeObserver(() => requestAnimationFrame(updateBookmarkOverflow)).observe($('bmbar'));
+}
+
+$('toolbar').addEventListener('mouseenter', () => triggerBookmarksHover(true));
+$('toolbar').addEventListener('mouseleave', (e) => {
+  if (e.relatedTarget && ($('bmbar').contains(e.relatedTarget) || e.relatedTarget === $('bmbar'))) return;
+  triggerBookmarksHover(false);
+});
+
+$('bmbar').addEventListener('mouseenter', () => triggerBookmarksHover(true));
+$('bmbar').addEventListener('mouseleave', (e) => {
+  if (e.relatedTarget && ($('toolbar').contains(e.relatedTarget) || e.relatedTarget === $('toolbar'))) return;
+  triggerBookmarksHover(false);
 });
 
 // ---- star / edit bookmark popup

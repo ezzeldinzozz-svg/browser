@@ -211,6 +211,8 @@ function defaultSettings() {
     fingerprintingProtection: true, // canvas/WebGL/audio noise + hardwareConcurrency clamping
     accentColor: 'violet', // 'violet' | 'blue' | 'emerald' | 'amber' | 'rose' | 'cyan'
     compactMode: false, // compact toolbar & tab strip
+    compactToolbar: false, // compact toolbar only (slim buttons and address bar)
+    bookmarksBarHover: false, // show bookmarks bar only on hover
     verticalTabs: false, // show tabs in a left sidebar
     verticalTabsCollapsed: false, // collapse vertical sidebar to icons only
     verticalTabsExpandOnHover: true, // expand collapsed vertical sidebar on hover (Brave style)
@@ -738,6 +740,9 @@ function sendTabs(w) {
     uiPrefs: {
       accentColor: store.data.settings.accentColor || 'violet',
       compactMode: !!store.data.settings.compactMode,
+      compactToolbar: !!store.data.settings.compactToolbar,
+      bookmarksBarHover: !!store.data.settings.bookmarksBarHover,
+      bookmarksBarHovered: !!w.bookmarksBarHovered,
       verticalTabs: !!store.data.settings.verticalTabs,
       verticalTabsCollapsed: !!store.data.settings.verticalTabsCollapsed,
       verticalTabsExpandOnHover: store.data.settings.verticalTabsExpandOnHover !== false,
@@ -844,9 +849,12 @@ const sendAll = () => windows.forEach(sendTabs);
 
 function chromeHeight(w) {
   const compact = !!(store && store.data.settings.compactMode);
+  const compactTb = compact || !!(store && store.data.settings.compactToolbar);
   const vertical = !!(store && store.data.settings.verticalTabs);
-  const baseH = vertical ? (compact ? COMPACT_TOOLBAR_ONLY_H : TOOLBAR_ONLY_H) : (compact ? COMPACT_CHROME_H : CHROME_H);
-  const bmH = store && store.data.settings.showBookmarksBar ? BOOKMARKS_BAR_H : 0;
+  const tbH = compactTb ? COMPACT_TOOLBAR_ONLY_H : TOOLBAR_ONLY_H;
+  const baseH = vertical ? tbH : (compact ? COMPACT_CHROME_H : (compactTb ? (38 + COMPACT_TOOLBAR_ONLY_H) : CHROME_H));
+  const showBm = store && store.data.settings.showBookmarksBar && (!store.data.settings.bookmarksBarHover || w.bookmarksBarHovered);
+  const bmH = showBm ? BOOKMARKS_BAR_H : 0;
   const tab = activeTab(w);
   if (!tab) return baseH + bmH;
   if (tab.fullscreen) return 0;
@@ -1034,6 +1042,7 @@ function createWindow({ private: isPrivate = false, session: saved = null, ses: 
   cwc.setWindowOpenHandler(() => ({ action: 'deny' }));
   cwc.on('will-navigate', (e) => e.preventDefault());
   cwc.on('context-menu', (_e, params) => showChromeMenu(w, params));
+  cwc.on('before-input-event', (e, input) => handleShortcutBeforeInput(w, e, input));
   cwc.loadURL(UI_URL);
   cwc.once('did-finish-load', () => sendTabs(w));
 
@@ -1467,6 +1476,7 @@ function createTab(w, url, { background = false, after = null, history = null, l
   });
   // A page may start one download on its own; more need the user's OK unless they clicked or
   // typed in between (like Chrome).
+  wc.on('before-input-event', (e, input) => handleShortcutBeforeInput(tab.w, e, input));
   wc.on('input-event', (_e, input) => {
     if (input.type === 'mouseDown' || input.type === 'rawKeyDown' || input.type === 'keyDown' || input.type === 'touchStart') {
       tab.pageDownloads = 0;
@@ -2239,18 +2249,20 @@ function showTabMenu(w, id) {
   const vis = visibleTabs(w);
   const idx = vis.indexOf(tab);
   const muted = tab.wc.isAudioMuted();
+  const acc = (aid, fallback) => getShortcutAccelerator(aid, fallback);
   Menu.buildFromTemplate([
     {
       label: 'New Tab to the Right',
+      accelerator: acc('new-tab-right', 'Alt+CmdOrCtrl+T'),
       click: () => {
         const t = createTab(w, internalURL('newtab'));
         moveTab(w, t.id, w.tabs.indexOf(tab) + 1);
       },
     },
     { type: 'separator' },
-    { label: 'Reload', click: () => reloadTab(tab) },
-    { label: 'Duplicate', click: () => duplicateTab(tab) },
-    { label: tab.pinned ? 'Unpin' : 'Pin', click: () => setPinned(tab, !tab.pinned) },
+    { label: 'Reload', accelerator: acc('reload', 'CmdOrCtrl+R'), click: () => reloadTab(tab) },
+    { label: 'Duplicate', accelerator: acc('duplicate-tab', 'CmdOrCtrl+Shift+K'), click: () => duplicateTab(tab) },
+    { label: tab.pinned ? 'Unpin' : 'Pin', accelerator: acc('pin-tab', ''), click: () => setPinned(tab, !tab.pinned) },
     ...groupSubmenuForTabs(w, [tab]),
     {
       label: w.splitId === tab.id || (w.splitId && tab.id === w.activeId)
@@ -2258,6 +2270,7 @@ function showTabMenu(w, id) {
         : tab.id === w.activeId
         ? 'Open Split View'
         : 'Split View with Active Tab',
+      accelerator: acc('split-view', 'Alt+CmdOrCtrl+S'),
       click: () => toggleSplitView(w, tab.id === w.activeId ? null : tab.id),
     },
     ...(w.workspaces && w.workspaces.length > 1 && !tab.pinned
@@ -2283,20 +2296,34 @@ function showTabMenu(w, id) {
           },
         ]
       : []),
-    { label: muted ? 'Unmute Tab' : 'Mute Tab', click: () => toggleMute(tab) },
-    ...(siteOf(tab.wc.getURL()) ? [{ label: siteMuted(tab.wc.getURL()) ? `Unmute ${siteOf(tab.wc.getURL())}` : `Mute ${siteOf(tab.wc.getURL())}`, click: () => toggleSiteMute(tab) }] : []),
+    { label: muted ? 'Unmute Tab' : 'Mute Tab', accelerator: acc('mute-tab', 'Alt+CmdOrCtrl+M'), click: () => toggleMute(tab) },
+    ...(siteOf(tab.wc.getURL())
+      ? [
+          {
+            label: siteMuted(tab.wc.getURL()) ? `Unmute ${siteOf(tab.wc.getURL())}` : `Mute ${siteOf(tab.wc.getURL())}`,
+            accelerator: acc('mute-site', ''),
+            click: () => toggleSiteMute(tab),
+          },
+        ]
+      : []),
     { type: 'separator' },
-    { label: 'Move to New Window', enabled: w.tabs.length > 1, click: () => moveTabToNewWindow(tab) },
+    { label: 'Move to New Window', accelerator: acc('move-tab-window', ''), enabled: w.tabs.length > 1, click: () => moveTabToNewWindow(tab) },
     { type: 'separator' },
-    { label: 'Close', click: () => closeTab(w, tab.id) },
-    { label: 'Close Other Tabs', enabled: vis.length > 1, click: () => closeTabs(w, (t) => t === tab || t.pinned || !vis.includes(t)) },
+    { label: 'Close', accelerator: acc('close-tab', 'CmdOrCtrl+W'), click: () => closeTab(w, tab.id) },
+    {
+      label: 'Close Other Tabs',
+      accelerator: acc('close-other-tabs', ''),
+      enabled: vis.length > 1,
+      click: () => closeTabs(w, (t) => t === tab || t.pinned || !vis.includes(t)),
+    },
     {
       label: 'Close Tabs to the Right',
+      accelerator: acc('close-tabs-right', ''),
       enabled: idx !== -1 && idx < vis.length - 1,
       click: () => closeTabs(w, (t) => !vis.includes(t) || vis.indexOf(t) <= vis.indexOf(tab) || t.pinned),
     },
     { type: 'separator' },
-    { label: 'Reopen Closed Tab', enabled: w.closedTabs.length > 0, click: () => reopenClosedTab(w) },
+    { label: 'Reopen Closed Tab', accelerator: acc('reopen-tab', 'CmdOrCtrl+Shift+T'), enabled: w.closedTabs.length > 0, click: () => reopenClosedTab(w) },
   ]).popup({ window: w.win });
 }
 
@@ -2377,6 +2404,19 @@ function showBookmarkMenu(w, id) {
       },
     },
     { label: 'Bookmark Manager', click: () => openInternalPage(w, 'bookmarks') },
+    {
+      label: 'Show Bookmarks Bar on Hover',
+      type: 'checkbox',
+      checked: !!store.data.settings.bookmarksBarHover,
+      click: () => {
+        store.data.settings.bookmarksBarHover = !store.data.settings.bookmarksBarHover;
+        store.save();
+        windows.forEach((win) => {
+          layout(win);
+          sendTabs(win);
+        });
+      },
+    },
     { label: 'Hide Bookmarks Bar', click: () => setBookmarksBar(false) },
   ];
   let template;
@@ -4107,6 +4147,17 @@ function resolveDangerousDownload(id, decision) {
 }
 
 function openInternalPage(w, name) {
+  if (name === 'shortcuts') {
+    const url = internalURL('settings') + '#shortcuts';
+    const existing = w.tabs.find((t) => t.wc.getURL().startsWith(internalURL('settings')));
+    if (existing) {
+      selectTab(w, existing.id);
+      existing.wc.loadURL(url).catch(() => {});
+    } else {
+      createTab(w, url);
+    }
+    return;
+  }
   const url = internalURL(name);
   const existing = w.tabs.find((t) => t.wc.getURL() === url);
   if (existing) selectTab(w, existing.id);
@@ -4936,6 +4987,33 @@ function setupIpc() {
           buildMenu();
         },
       },
+      {
+        label: 'Compact Toolbar',
+        type: 'checkbox',
+        checked: !!store.data.settings.compactToolbar,
+        click: () => {
+          store.data.settings.compactToolbar = !store.data.settings.compactToolbar;
+          store.save();
+          windows.forEach((win) => {
+            layout(win);
+            sendTabs(win);
+          });
+          buildMenu();
+        },
+      },
+      {
+        label: 'Show Bookmarks Bar on Hover',
+        type: 'checkbox',
+        checked: !!store.data.settings.bookmarksBarHover,
+        click: () => {
+          store.data.settings.bookmarksBarHover = !store.data.settings.bookmarksBarHover;
+          store.save();
+          windows.forEach((win) => {
+            layout(win);
+            sendTabs(win);
+          });
+        },
+      },
       { type: 'separator' },
       {
         label: 'Customize Toolbar in Settings…',
@@ -5098,6 +5176,7 @@ function setupIpc() {
     ...store.data.settings,
     toolbarButtons: toolbarButtonsState(),
     toolbarButtonDefs: Object.entries(TOOLBAR_BUTTON_LABELS).map(([id, label]) => ({ id, label, defaultOn: !!TOOLBAR_BUTTON_DEFAULTS[id] })),
+    shortcutGroups: SHORTCUT_GROUPS,
     accentColors: ACCENT_COLORS.map((id) => ({ id, hex: GROUP_COLORS[id] })),
     adblockAllowlist: store.data.adblockAllowlist,
     searchEngines: allEngines().map((e) => ({ id: e.id, name: e.name, keyword: e.keyword, url: e.url, custom: !!e.custom })),
@@ -5109,6 +5188,10 @@ function setupIpc() {
     uiLanguages: Object.entries(UI_LANGUAGES).map(([id, name]) => ({ id, name })),
     uiLanguageNow: uiLang,
   }));
+  handle('shortcuts:recording', fromInternal, (tab, active) => {
+    shortcutRecordingWc = active && tab && !tab.wc.isDestroyed() ? tab.wc : null;
+    buildMenu();
+  });
   handle('protocol:remove', fromInternal, (_tab, scheme) => {
     if (store.data.settings.protocolHandlers) {
       delete store.data.settings.protocolHandlers[String(scheme || '')];
@@ -5160,6 +5243,8 @@ function setupIpc() {
         'rejectCookies',
         'fingerprintingProtection',
         'compactMode',
+        'compactToolbar',
+        'bookmarksBarHover',
         'verticalTabs',
         'verticalTabsCollapsed',
         'verticalTabsExpandOnHover',
@@ -5206,7 +5291,7 @@ function setupIpc() {
     if (key === 'dns' || key === 'dnsCustom') applyDns();
     if (key === 'theme') nativeTheme.themeSource = value;
     if (key === 'historyKeepDays') pruneOldHistory();
-    if (['compactMode', 'verticalTabs', 'verticalTabsCollapsed', 'verticalTabsExpandOnHover', 'verticalNewTabUnderTabs', 'showBookmarksBar'].includes(key)) {
+    if (['compactMode', 'compactToolbar', 'verticalTabs', 'verticalTabsCollapsed', 'verticalTabsExpandOnHover', 'verticalNewTabUnderTabs', 'showBookmarksBar', 'bookmarksBarHover'].includes(key)) {
       windows.forEach((w) => {
         layout(w);
         sendTabs(w);
@@ -5391,6 +5476,67 @@ function setupIpc() {
     const f = bookmarks.find(String(id));
     if (f && f.node.type === 'folder') Menu.buildFromTemplate(folderMenuTemplate(w, f.node)).popup({ window: w.win });
   });
+  handle('bm:overflow-menu', fromChrome, (w, ids, rect) => {
+    if (!liveWindow(w) || !Array.isArray(ids) || ids.length === 0) return;
+    const template = ids
+      .map((id) => {
+        const f = bookmarks.find(String(id));
+        if (!f) return null;
+        const n = f.node;
+        if (n.type === 'folder') {
+          return {
+            label: trimLabel(n.title, 50),
+            submenu: folderMenuTemplate(w, n),
+          };
+        }
+        return {
+          label: trimLabel(n.title || n.url, 50),
+          click: () => openBookmarkUrl(w, n.url, 'current'),
+        };
+      })
+      .filter(Boolean);
+
+    if (template.length === 0) return;
+
+    template.push({ type: 'separator' });
+    template.push({
+      label: 'Open All in Tabs',
+      click: () => {
+        for (const id of ids) {
+          const f = bookmarks.find(String(id));
+          if (f && f.node.type === 'bookmark') {
+            createTab(w, f.node.url, { background: true });
+          }
+        }
+      },
+    });
+    template.push({
+      label: 'Bookmark Manager',
+      click: () => openInternalPage(w, 'bookmarks'),
+    });
+
+    const menu = Menu.buildFromTemplate(template);
+    const x = rect && typeof rect.x === 'number' ? Math.round(rect.x) : undefined;
+    const y = rect && typeof rect.bottom === 'number' ? Math.round(rect.bottom) : undefined;
+    w.inBookmarkMenu = true;
+    menu.popup({
+      window: w.win,
+      x,
+      y,
+      callback: () => {
+        w.inBookmarkMenu = false;
+      },
+    });
+  });
+  handle('bmbar:hover', fromChrome, (w, hovered) => {
+    if (!liveWindow(w)) return;
+    const shouldHover = !!hovered;
+    if (w.bookmarksBarHovered === shouldHover) return;
+    if (!shouldHover && w.inBookmarkMenu) return;
+    w.bookmarksBarHovered = shouldHover;
+    layout(w);
+    sendTabs(w);
+  });
   handle('bm:context', fromChrome, (w, id) => showBookmarkMenu(w, id ? String(id) : null));
 }
 
@@ -5449,15 +5595,535 @@ function bookmarkMenuItems(inWindow) {
   return items;
 }
 
+// ---------------------------------------------------------------- keyboard shortcuts & application menu
+
+const SHORTCUT_GROUPS = [
+  {
+    category: 'App',
+    items: [
+      { id: 'settings', label: 'Settings', defaultAcc: 'CmdOrCtrl+,', keywords: ['preferences', 'options', 'configure'] },
+      { id: 'shortcuts-page', label: 'Keyboard Shortcuts', defaultAcc: 'CmdOrCtrl+/', keywords: ['hotkeys', 'keybindings', 'keys'] },
+    ],
+  },
+  {
+    category: 'File',
+    items: [
+      { id: 'new-tab', label: 'New Tab', defaultAcc: 'CmdOrCtrl+T', keywords: ['open tab', 'create tab'] },
+      { id: 'new-tab-right', label: 'New Tab to the Right', defaultAcc: 'Alt+CmdOrCtrl+T', keywords: ['adjacent tab', 'next to current'] },
+      { id: 'new-window', label: 'New Window', defaultAcc: 'CmdOrCtrl+N', keywords: ['open window'] },
+      { id: 'private-window', label: 'New Private Window', defaultAcc: 'CmdOrCtrl+Shift+N', keywords: ['incognito', 'private browsing'] },
+      { id: 'reopen-tab', label: 'Reopen Closed Tab', defaultAcc: 'CmdOrCtrl+Shift+T', keywords: ['restore tab', 'undo close tab'] },
+      { id: 'open-file', label: 'Open File…', defaultAcc: 'CmdOrCtrl+O', keywords: ['local file', 'pdf', 'html'] },
+      { id: 'focus-address', label: 'Open Location (Focus Address Bar)', defaultAcc: 'CmdOrCtrl+L', keywords: ['omnibox', 'url bar', 'search bar', 'address'] },
+      { id: 'close-tab', label: 'Close Tab', defaultAcc: 'CmdOrCtrl+W', keywords: ['close current tab'] },
+      { id: 'close-window', label: 'Close Window', defaultAcc: 'CmdOrCtrl+Shift+W', keywords: ['close browser window'] },
+      { id: 'save-page', label: 'Save Page As…', defaultAcc: 'CmdOrCtrl+S', keywords: ['download page', 'html', 'pdf', 'mhtml'] },
+      ...(isMac ? [{ id: 'share-page', label: 'Share Page…', defaultAcc: 'Ctrl+Alt+S', keywords: ['airdrop', 'send link', 'share'] }] : []),
+      { id: 'print', label: 'Print…', defaultAcc: 'CmdOrCtrl+P', keywords: ['print page', 'pdf'] },
+    ],
+  },
+  {
+    category: 'Edit',
+    items: [
+      { id: 'copy-url', label: 'Copy Current URL', defaultAcc: 'CmdOrCtrl+Shift+C', keywords: ['copy link', 'copy address', 'url'] },
+      { id: 'find', label: 'Find in Page…', defaultAcc: 'CmdOrCtrl+F', keywords: ['search page', 'find text'] },
+      { id: 'find-next', label: 'Find Next Match', defaultAcc: 'CmdOrCtrl+G', keywords: ['next result', 'find forward'] },
+      { id: 'find-prev', label: 'Find Previous Match', defaultAcc: 'CmdOrCtrl+Shift+G', keywords: ['previous result', 'find backward'] },
+      { id: 'find-selection', label: 'Use Selection for Find', defaultAcc: 'CmdOrCtrl+E', keywords: ['selected text', 'find selection'] },
+    ],
+  },
+  {
+    category: 'View & Sidebar',
+    items: [
+      { id: 'vertical-tabs', label: 'Toggle Vertical Tabs Sidebar', defaultAcc: 'Alt+CmdOrCtrl+V', keywords: ['sidebar', 'vertical tabs', 'left tabs'] },
+      { id: 'toggle-sidebar-collapse', label: 'Collapse or Expand Sidebar', defaultAcc: 'Ctrl+Shift+S', keywords: ['collapse sidebar', 'icons only', 'expand sidebar'] },
+      { id: 'split-view', label: 'Split View (Side by Side)', defaultAcc: 'Alt+CmdOrCtrl+S', keywords: ['dual pane', 'side by side', 'split'] },
+      { id: 'stop', label: 'Stop Loading Page', defaultAcc: isMac ? 'Cmd+.' : 'Esc', keywords: ['cancel load', 'stop'] },
+      { id: 'reload', label: 'Reload Page', defaultAcc: 'CmdOrCtrl+R', keywords: ['refresh'] },
+      { id: 'hard-reload', label: 'Hard Reload (Bypass Cache)', defaultAcc: 'CmdOrCtrl+Shift+R', keywords: ['force refresh', 'clear cache reload'] },
+      { id: 'zoom-in', label: 'Zoom In', defaultAcc: 'CmdOrCtrl+Plus', keywords: ['enlarge', 'bigger', 'zoom plus'] },
+      { id: 'zoom-out', label: 'Zoom Out', defaultAcc: 'CmdOrCtrl+-', keywords: ['shrink', 'smaller', 'zoom minus'] },
+      { id: 'zoom-reset', label: 'Actual Size (Reset Zoom)', defaultAcc: 'CmdOrCtrl+0', keywords: ['100%', 'normal zoom', 'default zoom'] },
+      { id: 'reader', label: 'Toggle Reader View', defaultAcc: 'Alt+CmdOrCtrl+R', keywords: ['reading mode', 'article', 'distraction free'] },
+      { id: 'read-aloud', label: 'Read Page Aloud', defaultAcc: 'Alt+Shift+S', keywords: ['speech', 'tts', 'listen'] },
+      { id: 'translate', label: 'Translate Page', defaultAcc: 'Alt+Shift+T', keywords: ['language', 'translate'] },
+      { id: 'screenshot', label: 'Take Screenshot', defaultAcc: 'CmdOrCtrl+Shift+S', keywords: ['capture page', 'screen capture', 'snapshot'] },
+      { id: 'pip', label: 'Picture in Picture', defaultAcc: 'Alt+CmdOrCtrl+P', keywords: ['floating video', 'pip'] },
+      { id: 'view-source', label: 'View Page Source', defaultAcc: 'Alt+CmdOrCtrl+U', keywords: ['html source', 'code'] },
+      { id: 'devtools', label: 'Open Developer Tools', defaultAcc: isMac ? 'Alt+Cmd+I' : 'F12', keywords: ['inspector', 'devtools', 'console'] },
+      { id: 'devtools-inspect', label: 'Inspect Element', defaultAcc: 'Alt+CmdOrCtrl+C', keywords: ['element picker', 'dom inspect'] },
+      { id: 'devtools-console', label: 'Developer Tools Console', defaultAcc: 'Alt+CmdOrCtrl+J', keywords: ['javascript console', 'devtools'] },
+    ],
+  },
+  {
+    category: 'History',
+    items: [
+      { id: 'back', label: 'Back', defaultAcc: isMac ? 'Cmd+[' : 'Alt+Left', keywords: ['previous page', 'navigate back'] },
+      { id: 'forward', label: 'Forward', defaultAcc: isMac ? 'Cmd+]' : 'Alt+Right', keywords: ['next page', 'navigate forward'] },
+      { id: 'home', label: 'Home Page', defaultAcc: isMac ? 'Cmd+Shift+H' : 'Alt+Home', keywords: ['go home', 'start page'] },
+      { id: 'history', label: 'Show History', defaultAcc: isMac ? 'Cmd+Y' : 'Ctrl+H', keywords: ['browsing history', 'recent pages'] },
+      { id: 'clear-data', label: 'Clear Browsing Data…', defaultAcc: 'CmdOrCtrl+Shift+Backspace', keywords: ['delete cookies', 'clear cache', 'wipe history'] },
+    ],
+  },
+  {
+    category: 'Bookmarks, Downloads & Window',
+    items: [
+      { id: 'bookmark', label: 'Bookmark This Page', defaultAcc: 'CmdOrCtrl+D', keywords: ['star page', 'save bookmark'] },
+      { id: 'bookmark-all', label: 'Bookmark All Tabs', defaultAcc: 'CmdOrCtrl+Shift+D', keywords: ['save all tabs', 'folder'] },
+      { id: 'bookmarks-bar', label: 'Show or Hide Bookmarks Bar', defaultAcc: 'CmdOrCtrl+Shift+B', keywords: ['favorites bar', 'toggle bookmarks'] },
+      { id: 'bookmarks', label: 'Bookmark Manager', defaultAcc: 'CmdOrCtrl+Shift+O', keywords: ['organize bookmarks', 'library'] },
+      { id: 'downloads', label: 'Show Downloads', defaultAcc: isMac ? 'Alt+Cmd+L' : 'Ctrl+J', keywords: ['downloaded files', 'transfers'] },
+      { id: 'extensions', label: 'Manage Extensions', defaultAcc: 'CmdOrCtrl+Shift+E', keywords: ['addons', 'plugins', 'chrome web store'] },
+      { id: 'task-manager', label: 'Task Manager', defaultAcc: 'Shift+Esc', keywords: ['memory usage', 'cpu', 'processes'] },
+    ],
+  },
+  {
+    category: 'Tab',
+    items: [
+      { id: 'next-tab', label: 'Select Next Tab', defaultAcc: isMac ? 'Cmd+Shift+]' : 'Ctrl+Tab', keywords: ['switch tab forward', 'cycle tab'] },
+      { id: 'prev-tab', label: 'Select Previous Tab', defaultAcc: isMac ? 'Cmd+Shift+[' : 'Ctrl+Shift+Tab', keywords: ['switch tab backward', 'cycle tab'] },
+      { id: 'tab-search', label: 'Search Open Tabs', defaultAcc: 'CmdOrCtrl+Shift+A', keywords: ['find tab', 'switch to tab'] },
+      { id: 'duplicate-tab', label: 'Duplicate Tab', defaultAcc: 'CmdOrCtrl+Shift+K', keywords: ['clone tab', 'copy tab'] },
+      { id: 'pin-tab', label: 'Pin or Unpin Tab', defaultAcc: '', keywords: ['pin tab', 'unpin tab'] },
+      { id: 'mute-tab', label: 'Mute or Unmute Tab', defaultAcc: 'Alt+CmdOrCtrl+M', keywords: ['silence tab', 'audio'] },
+      { id: 'mute-site', label: 'Mute or Unmute Site', defaultAcc: '', keywords: ['silence domain', 'mute website'] },
+      { id: 'close-other-tabs', label: 'Close Other Tabs', defaultAcc: '', keywords: ['close all except current'] },
+      { id: 'close-tabs-right', label: 'Close Tabs to the Right', defaultAcc: '', keywords: ['close right tabs'] },
+      { id: 'move-tab-window', label: 'Move Tab to New Window', defaultAcc: '', keywords: ['detach tab', 'tear off tab'] },
+      ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({
+        id: `tab-${n}`,
+        label: `Select Tab ${n}`,
+        defaultAcc: `CmdOrCtrl+${n}`,
+        keywords: ['select', `tab${n}`],
+      })),
+      { id: 'tab-9', label: 'Select Last Tab', defaultAcc: 'CmdOrCtrl+9', keywords: ['select', 'last tab', 'tab9'] },
+    ],
+  },
+];
+
+const SHORTCUT_DEFAULTS = Object.fromEntries(SHORTCUT_GROUPS.flatMap((g) => g.items.map((item) => [item.id, item.defaultAcc])));
+
+let shortcutRecordingWc = null;
+let lastShortcutExecTime = 0;
+let lastShortcutExecId = '';
+
+function isShortcutRecordingActive() {
+  if (!shortcutRecordingWc) return false;
+  if (shortcutRecordingWc.isDestroyed()) {
+    shortcutRecordingWc = null;
+    return false;
+  }
+  return true;
+}
+
+function getShortcutAccelerator(id, fallback = SHORTCUT_DEFAULTS[id] || '') {
+  if (isShortcutRecordingActive()) return undefined;
+  const map = store && store.data.settings.shortcuts;
+  if (map && Object.prototype.hasOwnProperty.call(map, id)) {
+    return map[id] || undefined;
+  }
+  return fallback || undefined;
+}
+
+function normalizeAccelerator(acc) {
+  if (!acc || typeof acc !== 'string') return '';
+  const rawParts = acc.split('+').map((p) => p.trim()).filter(Boolean);
+  let cmd = false;
+  let ctrl = false;
+  let alt = false;
+  let shift = false;
+  let key = '';
+  for (const part of rawParts) {
+    const lower = part.toLowerCase();
+    if (lower === 'cmdorctrl' || lower === 'commandorcontrol' || lower === 'cmd' || lower === 'command' || lower === 'meta') {
+      if (isMac) cmd = true;
+      else ctrl = true;
+    } else if (lower === 'ctrl' || lower === 'control') {
+      ctrl = true;
+    } else if (lower === 'alt' || lower === 'option') {
+      alt = true;
+    } else if (lower === 'shift') {
+      shift = true;
+    } else {
+      if (lower === 'plus') key = 'Plus';
+      else if (lower === 'esc' || lower === 'escape') key = 'Escape';
+      else if (lower === 'return' || lower === 'enter') key = 'Enter';
+      else if (lower === 'arrowleft' || lower === 'left') key = 'Left';
+      else if (lower === 'arrowright' || lower === 'right') key = 'Right';
+      else if (lower === 'arrowup' || lower === 'up') key = 'Up';
+      else if (lower === 'arrowdown' || lower === 'down') key = 'Down';
+      else if (lower === 'space') key = 'Space';
+      else if (lower === 'tab') key = 'Tab';
+      else if (lower === 'backspace') key = 'Backspace';
+      else if (lower === 'delete') key = 'Delete';
+      else key = part.length === 1 ? part.toUpperCase() : part;
+    }
+  }
+  if (!key) return '';
+  const mods = [];
+  if (cmd) mods.push('Cmd');
+  if (ctrl) mods.push('Ctrl');
+  if (alt) mods.push('Alt');
+  if (shift) mods.push('Shift');
+  return [...mods, key].join('+');
+}
+
+const INPUT_CODE_MAP = {
+  BracketLeft: '[',
+  BracketRight: ']',
+  Backslash: '\\',
+  Semicolon: ';',
+  Quote: "'",
+  Comma: ',',
+  Period: '.',
+  Slash: '/',
+  Backquote: '`',
+  Minus: '-',
+  Equal: '=',
+  Space: 'Space',
+  Tab: 'Tab',
+  Enter: 'Enter',
+  NumpadEnter: 'Enter',
+  Backspace: 'Backspace',
+  Delete: 'Delete',
+  Escape: 'Escape',
+  ArrowUp: 'Up',
+  ArrowDown: 'Down',
+  ArrowLeft: 'Left',
+  ArrowRight: 'Right',
+  Home: 'Home',
+  End: 'End',
+  PageUp: 'PageUp',
+  PageDown: 'PageDown',
+};
+
+function inputToNormalizedKey(input) {
+  if (!input || input.type !== 'keyDown') return '';
+  if (['Meta', 'Control', 'Alt', 'Shift'].includes(input.key)) return '';
+  const hasMod = !!(input.meta || input.control || input.alt);
+  const isFn = /^F\d+$/i.test(input.key || '');
+  const isShiftEsc = !!(input.shift && (input.key === 'Escape' || input.code === 'Escape'));
+  if (!hasMod && !isFn && !isShiftEsc) return '';
+  let key = '';
+  const code = input.code || '';
+  if (/^Key[A-Z]$/.test(code)) key = code.slice(3);
+  else if (/^Digit\d$/.test(code)) key = code.slice(5);
+  else if (/^Numpad\d$/.test(code)) key = code.slice(6);
+  else if (code === 'NumpadAdd') key = 'Plus';
+  else if (code === 'NumpadSubtract') key = '-';
+  else if (INPUT_CODE_MAP[code]) key = INPUT_CODE_MAP[code];
+  else if (isFn) key = input.key.toUpperCase();
+  else if (input.key && input.key.length === 1) key = input.key.toUpperCase();
+  else return '';
+  const mods = [];
+  if (input.meta) mods.push('Cmd');
+  if (input.control) mods.push('Ctrl');
+  if (input.alt) mods.push('Alt');
+  if (input.shift) mods.push('Shift');
+  return [...mods, key].join('+');
+}
+
+async function openLocalFile(w) {
+  const { canceled, filePaths } = await dialog.showOpenDialog(w.win, {
+    properties: ['openFile'],
+  });
+  if (canceled || !filePaths[0] || !liveWindow(w)) return;
+  const fileUrl = pathToFileURL(filePaths[0]).href;
+  const tab = activeTab(w);
+  if (tab && internalName(tab.wc.getURL()) === 'newtab') {
+    tab.wc.loadURL(fileUrl).catch(() => {});
+  } else {
+    createTab(w, fileUrl);
+  }
+}
+
+function copyCurrentUrl(w) {
+  const tab = activeTab(w);
+  if (!tab) return;
+  const entry = tab.pending && tab.pending.entries[tab.pending.index];
+  const url = entry ? entry.url : tab.wc.getURL();
+  if (!url) return;
+  clipboard.writeText(displayUrl(url) || url);
+  showStatus(w, 'URL copied to clipboard');
+  setTimeout(() => {
+    if (liveWindow(w) && w.statusText === 'URL copied to clipboard') showStatus(w, '');
+  }, 2500);
+}
+
+async function useSelectionForFind(w) {
+  const tab = activeTab(w);
+  if (!tab || tab.fullscreen) return;
+  let selected = '';
+  try {
+    if (!tab.pending && !tab.wc.isDestroyed()) {
+      selected = String((await tab.wc.executeJavaScript('window.getSelection().toString()', true)) || '').trim();
+    }
+  } catch {}
+  openFind(w);
+  if (selected) {
+    findInTab(tab, selected, { forward: true, newSession: true });
+    sendTabs(w);
+  }
+}
+
+function viewPageSource(w) {
+  const tab = activeTab(w);
+  if (!tab || tab.pending) return;
+  const currentUrl = tab.wc.getURL();
+  if (!currentUrl || currentUrl.startsWith('view-source:')) return;
+  createTab(w, `view-source:${currentUrl}`, { after: tab });
+}
+
+function inspectElement(w) {
+  const tab = activeTab(w);
+  if (!tab || tab.pending || tab.wc.isDestroyed()) return;
+  if (!tab.wc.isDevToolsOpened()) tab.wc.openDevTools();
+  const bounds = tab.view.getBounds();
+  tab.wc.inspectElement(Math.round(bounds.width / 2), Math.round(bounds.height / 2));
+}
+
+function toggleVerticalTabsSetting() {
+  store.data.settings.verticalTabs = !store.data.settings.verticalTabs;
+  store.save();
+  windows.forEach((win) => {
+    layout(win);
+    sendTabs(win);
+  });
+  buildMenu();
+}
+
+function toggleSidebarCollapseSetting() {
+  if (!store.data.settings.verticalTabs) {
+    store.data.settings.verticalTabs = true;
+    store.data.settings.verticalTabsCollapsed = false;
+  } else {
+    store.data.settings.verticalTabsCollapsed = !store.data.settings.verticalTabsCollapsed;
+  }
+  store.save();
+  windows.forEach((win) => {
+    layout(win);
+    sendTabs(win);
+  });
+  buildMenu();
+}
+
+function openClearBrowsingData(w) {
+  const url = internalURL('settings') + '#clear';
+  const existing = w.tabs.find((t) => t.wc.getURL().startsWith(internalURL('settings')));
+  if (existing) {
+    selectTab(w, existing.id);
+    existing.wc.loadURL(url).catch(() => {});
+  } else {
+    createTab(w, url);
+  }
+}
+
+function runShortcutAction(id, targetWin = null) {
+  const now = Date.now();
+  if (id === lastShortcutExecId && now - lastShortcutExecTime < 65) return;
+  lastShortcutExecId = id;
+  lastShortcutExecTime = now;
+
+  if (id === 'new-window') return createWindow();
+  if (id === 'private-window') return createWindow({ private: true });
+  if (id === 'vertical-tabs') return toggleVerticalTabsSetting();
+  if (id === 'toggle-sidebar-collapse') return toggleSidebarCollapseSetting();
+  if (id === 'bookmarks-bar') return setBookmarksBar(!store.data.settings.showBookmarksBar);
+
+  const w = (targetWin && liveWindow(targetWin) ? targetWin : null) || focusedWindow() || createWindow();
+  const tab = activeTab(w);
+
+  switch (id) {
+    case 'settings':
+      return openInternalPage(w, 'settings');
+    case 'shortcuts-page':
+      return openInternalPage(w, 'shortcuts');
+    case 'new-tab':
+      return createTab(w, internalURL('newtab'));
+    case 'new-tab-right': {
+      const t = createTab(w, internalURL('newtab'));
+      if (tab) moveTab(w, t.id, w.tabs.indexOf(tab) + 1);
+      return;
+    }
+    case 'reopen-tab':
+      return reopenClosedTab(w);
+    case 'open-file':
+      return openLocalFile(w);
+    case 'focus-address':
+      return focusAddress(w);
+    case 'close-tab':
+      return closeActiveTabs(w);
+    case 'close-window':
+      return w.win.close();
+    case 'save-page':
+      return savePageAs(w);
+    case 'share-page':
+      return sharePage(w, tab);
+    case 'print':
+      return printTab(tab);
+    case 'copy-url':
+      return copyCurrentUrl(w);
+    case 'find':
+      return openFind(w);
+    case 'find-next':
+      return findStep(w, true);
+    case 'find-prev':
+      return findStep(w, false);
+    case 'find-selection':
+      return useSelectionForFind(w);
+    case 'split-view':
+      return toggleSplitView(w);
+    case 'stop':
+      return tab && !tab.pending && !tab.wc.isDestroyed() && tab.wc.stop();
+    case 'reload':
+      return reloadTab(tab);
+    case 'hard-reload':
+      return reloadTab(tab, { ignoreCache: true });
+    case 'zoom-in':
+      return zoom(w, 0.5);
+    case 'zoom-out':
+      return zoom(w, -0.5);
+    case 'zoom-reset':
+      return zoom(w, 0);
+    case 'reader':
+      return toggleReader(w);
+    case 'read-aloud':
+      return toggleReadAloud(w);
+    case 'translate':
+      return toggleTranslatePage(w);
+    case 'screenshot':
+      return takeScreenshot(w, 'visible');
+    case 'pip':
+      return togglePip(tab);
+    case 'view-source':
+      return viewPageSource(w);
+    case 'devtools':
+    case 'devtools-console':
+      return tab && !tab.pending && !tab.wc.isDestroyed() && tab.wc.toggleDevTools();
+    case 'devtools-inspect':
+      return inspectElement(w);
+    case 'back':
+      return tab && !tab.pending && !tab.wc.isDestroyed() && tab.wc.navigationHistory.goBack();
+    case 'forward':
+      return tab && !tab.pending && !tab.wc.isDestroyed() && tab.wc.navigationHistory.goForward();
+    case 'home':
+      return goHome(w);
+    case 'history':
+      return openInternalPage(w, 'history');
+    case 'clear-data':
+      return openClearBrowsingData(w);
+    case 'bookmark':
+      return starPage(w);
+    case 'bookmark-all':
+      return bookmarkAllTabs(w);
+    case 'bookmarks':
+      return openInternalPage(w, 'bookmarks');
+    case 'downloads':
+      return openInternalPage(w, 'downloads');
+    case 'extensions':
+      return openInternalPage(w, 'extensions');
+    case 'task-manager':
+      return openInternalPage(w, 'tasks');
+    case 'next-tab':
+      return cycleTab(w, 1);
+    case 'prev-tab':
+      return cycleTab(w, -1);
+    case 'tab-search':
+      return showTabSearch(w);
+    case 'duplicate-tab':
+      return tab && duplicateTab(tab);
+    case 'pin-tab':
+      return tab && setPinned(tab, !tab.pinned);
+    case 'mute-tab':
+      return tab && toggleMute(tab);
+    case 'mute-site':
+      return tab && toggleSiteMute(tab);
+    case 'close-other-tabs': {
+      if (!tab) return;
+      const vis = visibleTabs(w);
+      if (vis.length > 1) closeTabs(w, (t) => t === tab || t.pinned || !vis.includes(t));
+      return;
+    }
+    case 'close-tabs-right': {
+      if (!tab) return;
+      const vis = visibleTabs(w);
+      const idx = vis.indexOf(tab);
+      if (idx !== -1 && idx < vis.length - 1) closeTabs(w, (t) => !vis.includes(t) || vis.indexOf(t) <= idx || t.pinned);
+      return;
+    }
+    case 'move-tab-window':
+      return tab && w.tabs.length > 1 && moveTabToNewWindow(tab);
+    default: {
+      if (/^tab-[1-9]$/.test(id)) {
+        const n = Number(id.slice(4));
+        const vis = visibleTabs(w);
+        const t = n === 9 ? vis[vis.length - 1] : vis[n - 1];
+        if (t) selectTab(w, t.id);
+      }
+    }
+  }
+}
+
+const REPEATABLE_SHORTCUTS = new Set(['next-tab', 'prev-tab', 'find-next', 'find-prev', 'zoom-in', 'zoom-out']);
+
+function handleShortcutBeforeInput(w, event, input) {
+  if (!input || input.type !== 'keyDown' || isShortcutRecordingActive()) return;
+  const norm = inputToNormalizedKey(input);
+  if (!norm) return;
+
+  let matchedId = '';
+  for (const group of SHORTCUT_GROUPS) {
+    for (const item of group.items) {
+      const eff = getShortcutAccelerator(item.id, item.defaultAcc);
+      if (!eff) continue;
+      const targetNorm = normalizeAccelerator(eff);
+      if (targetNorm === norm) {
+        matchedId = item.id;
+        break;
+      }
+      if (item.id === 'zoom-in' && targetNorm === (isMac ? 'Cmd+Plus' : 'Ctrl+Plus')) {
+        if (norm === (isMac ? 'Cmd+=' : 'Ctrl+=') || norm === (isMac ? 'Cmd+Shift+=' : 'Ctrl+Shift+=')) {
+          matchedId = 'zoom-in';
+          break;
+        }
+      }
+    }
+    if (matchedId) break;
+  }
+
+  // Standard macOS / browser alternate shortcuts when not colliding with a custom binding
+  if (!matchedId) {
+    if (norm === 'Ctrl+Tab' || (isMac && norm === 'Cmd+Alt+Right')) matchedId = 'next-tab';
+    else if (norm === 'Ctrl+Shift+Tab' || (isMac && norm === 'Cmd+Alt+Left')) matchedId = 'prev-tab';
+    else if (isMac && norm === 'Cmd+Left') matchedId = 'back';
+    else if (isMac && norm === 'Cmd+Right') matchedId = 'forward';
+    else if (isMac && norm === 'Cmd+Shift+J') matchedId = 'downloads';
+    else if (isMac && norm === 'Cmd+Alt+B') matchedId = 'bookmarks';
+    else if (norm === 'F6') {
+      event.preventDefault();
+      cycleFocus(w);
+      return;
+    }
+  }
+
+  if (!matchedId) return;
+  if (input.isAutoRepeat && !REPEATABLE_SHORTCUTS.has(matchedId)) {
+    event.preventDefault();
+    return;
+  }
+  event.preventDefault();
+  runShortcutAction(matchedId, w);
+}
+
 function buildMenu() {
   clearTimeout(menuTimer);
-  // Menu commands act on the focused browser window, opening one if none is open.
   const inWindow = (fn) => () => {
     const w = focusedWindow() || createWindow();
     fn(w);
   };
   const open = (name) => inWindow((w) => openInternalPage(w, name));
-  const acc = (id, fallback) => (store && store.data.settings.shortcuts && store.data.settings.shortcuts[id]) || fallback;
+  const acc = (id, fallback) => getShortcutAccelerator(id, fallback);
+  const act = (id) => () => runShortcutAction(id);
 
   const template = [
     ...(isMac
@@ -5467,6 +6133,8 @@ function buildMenu() {
             submenu: [
               { label: `About ${DISPLAY_NAME}`, click: () => app.showAboutPanel() },
               { label: 'Check for Updates…', click: checkForUpdatesManually },
+              { type: 'separator' },
+              { label: 'Settings…', accelerator: acc('settings', 'CmdOrCtrl+,'), click: act('settings') },
               { type: 'separator' },
               { role: 'services' },
               { type: 'separator' },
@@ -5482,23 +6150,26 @@ function buildMenu() {
     {
       label: 'File',
       submenu: [
-        { label: 'New Tab', accelerator: acc('new-tab', 'CmdOrCtrl+T'), click: inWindow((w) => createTab(w, internalURL('newtab'))) },
-        { label: 'New Window', accelerator: acc('new-window', 'CmdOrCtrl+N'), click: () => createWindow() },
-        { label: 'New Private Window', accelerator: acc('private-window', 'CmdOrCtrl+Shift+N'), click: () => createWindow({ private: true }) },
+        { label: 'New Tab', accelerator: acc('new-tab', 'CmdOrCtrl+T'), click: act('new-tab') },
+        { label: 'New Tab to the Right', accelerator: acc('new-tab-right', 'Alt+CmdOrCtrl+T'), click: act('new-tab-right') },
+        { label: 'New Window', accelerator: acc('new-window', 'CmdOrCtrl+N'), click: act('new-window') },
+        { label: 'New Private Window', accelerator: acc('private-window', 'CmdOrCtrl+Shift+N'), click: act('private-window') },
         { type: 'separator' },
-        { label: 'Close Tab', accelerator: acc('close-tab', 'CmdOrCtrl+W'), click: inWindow((w) => closeActiveTabs(w)) },
-        { label: 'Close Window', accelerator: 'CmdOrCtrl+Shift+W', click: inWindow((w) => w.win.close()) },
-        { label: 'Reopen Closed Tab', accelerator: acc('reopen-tab', 'CmdOrCtrl+Shift+T'), click: inWindow(reopenClosedTab) },
-        { label: 'Open Location', accelerator: acc('focus-address', 'CmdOrCtrl+L'), click: inWindow(focusAddress) },
-        { label: 'Switch Between Toolbar and Page', accelerator: 'F6', click: inWindow(cycleFocus) },
+        { label: 'Open File…', accelerator: acc('open-file', 'CmdOrCtrl+O'), click: act('open-file') },
+        { label: 'Open Location…', accelerator: acc('focus-address', 'CmdOrCtrl+L'), click: act('focus-address') },
+        { label: 'Switch Between Toolbar and Page', accelerator: isShortcutRecordingActive() ? undefined : 'F6', click: inWindow(cycleFocus) },
         { type: 'separator' },
-        { label: 'Save Page As…', accelerator: 'CmdOrCtrl+S', click: inWindow(savePageAs) },
-        { label: 'Print…', accelerator: 'CmdOrCtrl+P', click: inWindow((w) => printTab(activeTab(w))) },
-        ...(isMac ? [{ label: 'Share…', click: inWindow((w) => sharePage(w, activeTab(w))) }] : []),
+        { label: 'Close Tab', accelerator: acc('close-tab', 'CmdOrCtrl+W'), click: act('close-tab') },
+        { label: 'Close Window', accelerator: acc('close-window', 'CmdOrCtrl+Shift+W'), click: act('close-window') },
+        { label: 'Reopen Closed Tab', accelerator: acc('reopen-tab', 'CmdOrCtrl+Shift+T'), click: act('reopen-tab') },
+        { type: 'separator' },
+        { label: 'Save Page As…', accelerator: acc('save-page', 'CmdOrCtrl+S'), click: act('save-page') },
+        { label: 'Print…', accelerator: acc('print', 'CmdOrCtrl+P'), click: act('print') },
+        ...(isMac ? [{ label: 'Share…', accelerator: acc('share-page', 'Ctrl+Alt+S'), click: act('share-page') }] : []),
         { label: 'Install Site as App…', click: inWindow(installSiteAsApp) },
         { type: 'separator' },
-        { label: 'Settings', accelerator: 'CmdOrCtrl+,', click: open('settings') },
-        { label: 'Extensions', click: open('extensions') },
+        { label: 'Settings', accelerator: acc('settings', 'CmdOrCtrl+,'), click: act('settings') },
+        { label: 'Extensions', accelerator: acc('extensions', 'CmdOrCtrl+Shift+E'), click: act('extensions') },
         ...(isMac ? [] : [{ type: 'separator' }, { label: 'Exit', accelerator: 'Ctrl+Q', click: userQuit }]),
       ],
     },
@@ -5514,104 +6185,81 @@ function buildMenu() {
         { role: 'pasteAndMatchStyle', label: 'Paste as Plain Text', accelerator: 'CmdOrCtrl+Shift+V' },
         { role: 'selectAll' },
         { type: 'separator' },
-        { label: 'Find…', accelerator: acc('find', 'CmdOrCtrl+F'), click: inWindow(openFind) },
-        { label: 'Find Next', accelerator: 'CmdOrCtrl+G', click: inWindow((w) => findStep(w, true)) },
-        { label: 'Find Previous', accelerator: 'CmdOrCtrl+Shift+G', click: inWindow((w) => findStep(w, false)) },
+        { label: 'Copy Current URL', accelerator: acc('copy-url', 'CmdOrCtrl+Shift+C'), click: act('copy-url') },
+        { type: 'separator' },
+        { label: 'Find…', accelerator: acc('find', 'CmdOrCtrl+F'), click: act('find') },
+        { label: 'Find Next', accelerator: acc('find-next', 'CmdOrCtrl+G'), click: act('find-next') },
+        { label: 'Find Previous', accelerator: acc('find-prev', 'CmdOrCtrl+Shift+G'), click: act('find-prev') },
+        { label: 'Use Selection for Find', accelerator: acc('find-selection', 'CmdOrCtrl+E'), click: act('find-selection') },
       ],
     },
     {
       label: 'View',
       submenu: [
-        { label: 'Reload', accelerator: acc('reload', 'CmdOrCtrl+R'), click: inWindow((w) => reloadTab(activeTab(w))) },
-        {
-          label: 'Hard Reload',
-          accelerator: 'CmdOrCtrl+Shift+R',
-          click: inWindow((w) => reloadTab(activeTab(w), { ignoreCache: true })),
-        },
+        { label: 'Stop', accelerator: acc('stop', isMac ? 'Cmd+.' : 'Esc'), click: act('stop') },
+        { label: 'Reload', accelerator: acc('reload', 'CmdOrCtrl+R'), click: act('reload') },
+        { label: 'Hard Reload', accelerator: acc('hard-reload', 'CmdOrCtrl+Shift+R'), click: act('hard-reload') },
         { type: 'separator' },
-        { label: 'Reader Mode', accelerator: acc('reader', 'Alt+CmdOrCtrl+R'), click: inWindow(toggleReader) },
+        { label: 'Reader Mode', accelerator: acc('reader', 'Alt+CmdOrCtrl+R'), click: act('reader') },
         {
-          label: 'Vertical Tabs',
+          label: 'Vertical Tabs Sidebar',
           type: 'checkbox',
           checked: !!(store && store.data.settings.verticalTabs),
           accelerator: acc('vertical-tabs', 'Alt+CmdOrCtrl+V'),
-          click: (item) => {
-            store.data.settings.verticalTabs = item.checked;
-            store.save();
-            windows.forEach((w) => {
-              layout(w);
-              sendTabs(w);
-            });
-            buildMenu();
-          },
+          click: () => runShortcutAction('vertical-tabs'),
         },
-        { label: 'Split View', accelerator: acc('split-view', 'Alt+CmdOrCtrl+S'), click: inWindow((w) => toggleSplitView(w)) },
-        { label: 'Picture in Picture', click: inWindow((w) => togglePip(activeTab(w))) },
+        {
+          label: 'Collapse Vertical Sidebar',
+          type: 'checkbox',
+          checked: !!(store && store.data.settings.verticalTabs && store.data.settings.verticalTabsCollapsed),
+          accelerator: acc('toggle-sidebar-collapse', 'Ctrl+Shift+S'),
+          click: () => runShortcutAction('toggle-sidebar-collapse'),
+        },
+        { label: 'Split View', accelerator: acc('split-view', 'Alt+CmdOrCtrl+S'), click: act('split-view') },
+        { label: 'Picture in Picture', accelerator: acc('pip', 'Alt+CmdOrCtrl+P'), click: act('pip') },
         { type: 'separator' },
-        { label: 'Read Page Aloud', click: inWindow(toggleReadAloud) },
-        { label: 'Translate Page', click: inWindow(toggleTranslatePage) },
+        { label: 'Read Page Aloud', accelerator: acc('read-aloud', 'Alt+Shift+S'), click: act('read-aloud') },
+        { label: 'Translate Page', accelerator: acc('translate', 'Alt+Shift+T'), click: act('translate') },
         {
           label: 'Take Screenshot',
           submenu: [
-            { label: 'Capture Visible Page', accelerator: acc('screenshot', 'CmdOrCtrl+Shift+S'), click: inWindow((w) => takeScreenshot(w, 'visible')) },
+            { label: 'Capture Visible Page', accelerator: acc('screenshot', 'CmdOrCtrl+Shift+S'), click: act('screenshot') },
             { label: 'Capture Selection…', click: inWindow((w) => takeScreenshot(w, 'selection')) },
             { label: 'Capture Full Page', click: inWindow((w) => takeScreenshot(w, 'full')) },
           ],
         },
         { type: 'separator' },
-        { label: 'Zoom In', accelerator: 'CmdOrCtrl+Plus', click: inWindow((w) => zoom(w, 0.5)) },
-        { label: 'Zoom Out', accelerator: 'CmdOrCtrl+-', click: inWindow((w) => zoom(w, -0.5)) },
-        { label: 'Actual Size', accelerator: 'CmdOrCtrl+0', click: inWindow((w) => zoom(w, 0)) },
+        { label: 'Zoom In', accelerator: acc('zoom-in', 'CmdOrCtrl+Plus'), click: act('zoom-in') },
+        { label: 'Zoom Out', accelerator: acc('zoom-out', 'CmdOrCtrl+-'), click: act('zoom-out') },
+        { label: 'Actual Size', accelerator: acc('zoom-reset', 'CmdOrCtrl+0'), click: act('zoom-reset') },
         { type: 'separator' },
-        { label: 'Task Manager', accelerator: isMac ? undefined : 'Shift+Esc', click: open('tasks') },
-        {
-          label: 'Developer Tools',
-          accelerator: acc('devtools', isMac ? 'Alt+Cmd+I' : 'F12'),
-          click: inWindow((w) => activeTab(w)?.wc.toggleDevTools()),
-        },
+        { label: 'Task Manager', accelerator: acc('task-manager', 'Shift+Esc'), click: act('task-manager') },
+        { label: 'View Page Source', accelerator: acc('view-source', 'Alt+CmdOrCtrl+U'), click: act('view-source') },
+        { label: 'Developer Tools', accelerator: acc('devtools', isMac ? 'Alt+Cmd+I' : 'F12'), click: act('devtools') },
+        { label: 'Inspect Element', accelerator: acc('devtools-inspect', 'Alt+CmdOrCtrl+C'), click: act('devtools-inspect') },
+        { label: 'Developer Tools Console', accelerator: acc('devtools-console', 'Alt+CmdOrCtrl+J'), click: act('devtools-console') },
         { role: 'togglefullscreen' },
       ],
     },
     {
       label: 'History',
       submenu: [
-        {
-          label: 'Back',
-          accelerator: isMac ? 'Cmd+[' : 'Alt+Left',
-          click: inWindow((w) => activeTab(w)?.wc.navigationHistory.goBack()),
-        },
-        {
-          label: 'Forward',
-          accelerator: isMac ? 'Cmd+]' : 'Alt+Right',
-          click: inWindow((w) => activeTab(w)?.wc.navigationHistory.goForward()),
-        },
+        { label: 'Back', accelerator: acc('back', isMac ? 'Cmd+[' : 'Alt+Left'), click: act('back') },
+        { label: 'Forward', accelerator: acc('forward', isMac ? 'Cmd+]' : 'Alt+Right'), click: act('forward') },
         { type: 'separator' },
-        { label: 'Home', accelerator: isMac ? 'Cmd+Shift+H' : 'Alt+Home', click: inWindow(goHome) },
+        { label: 'Home', accelerator: acc('home', isMac ? 'Cmd+Shift+H' : 'Alt+Home'), click: act('home') },
         { type: 'separator' },
-        { label: 'Show History', accelerator: acc('history', isMac ? 'Cmd+Y' : 'Ctrl+H'), click: open('history') },
-        { label: 'Show Downloads', accelerator: acc('downloads', isMac ? 'Alt+Cmd+L' : 'Ctrl+J'), click: open('downloads') },
+        { label: 'Show History', accelerator: acc('history', isMac ? 'Cmd+Y' : 'Ctrl+H'), click: act('history') },
+        { label: 'Show Downloads', accelerator: acc('downloads', isMac ? 'Alt+Cmd+L' : 'Ctrl+J'), click: act('downloads') },
         ...recentMenuItems(inWindow),
         { type: 'separator' },
-        {
-          label: 'Clear Browsing Data…',
-          accelerator: 'CmdOrCtrl+Shift+Backspace',
-          click: inWindow((w) => {
-            const url = internalURL('settings') + '#clear';
-            const existing = w.tabs.find((t) => t.wc.getURL().startsWith(internalURL('settings')));
-            if (existing) {
-              selectTab(w, existing.id);
-              existing.wc.loadURL(url).catch(() => {});
-            } else {
-              createTab(w, url);
-            }
-          }),
-        },
+        { label: 'Clear Browsing Data…', accelerator: acc('clear-data', 'CmdOrCtrl+Shift+Backspace'), click: act('clear-data') },
       ],
     },
     {
       label: 'Bookmarks',
       submenu: [
-        { label: 'Bookmark This Page…', accelerator: 'CmdOrCtrl+D', click: inWindow(starPage) },
+        { label: 'Bookmark This Page…', accelerator: acc('bookmark', 'CmdOrCtrl+D'), click: act('bookmark') },
         {
           label: 'Show Bookmarks Bar',
           type: 'checkbox',
@@ -5619,25 +6267,31 @@ function buildMenu() {
           accelerator: acc('bookmarks-bar', 'CmdOrCtrl+Shift+B'),
           click: (item) => setBookmarksBar(item.checked),
         },
-        { label: 'Bookmark All Tabs…', accelerator: 'CmdOrCtrl+Shift+D', click: inWindow(bookmarkAllTabs) },
-        { label: 'Bookmark Manager', accelerator: 'CmdOrCtrl+Shift+O', click: open('bookmarks') },
+        { label: 'Bookmark All Tabs…', accelerator: acc('bookmark-all', 'CmdOrCtrl+Shift+D'), click: act('bookmark-all') },
+        { label: 'Bookmark Manager', accelerator: acc('bookmarks', 'CmdOrCtrl+Shift+O'), click: act('bookmarks') },
         ...bookmarkMenuItems(inWindow),
       ],
     },
     {
       label: 'Tab',
       submenu: [
-        { label: 'Next Tab', accelerator: 'Ctrl+Tab', click: inWindow((w) => cycleTab(w, 1)) },
-        { label: 'Previous Tab', accelerator: 'Ctrl+Shift+Tab', click: inWindow((w) => cycleTab(w, -1)) },
-        { label: 'Search Tabs…', accelerator: 'CmdOrCtrl+Shift+A', click: inWindow(showTabSearch) },
+        { label: 'Select Next Tab', accelerator: acc('next-tab', isMac ? 'Cmd+Shift+]' : 'Ctrl+Tab'), click: act('next-tab') },
+        { label: 'Select Previous Tab', accelerator: acc('prev-tab', isMac ? 'Cmd+Shift+[' : 'Ctrl+Shift+Tab'), click: act('prev-tab') },
+        { label: 'Search Open Tabs…', accelerator: acc('tab-search', 'CmdOrCtrl+Shift+A'), click: act('tab-search') },
+        { type: 'separator' },
+        { label: 'Duplicate Tab', accelerator: acc('duplicate-tab', 'CmdOrCtrl+Shift+K'), click: act('duplicate-tab') },
+        { label: 'Pin or Unpin Tab', accelerator: acc('pin-tab', ''), click: act('pin-tab') },
+        { label: 'Mute or Unmute Tab', accelerator: acc('mute-tab', 'Alt+CmdOrCtrl+M'), click: act('mute-tab') },
+        { label: 'Mute or Unmute Site', accelerator: acc('mute-site', ''), click: act('mute-site') },
+        { label: 'Move Tab to New Window', accelerator: acc('move-tab-window', ''), click: act('move-tab-window') },
+        { type: 'separator' },
+        { label: 'Close Other Tabs', accelerator: acc('close-other-tabs', ''), click: act('close-other-tabs') },
+        { label: 'Close Tabs to the Right', accelerator: acc('close-tabs-right', ''), click: act('close-tabs-right') },
         { type: 'separator' },
         ...[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => ({
-          label: n === 9 ? 'Last Tab' : `Tab ${n}`,
-          accelerator: `CmdOrCtrl+${n}`,
-          click: inWindow((w) => {
-            const t = n === 9 ? w.tabs[w.tabs.length - 1] : w.tabs[n - 1];
-            if (t) selectTab(w, t.id);
-          }),
+          label: n === 9 ? 'Select Last Tab' : `Select Tab ${n}`,
+          accelerator: acc(`tab-${n}`, `CmdOrCtrl+${n}`),
+          click: act(`tab-${n}`),
         })),
       ],
     },
@@ -5645,7 +6299,7 @@ function buildMenu() {
     {
       role: 'help',
       submenu: [
-        { label: 'Keyboard Shortcuts', accelerator: 'CmdOrCtrl+/', click: open('shortcuts') },
+        { label: 'Keyboard Shortcuts', accelerator: acc('shortcuts-page', 'CmdOrCtrl+/'), click: act('shortcuts-page') },
         { label: "What's New", click: open('whatsnew') },
         {
           label: 'Report a Problem…',
