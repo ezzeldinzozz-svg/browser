@@ -1,6 +1,7 @@
 {
   "_comment": "Shown on browser://whatsnew after an update. Add user-visible changes to \"next\" as they land; `npm run release` renames \"next\" to the version it releases (and refuses to release without notes).",
-  "next": [
+  "next": [],
+  "0.21.6": [
     "Vertical tabs layout refinement: removed the floating page border frame and insets in vertical tabs mode so web pages sit flush edge-to-edge against the sidebar and toolbar, while preserving the card border and inset in horizontal tabs mode"
   ],
   "0.21.5": [
