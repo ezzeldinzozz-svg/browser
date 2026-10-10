@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Operecs Browser — Engineered for Flow</title>
+  <meta name="description" content="A fast, private, and aesthetic web browser for macOS. Built with native ad-blocking, collapsible vertical tabs, fluid split view, and 60+ customizable keyboard shortcuts.">
+  <meta name="keywords" content="Operecs, browser, macOS, Apple Silicon, vertical tabs, ad blocker, private browser, minimalist, keyboard shortcuts">
+  <meta name="author" content="Ezzeddin Magdy">
+
+  <!-- Open Graph / Social -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://github.com/ezzeldinzozz-svg/operecs-browser">
+  <meta property="og:title" content="Operecs Browser — Engineered for Flow">
+  <meta property="og:description" content="A fast, private, and aesthetic web browser for macOS. Zero telemetry, native tracker blocking, vertical tabs, and floating distraction-free chrome.">
+  <meta property="og:image" content="assets/icon.png">
+
+  <!-- Favicon -->
+  <link rel="icon" type="image/png" href="assets/icon.png">
+
+  <!-- Typography -->
+  <link rel="stylesheet" href="assets/fonts/fonts.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-accent="violet">
+  <!-- Subtle ambient background glow -->
+  <div class="glow-orb orb-1" aria-hidden="true"></div>
+  <div class="glow-orb orb-2" aria-hidden="true"></div>
+
+  <!-- Navigation Bar -->
+  <header class="navbar" id="top">
+    <div class="nav-container">
+      <a href="#top" class="brand-link" aria-label="Operecs Home">
+        <img src="assets/icon.png" alt="Operecs Icon" class="brand-icon" width="32" height="32">
+        <span class="brand-name">Operecs</span>
+        <span class="version-tag">v0.21.8</span>
+      </a>
+
+      <nav class="nav-links">
+        <a href="#privacy">Privacy</a>
+        <a href="#speed">Speed</a>
+        <a href="#aesthetics">Aesthetics</a>
+        <a href="#workflow">Workflow</a>
+        <a href="#shortcuts">Shortcuts</a>
+        <a href="#compare">Compare</a>
+      </nav>
+
+      <div class="nav-actions">
+        <a href="https://github.com/ezzeldinzozz-svg/operecs-browser" target="_blank" rel="noopener noreferrer" class="btn-github" title="View Source on GitHub">
+          <svg class="ico" viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
+            <path fill-rule="evenodd" clip-rule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+          </svg>
+          <span>GitHub</span>
+        </a>
+        <a href="#download" class="btn-primary">Download DMG</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <!-- HERO SECTION -->
+    <section class="hero-section">
+      <div class="hero-content">
+        <div class="pill-badge">
+          <span class="pill-dot"></span>
+          <span>Operecs v0.21.8 · Apple Silicon</span>
+        </div>
+
+        <h1 class="hero-title">
+          The browser that <br><span class="gradient-text">gets out of your way.</span>
+        </h1>
+
+        <p class="hero-desc">
+          Engineered for flow. No telemetry, no mandatory accounts, and no AI bloat.
+          Just blistering speed, hardened privacy, fluid vertical tabs, and an uncompromising dark aesthetic.
+        </p>
+
+        <div class="hero-cta-group">
+          <a href="https://github.com/ezzeldinzozz-svg/operecs-browser/releases/download/v0.21.8/Operecs-0.21.8-arm64.dmg" class="btn-hero-primary" id="mainDownloadBtn">
+            <svg class="ico" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+            </svg>
+            <div class="btn-text-block">
+              <span class="btn-main-label">Download for Mac</span>
+              <span class="btn-sub-label">Apple Silicon (M1/M2/M3/M4) · v0.21.8</span>
+            </div>
+          </a>
+
+          <a href="https://github.com/ezzeldinzozz-svg/operecs-browser" target="_blank" rel="noopener noreferrer" class="btn-hero-secondary">
+            <svg class="ico" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"/>
+            </svg>
+            <span>Explore Source</span>
+          </a>
+        </div>
+
+        <div class="hero-specs">
+          <span class="spec-item"><svg class="check-ico" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg> Zero Telemetry</span>
+          <span class="spec-divider">•</span>
+          <span class="spec-item"><svg class="check-ico" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg> Built-in Adblocker</span>
+          <span class="spec-divider">•</span>
+          <span class="spec-item"><svg class="check-ico" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/></svg> Open Source (GPL-3.0)</span>
+        </div>
+      </div>
+
+      <!-- INTERACTIVE BROWSER MOCKUP -->
+      <div class="browser-mockup-wrapper">
+        <!-- Interactive Controls Bar -->
+        <div class="mockup-toolbar-controls">
+          <div class="control-group">
+            <span class="control-label">Tab Layout:</span>
+            <div class="btn-segmented">
+              <button class="seg-btn active" id="segVertical" type="button">Vertical Tabs</button>
+              <button class="seg-btn" id="segHorizontal" type="button">Horizontal</button>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <span class="control-label">Accent Theme:</span>
+            <div class="accent-picker">
+              <button class="accent-dot dot-violet active" data-color="violet" title="Violet Glow" aria-label="Violet"></button>
+              <button class="accent-dot dot-cyan" data-color="cyan" title="Cyan Accent" aria-label="Cyan"></button>
+              <button class="accent-dot dot-emerald" data-color="emerald" title="Emerald Accent" aria-label="Emerald"></button>
+              <button class="accent-dot dot-rose" data-color="rose" title="Rose Accent" aria-label="Rose"></button>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <button class="toggle-split-btn" id="mockupSplitBtn" type="button" title="Toggle Split View">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2.5"/><path d="M12 4v16"/></svg>
+              <span>Split View</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- The Browser Window Element -->
+        <div class="browser-window mode-vertical" id="browserMockup">
+          <!-- Top Window Chrome / Titlebar -->
+          <div class="window-chrome">
+            <div class="traffic-lights">
+              <span class="light close"></span>
+              <span class="light min"></span>
+              <span class="light max"></span>
+            </div>
+
+            <div class="omnibox-wrapper">
+              <div class="omnibox-site-info">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                <span class="url-protocol">https://</span><span class="url-host">ezzeddin.work</span>
+              </div>
+              <input type="text" class="mockup-address-input" value="ezzeddin.work/portfolio" readonly>
+              <div class="omnibox-badge">
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M12 2.5 4.5 5.4v5.8c0 4.7 3.2 8.8 7.5 10.3 4.3-1.5 7.5-5.6 7.5-10.3V5.4z"/></svg>
+                <span>4 blocked</span>
+              </div>
+            </div>
+
+            <div class="window-actions">
+              <button class="mock-btn" title="Reader Mode"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 6h14M5 10h14M5 14h9M5 18h12"/></svg></button>
+              <button class="mock-btn" title="Screenshot"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3.2"/><path d="M4 8h3l2-2h6l2 2h3a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z"/></svg></button>
+              <button class="mock-btn" title="Bookmarks"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8L3.5 9.7l5.9-.9z"/></svg></button>
+            </div>
+          </div>
+
+          <!-- Horizontal Tabstrip (shown in horizontal mode) -->
+          <div class="horizontal-tabstrip" id="horizontalTabstrip">
+            <div class="h-tab active">
+              <span class="favicon-dot"></span>
+              <span class="tab-title">Portfolio — Ezzeddin</span>
+              <span class="tab-close">×</span>
+            </div>
+            <div class="h-tab">
+              <span class="favicon-dot gh"></span>
+              <span class="tab-title">GitHub — operecs-browser</span>
+              <span class="tab-close">×</span>
+            </div>
+            <div class="h-tab">
+              <span class="favicon-dot hn"></span>
+              <span class="tab-title">Hacker News</span>
+              <span class="tab-close">×</span>
+            </div>
+            <button class="h-newtab-btn" title="New Tab">+</button>
+          </div>
+
+          <!-- Main Layout Body (Sidebar + Floating Web Viewport) -->
+          <div class="browser-body">
+            <!-- Vertical Sidebar (shown in vertical mode) -->
+            <aside class="vertical-sidebar" id="verticalSidebar">
+              <div class="sidebar-header">
+                <span class="sidebar-title">WORKSPACES</span>
+                <span class="sidebar-badge">DEV</span>
+              </div>
+              <div class="v-tab active">
+                <span class="v-favicon">E</span>
+                <span class="v-tab-name">Ezzeddin Magdy</span>
+                <span class="audio-pill" title="Playing audio">♪</span>
+              </div>
+              <div class="v-tab">
+                <span class="v-favicon gh">G</span>
+                <span class="v-tab-name">operecs / main</span>
+              </div>
+              <div class="v-tab">
+                <span class="v-favicon hn">Y</span>
+                <span class="v-tab-name">Hacker News</span>
+              </div>
+              <div class="v-tab">
+                <span class="v-favicon x">𝕏</span>
+                <span class="v-tab-name">Feed / Trending</span>
+              </div>
+              <button class="v-newtab-btn">
+                <svg viewBox="0 0 24 24" width="13" height="13" stroke="currentColor" fill="none" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+                <span>New Tab</span>
+                <span class="shortcut-hint">⌘T</span>
+              </button>
+
+              <div class="sidebar-footer">
+                <span class="status-shield">🛡️ Ghostery Active</span>
+              </div>
+            </aside>
+
+            <!-- Floating Viewport Canvas Frame -->
+            <div class="viewport-canvas">
+              <div class="page-card" id="mockupPageCard">
+                <!-- Page Content Mock -->
+                <div class="mock-page-content">
+                  <div class="mock-hero-banner">
+                    <div class="mock-avatar">EM</div>
+                    <div class="mock-text-col">
+                      <div class="mock-line-title">Crafting human software &amp; native tooling</div>
+                      <div class="mock-line-sub">Cairo, Egypt · ezzeddin.work</div>
+                    </div>
+                  </div>
+
+                  <div class="mock-grid">
+                    <div class="mock-grid-box">
+                      <span class="mock-label">PROJECT</span>
+                      <span class="mock-heading">Operecs Browser</span>
+                      <p class="mock-desc">A fast, private, keyboard-first desktop browser for macOS.</p>
+                      <span class="mock-tag">v0.21.8 Released</span>
+                    </div>
+                    <div class="mock-grid-box">
+                      <span class="mock-label">FOCUS</span>
+                      <span class="mock-heading">Zero Bloat</span>
+                      <p class="mock-desc">No corporate telemetry, local SQLite FTS5 search, instant startup.</p>
+                      <span class="mock-tag">Pure Flow</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Split Pane (when split mode is active) -->
+                <div class="page-card-split" id="mockupSplitPane" style="display: none;">
+                  <div class="mock-split-header">
+                    <span class="split-tab-badge">github.com/ezzeldinzozz-svg/operecs-browser</span>
+                  </div>
+                  <div class="mock-code-view">
+                    <pre><code>// main.js - Operecs Browser
+const PAGE_INSET = 8;
+const PAGE_RADIUS = 12;
+
+function pageFrames(w) {
+  const left = sidebarWidth(w);
+  const x0 = left > 0 ? (left + 8) : 8;
+  return [{ x: x0, y: 42, width, height }];
+}</code></pre>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- THE 4 PILLARS GRID -->
+    <section class="pillars-section" id="pillars">
+      <div class="section-container">
+        <div class="section-head text-center">
+          <span class="eyebrow">BUILT DIFFERENT</span>
+          <h2 class="section-title">The Four Pillars of Operecs</h2>
+          <p class="section-desc">We reimagined what a desktop web browser should be when you strip away corporate surveillance and feature creep.</p>
+        </div>
+
+        <div class="bento-grid">
+          <!-- PILLAR 1: PRIVACY -->
+          <div class="bento-card card-large" id="privacy">
+            <div class="card-glow"></div>
+            <div class="card-badge">PRIVACY HARDENED</div>
+            <h3 class="card-title">Surveillance-proof by default.</h3>
+            <p class="card-text">
+              Most browsers track your habits and monetize your attention. Operecs operates on a strict zero-telemetry policy. Everything stays on your physical Mac.
+            </p>
+            <div class="feature-checklist">
+              <div class="check-row">
+                <div class="check-icon">✓</div>
+                <div>
+                  <strong>Integrated Ghostery Ad &amp; Tracker Blocker</strong>
+                  <span>Blocks banner ads, invasive video pre-rolls, and analytics beacons before they hit your CPU.</span>
+                </div>
+              </div>
+              <div class="check-row">
+                <div class="check-icon">✓</div>
+                <div>
+                  <strong>Automatic Cookie Notice Annihilator</strong>
+                  <span>Instantly dismisses annoying GDPR cookie popups with zero clicks required.</span>
+                </div>
+              </div>
+              <div class="check-row">
+                <div class="check-icon">✓</div>
+                <div>
+                  <strong>Fingerprinting Noise Injection</strong>
+                  <span>Adds imperceptible randomized noise to Canvas, WebGL, and Audio buffers to prevent cross-site identity tracking.</span>
+                </div>
+              </div>
+              <div class="check-row">
+                <div class="check-icon">✓</div>
+                <div>
+                  <strong>Local-Only SQLite with FTS5 Search</strong>
+                  <span>Your history and bookmarks are stored in an encrypted local SQLite database. No cloud sync leaks, ever.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- PILLAR 2: SPEED -->
+          <div class="bento-card" id="speed">
+            <div class="card-glow"></div>
+            <div class="card-badge">PURE SPEED</div>
+            <h3 class="card-title">Instant startup. Zero lag.</h3>
+            <p class="card-text">
+              Cold launches in under a second. No background cryptocurrency mining, no AI latency overhead, and no bloated tab processes draining your battery.
+            </p>
+            <div class="speed-stat-box">
+              <div class="stat-number">&lt; 1s</div>
+              <div class="stat-label">Cold boot time on Apple Silicon</div>
+            </div>
+            <div class="quick-answer-card">
+              <span class="quick-tag">OMNIBOX QUICK CALCULATIONS</span>
+              <div class="mock-input-row">
+                <code>&gt; 42 * 18.5</code>
+                <span class="ans-pill">= 777</span>
+              </div>
+              <div class="mock-input-row">
+                <code>&gt; 120 km in miles</code>
+                <span class="ans-pill">= 74.56 mi</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- PILLAR 3: AESTHETICS -->
+          <div class="bento-card" id="aesthetics">
+            <div class="card-glow"></div>
+            <div class="card-badge">AESTHETICS</div>
+            <h3 class="card-title">Dark luxury. Floating frames.</h3>
+            <p class="card-text">
+              Designed for night owls and craft purists. Every webpage floats inside a rounded 12px card with balanced outer insets, subtle glows, and a near-black canvas.
+            </p>
+            <div class="palette-swatch-row">
+              <div class="swatch" style="background: #0c0a11;" title="Canvas (#0c0a11)"><span>Canvas</span></div>
+              <div class="swatch" style="background: #15121e;" title="Raised (#15121e)"><span>Raised</span></div>
+              <div class="swatch" style="background: #9b6cff;" title="Violet Glow (#9b6cff)"><span>Accent</span></div>
+            </div>
+            <div class="quote-pill">
+              “The viewport floats like a fine art canvas instead of a sterile window.”
+            </div>
+          </div>
+
+          <!-- PILLAR 4: WORKFLOW -->
+          <div class="bento-card card-large" id="workflow">
+            <div class="card-glow"></div>
+            <div class="card-badge">WORKFLOW</div>
+            <h3 class="card-title">Tailored for deep concentration.</h3>
+            <p class="card-text">
+              Work the way you think. Seamless vertical tabs that collapse to icons when you need screen estate, native side-by-side split screen, and floating bookmarks.
+            </p>
+            <div class="workflow-grid">
+              <div class="wf-item">
+                <div class="wf-icon">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="18" rx="1"/><rect x="14" y="3" width="7" height="18" rx="1"/></svg>
+                </div>
+                <h4>Collapsible Vertical Tabs</h4>
+                <p>Pin tabs, group workflows, and collapse to a micro-rail with automatic hover expansion.</p>
+              </div>
+
+              <div class="wf-item">
+                <div class="wf-icon">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/></svg>
+                </div>
+                <h4>Native Split View (⌥⌘\)</h4>
+                <p>Inspect documentation on the right while running localhost on the left. Zero window juggling.</p>
+              </div>
+
+              <div class="wf-item">
+                <div class="wf-icon">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+                </div>
+                <h4>Hover-Only Bookmarks</h4>
+                <p>Bookmarks glide into view as a floating overlay on toolbar hover, causing zero layout shift.</p>
+              </div>
+
+              <div class="wf-item">
+                <div class="wf-icon">
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+                </div>
+                <h4>Instant Screenshot Tool</h4>
+                <p>Capture Visible Area, Selection, or Full Scrolling Page directly from the toolbar (⇧⌘S).</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- KEYBOARD SHORTCUTS INTERACTIVE EXPLORER -->
+    <section class="shortcuts-section" id="shortcuts">
+      <div class="section-container">
+        <div class="section-head text-center">
+          <span class="eyebrow">KEYBOARD-FIRST ARCHITECTURE</span>
+          <h2 class="section-title">60+ Custom Shortcut Commands</h2>
+          <p class="section-desc">Every single command in Operecs can be remapped to your own muscle memory with instant physical key normalization and live conflict detection.</p>
+        </div>
+
+        <div class="shortcuts-card">
+          <div class="shortcuts-filter-bar">
+            <div class="search-input-wrap">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+              <input type="text" id="shortcutSearch" placeholder="Filter shortcuts (e.g. split, vertical, tab, screenshot)...">
+            </div>
+            <span class="shortcut-count-badge" id="shortcutCountBadge">Showing all shortcuts</span>
+          </div>
+
+          <div class="shortcuts-table" id="shortcutsTable">
+            <!-- Dynamically populated / interactive table -->
+            <div class="shortcut-row" data-name="Toggle Vertical Tabs" data-category="Tabs">
+              <div class="sc-info">
+                <span class="sc-name">Toggle Vertical Tabs</span>
+                <span class="sc-cat">Tabs &amp; Sidebar</span>
+              </div>
+              <div class="sc-keys"><kbd>⌥</kbd><kbd>⌘</kbd><kbd>V</kbd></div>
+            </div>
+
+            <div class="shortcut-row" data-name="Toggle Split View" data-category="Tabs">
+              <div class="sc-info">
+                <span class="sc-name">Toggle Split View</span>
+                <span class="sc-cat">Tabs &amp; Layout</span>
+              </div>
+              <div class="sc-keys"><kbd>⌥</kbd><kbd>⌘</kbd><kbd>\</kbd></div>
+            </div>
+
+            <div class="shortcut-row" data-name="Take Screenshot" data-category="Tools">
+              <div class="sc-info">
+                <span class="sc-name">Capture Screenshot</span>
+                <span class="sc-cat">Tools &amp; Media</span>
+              </div>
+              <div class="sc-keys"><kbd>⇧</kbd><kbd>⌘</kbd><kbd>S</kbd></div>
+            </div>
+
+            <div class="shortcut-row" data-name="Toggle Reader Mode" data-category="Page">
+              <div class="sc-info">
+                <span class="sc-name">Toggle Reader Mode</span>
+                <span class="sc-cat">Page View</span>
+              </div>
+              <div class="sc-keys"><kbd>⌥</kbd><kbd>⌘</kbd><kbd>R</kbd></div>
+            </div>
+
+            <div class="shortcut-row" data-name="New Tab" data-category="Tabs">
+              <div class="sc-info">
+                <span class="sc-name">New Tab</span>
+                <span class="sc-cat">Navigation</span>
+              </div>
+              <div class="sc-keys"><kbd>⌘</kbd><kbd>T</kbd></div>
+            </div>
+
+            <div class="shortcut-row" data-name="Reopen Closed Tab" data-category="Tabs">
+              <div class="sc-info">
+                <span class="sc-name">Reopen Closed Tab</span>
+                <span class="sc-cat">Navigation</span>
+              </div>
+              <div class="sc-keys"><kbd>⇧</kbd><kbd>⌘</kbd><kbd>T</kbd></div>
+            </div>
+
+            <div class="shortcut-row" data-name="Focus Address Bar" data-category="Navigation">
+              <div class="sc-info">
+                <span class="sc-name">Focus Address Bar</span>
+                <span class="sc-cat">Navigation</span>
+              </div>
+              <div class="sc-keys"><kbd>⌘</kbd><kbd>L</kbd></div>
+            </div>
+
+            <div class="shortcut-row" data-name="Open Settings" data-category="General">
+              <div class="sc-info">
+                <span class="sc-name">Open Settings &amp; Shortcuts</span>
+                <span class="sc-cat">General</span>
+              </div>
+              <div class="sc-keys"><kbd>⌘</kbd><kbd>,</kbd></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- COMPARISON TABLE SECTION -->
+    <section class="compare-section" id="compare">
+      <div class="section-container">
+        <div class="section-head text-center">
+          <span class="eyebrow">HEAD-TO-HEAD</span>
+          <h2 class="section-title">How Operecs Compares</h2>
+          <p class="section-desc">A transparent look at how Operecs stacks up against the mainstream alternatives.</p>
+        </div>
+
+        <div class="table-wrap">
+          <table class="compare-table">
+            <thead>
+              <tr>
+                <th>Feature</th>
+                <th class="highlight-col">Operecs</th>
+                <th>Google Chrome</th>
+                <th>Arc Browser</th>
+                <th>Brave</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Zero Telemetry &amp; Cloud Tracking</strong></td>
+                <td class="highlight-col"><span class="badge-yes">✓ 100% Local</span></td>
+                <td><span class="badge-no">✕ Invasive</span></td>
+                <td><span class="badge-no">✕ Mandatory Account</span></td>
+                <td><span class="badge-partial">⚠️ Crypto telemetry</span></td>
+              </tr>
+              <tr>
+                <td><strong>Integrated Ghostery Adblocker</strong></td>
+                <td class="highlight-col"><span class="badge-yes">✓ Native (Fast)</span></td>
+                <td><span class="badge-no">✕ Manifest v3 limits</span></td>
+                <td><span class="badge-partial">⚠️ Basic uBlock</span></td>
+                <td><span class="badge-yes">✓ Native</span></td>
+              </tr>
+              <tr>
+                <td><strong>Collapsible Vertical Tabs + Hover Expand</strong></td>
+                <td class="highlight-col"><span class="badge-yes">✓ Yes (Brave style)</span></td>
+                <td><span class="badge-no">✕ Clunky</span></td>
+                <td><span class="badge-yes">✓ Yes</span></td>
+                <td><span class="badge-yes">✓ Yes</span></td>
+              </tr>
+              <tr>
+                <td><strong>Floating Rounded Card Viewport Frame</strong></td>
+                <td class="highlight-col"><span class="badge-yes">✓ Signature Frame</span></td>
+                <td><span class="badge-no">✕ None</span></td>
+                <td><span class="badge-partial">⚠️ Borders only</span></td>
+                <td><span class="badge-no">✕ None</span></td>
+              </tr>
+              <tr>
+                <td><strong>60+ Rebindable Keyboard Shortcuts</strong></td>
+                <td class="highlight-col"><span class="badge-yes">✓ Full GUI Editor</span></td>
+                <td><span class="badge-no">✕ Very limited</span></td>
+                <td><span class="badge-partial">⚠️ Basic</span></td>
+                <td><span class="badge-partial">⚠️ Basic</span></td>
+              </tr>
+              <tr>
+                <td><strong>Local SQLite History with FTS5 Search</strong></td>
+                <td class="highlight-col"><span class="badge-yes">✓ Yes (Instant)</span></td>
+                <td><span class="badge-no">✕ Cloud synced</span></td>
+                <td><span class="badge-no">✕ Cloud synced</span></td>
+                <td><span class="badge-partial">⚠️ Standard</span></td>
+              </tr>
+              <tr>
+                <td><strong>Mandatory Login / Crypto Gimmicks</strong></td>
+                <td class="highlight-col"><span class="badge-yes">✓ Never</span></td>
+                <td><span class="badge-no">✕ Google Account</span></td>
+                <td><span class="badge-no">✕ Arc Account</span></td>
+                <td><span class="badge-no">✕ Crypto Rewards</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- DOWNLOAD / CALL TO ACTION -->
+    <section class="download-section" id="download">
+      <div class="download-card">
+        <div class="card-glow-intense"></div>
+        <img src="assets/icon.png" alt="Operecs Logo" class="download-logo" width="72" height="72">
+        <h2 class="download-title">Elevate your daily browse.</h2>
+        <p class="download-sub">Download Operecs for macOS today. Free, open source, and built with love by Ezzeddin Magdy.</p>
+
+        <div class="download-buttons">
+          <a href="https://github.com/ezzeldinzozz-svg/operecs-browser/releases/download/v0.21.8/Operecs-0.21.8-arm64.dmg" class="btn-download-hero">
+            <svg class="ico" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+            <div class="btn-info">
+              <span class="primary-label">Download for Apple Silicon (.dmg)</span>
+              <span class="secondary-label">v0.21.8 · M1 / M2 / M3 / M4 · ~98 MB</span>
+            </div>
+          </a>
+
+          <a href="https://github.com/ezzeldinzozz-svg/operecs-browser/releases/download/v0.21.8/Operecs-0.21.8-arm64-mac.zip" class="btn-download-alt">
+            <span>Download as .zip</span>
+          </a>
+        </div>
+
+        <!-- Terminal Quick Fix / Gatekeeper Note -->
+        <div class="terminal-note-box">
+          <div class="terminal-header">
+            <span>macOS Gatekeeper First Launch:</span>
+            <button class="copy-cmd-btn" id="copyCmdBtn" title="Copy command">Copy</button>
+          </div>
+          <code>xattr -cr /Applications/Operecs.app</code>
+          <p class="terminal-help">Since Operecs is built and distributed directly on GitHub without an Apple Developer enterprise certificate, run this one-liner if macOS displays an untrusted developer prompt.</p>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- FOOTER -->
+  <footer class="site-footer">
+    <div class="footer-container">
+      <div class="footer-col brand-col">
+        <div class="footer-brand">
+          <img src="assets/icon.png" alt="Operecs" width="24" height="24">
+          <span class="footer-brand-name">Operecs Browser</span>
+        </div>
+        <p class="footer-desc">Crafted with obsessive attention to craft by <a href="https://ezzeddin.work" target="_blank" rel="noopener">Ezzeddin Magdy</a>.</p>
+        <p class="footer-copy">© 2026 Ezzeddin Magdy · Released under GPL-3.0 License.</p>
+      </div>
+
+      <div class="footer-col">
+        <h4>Product</h4>
+        <ul>
+          <li><a href="#privacy">Privacy Model</a></li>
+          <li><a href="#speed">Speed &amp; Performance</a></li>
+          <li><a href="#aesthetics">Aesthetics &amp; Themes</a></li>
+          <li><a href="#workflow">Vertical Tabs &amp; Split</a></li>
+          <li><a href="#shortcuts">Keyboard Shortcuts</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>Downloads</h4>
+        <ul>
+          <li><a href="https://github.com/ezzeldinzozz-svg/operecs-browser/releases/tag/v0.21.8">Release v0.21.8</a></li>
+          <li><a href="https://github.com/ezzeldinzozz-svg/operecs-browser/releases">All Releases</a></li>
+          <li><a href="https://github.com/ezzeldinzozz-svg/operecs-browser/releases/download/v0.21.8/Operecs-0.21.8-arm64.dmg">Apple Silicon DMG</a></li>
+          <li><a href="https://github.com/ezzeldinzozz-svg/operecs-browser/releases/download/v0.21.8/Operecs-0.21.8-arm64-mac.zip">Apple Silicon ZIP</a></li>
+        </ul>
+      </div>
+
+      <div class="footer-col">
+        <h4>Community &amp; Source</h4>
+        <ul>
+          <li><a href="https://github.com/ezzeldinzozz-svg/operecs-browser" target="_blank" rel="noopener">GitHub Repository</a></li>
+          <li><a href="https://github.com/ezzeldinzozz-svg/operecs-browser/issues" target="_blank" rel="noopener">Issue Tracker</a></li>
+          <li><a href="https://ezzeddin.work" target="_blank" rel="noopener">ezzeddin.work</a></li>
+        </ul>
+      </div>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
