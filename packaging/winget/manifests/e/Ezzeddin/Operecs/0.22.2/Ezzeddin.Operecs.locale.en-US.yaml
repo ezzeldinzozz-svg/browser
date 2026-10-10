@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+PackageIdentifier: Ezzeddin.Operecs
+PackageVersion: 0.22.2
+PackageLocale: en-US
+Publisher: Ezzeddin Magdy
+PublisherUrl: https://github.com/ezzeldinzozz-svg
+PackageName: Operecs
+PackageUrl: https://github.com/ezzeldinzozz-svg/operecs-browser
+License: GPL-3.0-or-later
+LicenseUrl: https://github.com/ezzeldinzozz-svg/operecs-browser/blob/main/LICENSE
+ShortDescription: Private, fast web browser built on Chromium
+Description: Operecs is a web browser with built-in ad and tracker blocking, tab groups, vertical tabs, split view, Chrome extensions and free automatic updates.
+Moniker: operecs
+Tags:
+  - browser
+  - chromium
+  - privacy
+  - web-browser
+ReleaseNotesUrl: https://github.com/ezzeldinzozz-svg/operecs-browser/releases/tag/v0.22.2
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

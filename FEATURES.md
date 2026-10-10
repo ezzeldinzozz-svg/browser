@@ -83,8 +83,9 @@ Edit freely: move lines between sections, delete what you don't want, add your o
 - [ ] Linux: AppImage/.deb exist and pass CI; Ubuntu 24.04 sandbox note, Flatpak/rpm, package repositories
 - [ ] Intel Macs: x64 build exists, never run
 - [ ] Other languages: Arabic (with right-to-left) exists in `locales/ar.json`; more languages
-- [ ] Listings: Homebrew, winget, Microsoft Store
-- [ ] Trademark check for the name; terms of use
+- [ ] Listings: Homebrew, winget, Microsoft Store — files ready in `packaging/` (see its README); publishing waits on the owner (own Homebrew tap repo, winget PR, Partner Center account). Official Homebrew needs notarization
+- [x] Trademark check for the name (2026-10-10, `research/trademark-check.md`: no "Operecs" mark in USPTO or WIPO; closest is openECS, class 7/9)
+- [ ] Terms of use
 
 ## Won't do
 
