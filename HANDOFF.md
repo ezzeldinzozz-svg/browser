@@ -252,7 +252,7 @@ current build as an update signed with a throwaway key from a local server (`BRO
 plus `BROWSER_UPDATE_URL`/`BROWSER_UPDATE_KEY`, honored only together), clicks "Restart to update"
 and checks the new version is installed and running.
 
-Release tags (`v*`) run the same workflow; `npm run release` waits for it, downloads the Windows
+CI also runs `scripts/feature-test.js` (the full end-to-end suite, against the unpackaged app) on Windows and Linux (under xvfb). Release tags (`v*`) run the same workflow; `npm run release` waits for it, downloads the Windows
 and Linux packages, signs every platform's update manifest locally and publishes them with the Mac
 build. The signing keys never leave the Mac.
 

@@ -88,7 +88,8 @@ const server = http.createServer((req, res) => {
 
 (async () => {
   await new Promise((r) => server.listen(8798, r));
-  const app = spawn(path.join(ROOT, 'node_modules', '.bin', 'electron'), ['--inspect=9229', '.', '--remote-debugging-port=9333'], {
+  // require('electron') is the path to the Electron binary on every system (.bin/electron is a .cmd on Windows)
+  const app = spawn(require('electron'), ['--inspect=9229', '.', '--remote-debugging-port=9333'], {
     cwd: ROOT,
     env: { ...process.env, BROWSER_PROFILE_DIR: PROFILE },
     stdio: 'ignore',
@@ -239,7 +240,11 @@ const server = http.createServer((req, res) => {
       // gone already
     }
     await sleep(1000);
-    fs.rmSync(PROFILE, { recursive: true, force: true });
+    try {
+      fs.rmSync(PROFILE, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 }); // Windows can hold files a moment longer
+    } catch {
+      // a temp folder left behind
+    }
     console.log(failures ? `\n${failures} check(s) failed.` : '\nAll feature checks passed.');
     process.exit(failures ? 1 : 0);
   }

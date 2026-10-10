@@ -32,6 +32,8 @@ jobs:
         run: npx electron-builder --win --x64 --publish never
       - name: Smoke test
         run: node scripts/smoke-test.js dist/win-unpacked/Operecs.exe
+      - name: Feature tests (the same end-to-end checks as on the Mac)
+        run: node scripts/feature-test.js
       - uses: actions/upload-artifact@v4
         with:
           name: browser-windows
@@ -58,6 +60,8 @@ jobs:
         run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
       - name: Smoke test
         run: xvfb-run -a node scripts/smoke-test.js dist/linux-unpacked/browser
+      - name: Feature tests (the same end-to-end checks as on the Mac)
+        run: xvfb-run -a node scripts/feature-test.js
       - uses: actions/upload-artifact@v4
         with:
           name: browser-linux
