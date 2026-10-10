@@ -171,6 +171,7 @@ See `research/browser-lessons.md` for the full research on how Brave and others 
 | `scripts/keygen.js`, `scripts/release.js` | Release signing key setup, and build+sign+publish |
 
 Key decisions:
+- `overrides` in package.json pins `adm-zip` 0.6.1 (electron-chrome-web-store 0.13.0 pulls 0.5.18, which has extraction advisories: symlink overwrite, zip bombs). Drop the override once the store library depends on a fixed version
 - **License: GPL-3.0-or-later** since v0.10 (required by `electron-chrome-extensions`, which is GPL-3.0; up to v0.9 the project was MIT).
 - **Electron over Rust/system webview:** same Chromium engine on all three OSes; Linux webviews are weak. Revisit only if "lightweight/native" becomes the product's identity.
 - **Security model:** websites never get the IPC API; only `browser://` pages do, checked by sender in main. Websites can't navigate/frame/redirect to `browser://`.
