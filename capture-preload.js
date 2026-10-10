@@ -539,6 +539,7 @@ if ((/^https?:$/.test(location.protocol) || /^browser:$/.test(location.protocol)
   }
 
   window.addEventListener('wheel', (e) => {
+    if (!e.isTrusted) return;
     if (Math.abs(e.deltaX) <= Math.abs(e.deltaY) * 1.3 || Math.abs(e.deltaX) < 1.5) return;
     if (canScrollH(e.target, e.deltaX)) {
       swipeX = 0;
@@ -604,6 +605,7 @@ if (window === window.top && location.href !== 'browser://ui/') {
     };
     window.addEventListener('keydown', onKey, true);
     ov.addEventListener('mousedown', (e) => {
+      if (!e.isTrusted) return; // only the user's own mouse, never events the page makes up
       dragging = true;
       startX = e.clientX;
       startY = e.clientY;
@@ -622,7 +624,7 @@ if (window === window.top && location.href !== 'browser://ui/') {
       box.style.height = `${h}px`;
     });
     ov.addEventListener('mouseup', (e) => {
-      if (!dragging) return;
+      if (!dragging || !e.isTrusted) return;
       dragging = false;
       const x = Math.round(Math.min(startX, e.clientX));
       const y = Math.round(Math.min(startY, e.clientY));

@@ -64,9 +64,9 @@ Edit freely: move lines between sections, delete what you don't want, add your o
 - [x] Share a single tab when screen sharing
 - [x] Client certificate selection
 - [x] Workspaces / spaces
-- [ ] Built-in AI features (summaries, chat) — product decision
+- ~~Built-in AI features (summaries, chat)~~ — skipped (decided 2026-10-10)
 - [x] QR code for the current page
-- [ ] Encrypted sync / send tab to another device
+- ~~Encrypted sync / send tab to another device~~ — skipped (decided 2026-10-10)
 
 ## Blocked — needs a paid account or a provider
 

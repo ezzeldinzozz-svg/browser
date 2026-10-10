@@ -542,6 +542,8 @@ function readableHost(u) {
   }
 }
 
+const PROTOCOL_SAFELIST = new Set(['bitcoin', 'ftp', 'ftps', 'geo', 'im', 'irc', 'ircs', 'magnet', 'mailto', 'matrix', 'mms', 'news', 'nntp', 'openpgp4fpr', 'sftp', 'sip', 'sms', 'smsto', 'ssh', 'tel', 'urn', 'webcal', 'wtai', 'xmpp']);
+
 function resolveProtocolUrl(targetUrl) {
   if (!store || !targetUrl) return null;
   const m = String(targetUrl).trim().match(/^([a-z][a-z0-9+.-]*):/i);
@@ -3667,9 +3669,28 @@ function toggleReadAloud(w) {
   if (isWeb(url)) tab.wc.mainFrame.send('speech:toggle');
 }
 
-function toggleTranslatePage(w) {
+async function toggleTranslatePage(w) {
   const tab = activeTab(w);
   if (!tab || tab.pending || tab.wc.isDestroyed() || !isWeb(tab.wc.getURL())) return;
+  // Translation sends the page's text to Google Translate: never from private windows, and only
+  // after the user has agreed once.
+  if (w.private) {
+    dialog.showMessageBox(w.win, { type: 'info', message: 'Translate isn\u2019t available in private windows', detail: 'Translating sends the page\u2019s text to Google Translate.', buttons: ['OK'] }).catch(() => {});
+    return;
+  }
+  if (!store.data.settings.translateConsent) {
+    const { response } = await dialog.showMessageBox(w.win, {
+      type: 'question',
+      message: 'Translate this page with Google Translate?',
+      detail: 'The text of the page is sent to Google to be translated. Nothing is sent until you choose Translate.',
+      buttons: ['Translate', 'Cancel'],
+      defaultId: 0,
+      cancelId: 1,
+    });
+    if (response !== 0 || tab.wc.isDestroyed()) return;
+    store.data.settings.translateConsent = true;
+    store.save();
+  }
   const lang = store.data.settings.languages && store.data.settings.languages[0] ? store.data.settings.languages[0].split('-')[0] : 'en';
   tab.wc.mainFrame.send('translate:toggle', lang || 'en');
 }
@@ -4588,8 +4609,10 @@ function setupIpc() {
     } catch {
       return;
     }
-    if (parsed.origin !== origin || !info.url.includes('%s')) return;
+    if (parsed.origin !== origin || parsed.protocol !== 'https:' || !info.url.includes('%s')) return;
     const scheme = info.scheme.toLowerCase();
+    // the same list as the HTML spec (also checked in the page, but never trust the page)
+    if (!PROTOCOL_SAFELIST.has(scheme) && !/^web\+[a-z]{1,30}$/.test(scheme)) return;
     const existing = (store.data.settings.protocolHandlers || {})[scheme];
     if (existing && existing.url === info.url) return;
     tab.prompts = tab.prompts.filter((p) => !(p.kind === 'protocol-handler' && p.scheme === scheme));
@@ -4632,7 +4655,8 @@ function setupIpc() {
 
   ipcMain.handle('translate:batch', (e, texts, targetLang) => {
     const tab = tabOfWc(e.sender);
-    if (!tab || !Array.isArray(texts)) return [];
+    // page text goes to Google Translate: never from private windows
+    if (!tab || tab.w.private || !Array.isArray(texts)) return [];
     return translateTexts(texts.slice(0, 50), String(targetLang || 'en'));
   });
 

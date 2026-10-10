@@ -1,6 +1,9 @@
 {
   "_comment": "Shown on browser://whatsnew after an update. Add user-visible changes to \"next\" as they land; `npm run release` renames \"next\" to the version it releases (and refuses to release without notes).",
-  "next": [],
+  "next": [
+    "Translate asks before sending a page's text to Google Translate the first time, and is never used in private windows",
+    "Sites can only register as handlers for safe link types (mailto:, web+…)"
+  ],
   "0.21.8": [
     "Vertical tabs: restored balanced outer card frame with even 8px insets and rounded corners matching horizontal tabs mode"
   ],

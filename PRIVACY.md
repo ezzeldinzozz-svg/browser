@@ -14,6 +14,7 @@ Besides the websites you visit, Operecs itself contacts:
 | Ad and tracker block lists | Ghostery's CDN (`cdn.ghostery.com`) | First launch, then about once a week | A normal web request for the lists |
 | Your search engine | The one you choose (DuckDuckGo by default) | When you search from the address bar | What you typed |
 | Search suggestions (off by default) | Your search engine's suggestion service | Only if you turn on "Show search suggestions": as you type in the address bar (not in private windows) | What you're typing, without cookies |
+| Page translation (only when you choose Translate) | Google Translate (`translate.googleapis.com`) | When you translate a page; never in private windows | The page's text, without cookies |
 | Site icons | The site you're visiting | When a page has an icon | A request for the icon, without cookies |
 
 These requests include your IP address and a standard browser user agent, like any web request.
