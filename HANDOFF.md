@@ -226,6 +226,7 @@ macOS DMG needs a Mac (Apple Silicon builds are arm64).
 | `npm run release -- 0.3.0` | Release a specific version |
 | `npm run release -- 0.3.0 --critical` | Security fix: installed copies ask to restart now and restart by themselves within 10 minutes |
 | `npm run release -- 0.3.0 --all-platforms` | Also Intel Mac + Windows/Linux from CI (parked; default is Apple silicon only) |
+| (release page) | `release.js` writes the notes itself (`releaseNotes`): a Download table (which file for which computer) and the version's changelog entries |
 | `npm run release -- --resume` | Finish a release whose tag is pushed but that stopped before publishing (e.g. a flaky smoke test). Refuses if app files changed since the tag; add `--all-platforms` if the original run had it |
 
 Release needs a clean git tree. Uploading the DMG and zip (~130 MB each) can take 10+ minutes;

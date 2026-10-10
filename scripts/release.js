@@ -95,6 +95,34 @@ function resumeFrom(tag) {
   return out('git', ['rev-parse', `${tag}^{commit}`]);
 }
 
+// The release page: which file to download for which computer, then what's new (from
+// pages/changelog.json). The .zip and latest-*.json files are only for automatic updates.
+function releaseNotes(version, files) {
+  const link = (file) => file && `[${path.basename(file)}](https://github.com/${REPO}/releases/download/v${version}/${encodeURIComponent(path.basename(file))})`;
+  const rows = [
+    ['Mac with Apple silicon (M1 and later)', link(files.macDmg)],
+    ['Mac with Intel', link(files.macDmgX64)],
+    ['Windows 10 and 11 (64-bit)', link(files.win)],
+    ['Linux (64-bit)', [link(files.appImage), link(files.deb)].filter(Boolean).join(' or ')],
+  ].filter(([, l]) => l);
+  const log = JSON.parse(fs.readFileSync(path.join(ROOT, 'pages', 'changelog.json'), 'utf8'));
+  return [
+    '## Download',
+    '',
+    '| Your computer | File |',
+    '| --- | --- |',
+    ...rows.map(([who, l]) => `| ${who} | ${l} |`),
+    '',
+    'Already have Operecs? It updates itself. The `.zip` and `latest-*.json` files are for those automatic updates.',
+    '',
+    'First launch: on Mac, if it says Apple can\'t check the app, open System Settings → Privacy & Security and click **Open Anyway**. On Windows, if SmartScreen appears, click **More info** → **Run anyway**.',
+    '',
+    "## What's new",
+    '',
+    ...(log[version] || []).map((n) => `- ${n}`),
+  ].join('\n');
+}
+
 function main() {
   if (!fs.existsSync(PRIVATE_KEY)) throw new Error(`Missing signing key ${PRIVATE_KEY}. Run: npm run keygen`);
   if (out('git', ['status', '--porcelain'])) throw new Error('Commit or stash your changes first.');
@@ -170,7 +198,8 @@ function main() {
   const assets = [mac.dmg, mac.zip, mac.dmgX64, mac.zipX64, win, appImage, deb, ...manifests].filter(Boolean);
   console.log(`\nUploading ${assets.length} files (this can take a while)…`);
   try {
-    sh('gh', ['release', 'create', tag, '--repo', REPO, '--title', tag, '--generate-notes', ...assets], { env });
+    const notes = releaseNotes(version, { macDmg: mac.dmg, macDmgX64: mac.dmgX64, win, appImage, deb });
+    sh('gh', ['release', 'create', tag, '--repo', REPO, '--title', tag, '--notes', notes, ...assets], { env });
   } catch (err) {
     console.error(
       '\nThe upload stopped. GitHub keeps the release as a draft, which installed apps never see.\n' +

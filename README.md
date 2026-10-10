@@ -4,6 +4,19 @@
 
 A basic cross-platform web browser built on Electron.
 
+## Download
+
+Get the latest version from the [releases page](https://github.com/ezzeldinzozz-svg/operecs-browser/releases/latest):
+
+| Your computer | File |
+| --- | --- |
+| Mac with Apple silicon (M1 and later) | `Operecs-<version>-arm64.dmg` |
+| Mac with Intel | `Operecs-<version>.dmg` |
+| Windows 10 and 11 (64-bit) | `Operecs-Setup-<version>.exe` |
+| Linux (64-bit) | `Operecs-<version>.AppImage` or `browser_<version>_amd64.deb` |
+
+Operecs updates itself after that.
+
 ## Features
 
 - Tabs, address bar with search, back/forward/reload
