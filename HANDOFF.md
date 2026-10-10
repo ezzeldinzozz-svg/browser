@@ -3,7 +3,7 @@
 Everything needed to pick this project up on any device. **Keep this file current:** update it
 in the same commit as any change to features, architecture, setup, or plans.
 
-_Last updated: 2026-10-10 · Current release: v0.21.8 (Apple silicon Mac; v0.19.0 was the last for Intel, Windows and Linux)_
+_Last updated: 2026-10-10 · Current release: v0.22.0 (all platforms: Apple silicon + Intel Mac, Windows, Linux)_
 
 **v0.21.8 added:** balanced outer card frame in vertical tabs mode — restored even 8px insets and rounded 12px corners with border outline and shadow around the webpage view, matching horizontal tabs mode.
 
