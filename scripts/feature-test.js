@@ -55,6 +55,14 @@ async function main(expr) {
   return r.result?.value ?? `ERROR ${r.exceptionDetails?.exception?.description || ''}`;
 }
 const ui = (e) => evalIn('browser://ui', e);
+// A trusted mouse click on an element (Input.dispatchMouseEvent), which also focuses the page.
+async function clickIn(match, selector) {
+  const t = (await targets()).find((x) => x.url.startsWith(match));
+  const rect = JSON.parse(await evalIn(match, `JSON.stringify(document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect())`));
+  const x = rect.x + rect.width / 2;
+  const y = rect.y + rect.height / 2;
+  for (const type of ['mousePressed', 'mouseReleased']) await cdp(t.webSocketDebuggerUrl, 'Input.dispatchMouseEvent', { type, x, y, button: 'left', clickCount: 1 });
+}
 const go = async (url, wait = 2500) => {
   await ui(`browserAPI.go(${JSON.stringify(url)})`);
   await sleep(wait);
@@ -161,7 +169,7 @@ const server = http.createServer((req, res) => {
     await go('browser://settings', 1500);
     await evalIn('browser://settings', "browserAPI.saveAddress({ name: 'Test Person', street: '1 Test St', city: 'Testville', email: 't@example.com' })");
     await go('http://localhost:8798/', 2000);
-    await evalIn('http://localhost:8798', "document.querySelector('[name=fname]').focus(); 1");
+    await clickIn('http://localhost:8798', '[name=fname]'); // a real click, as a user would
     await sleep(1200);
     await evalIn('browser://ui/autofill.html', "document.querySelector('.row') && document.querySelector('.row').click(); 1");
     await sleep(800);

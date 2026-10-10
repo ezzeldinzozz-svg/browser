@@ -1050,7 +1050,10 @@ function createWindow({ private: isPrivate = false, session: saved = null, ses: 
   cwc.on('context-menu', (_e, params) => showChromeMenu(w, params));
   cwc.on('before-input-event', (e, input) => handleShortcutBeforeInput(w, e, input));
   cwc.loadURL(UI_URL);
-  cwc.once('did-finish-load', () => sendTabs(w));
+  cwc.once('did-finish-load', () => {
+    sendTabs(w);
+    learnClientHints(cwc);
+  });
 
   win.on('focus', () => {
     if (lastFocused !== w) rebuildMenuSoon(); // History → Recently Closed is per window
@@ -1240,9 +1243,52 @@ function preferredLanguages() {
   return list.length ? list : ['en-US'];
 }
 
+// Real Chrome sends the low-entropy User-Agent Client Hints with every secure request, and pages
+// see the same brands in navigator.userAgentData. With our user agent override Chromium stops
+// sending the headers but keeps the JavaScript values, a mismatch that bot checks such as
+// Cloudflare's treat as a fake browser (endless "Verifying you are human"). So send them
+// ourselves, copied from what the engine reports to pages.
+let clientHintBrands = null; // '"Not?A_Brand";v="24", "Chromium";v="152"'
+const CLIENT_HINT_PLATFORM = isMac ? '"macOS"' : process.platform === 'win32' ? '"Windows"' : '"Linux"';
+function learnClientHints(wc) {
+  if (clientHintBrands) return;
+  wc.executeJavaScript('JSON.stringify(navigator.userAgentData ? navigator.userAgentData.brands : [])')
+    .then((json) => {
+      const brands = JSON.parse(json);
+      if (Array.isArray(brands) && brands.length) clientHintBrands = brands.map((b) => `"${b.brand}";v="${b.version}"`).join(', ');
+    })
+    .catch(() => {});
+}
+function addClientHints(details) {
+  if (!clientHintBrands || !/^https:/i.test(details.url)) return;
+  const h = details.requestHeaders;
+  if (Object.keys(h).some((k) => k.toLowerCase() === 'sec-ch-ua')) return;
+  h['sec-ch-ua'] = clientHintBrands;
+  h['sec-ch-ua-mobile'] = '?0';
+  h['sec-ch-ua-platform'] = CLIENT_HINT_PLATFORM;
+}
+
+// User agent. By default an honest one: Chrome's, plus Operecs and Electron. Bot checks such as
+// Cloudflare's treat a browser that says plain "Chrome" but lacks Chrome-only features as a fake
+// and loop forever on "Verifying you are human" (futbin.com, 2026-10-10). Google sign-in refuses
+// "Electron", so only its pages get the plain Chrome one (googleSignInUA below).
+const DEFAULT_UA = () => app.userAgentFallback.replace(`${app.getName()}/`, 'Operecs/');
+const CHROME_UA = () =>
+  app.userAgentFallback
+    .replace(/ Electron\/\S+/, '')
+    .replace(` ${app.getName()}/${app.getVersion()}`, '')
+    .replace(/Chrome\/(\d+)[\d.]+/, 'Chrome/$1.0.0.0'); // real Chrome only shows its major version
+const GOOGLE_SIGN_IN = /^https:\/\/accounts\.(google|youtube)\.com\//i;
+const userAgentFor = (url) => (GOOGLE_SIGN_IN.test(String(url)) ? CHROME_UA() : DEFAULT_UA());
+
+// navigator.userAgent follows the page: Chrome's on Google sign-in, ours everywhere else.
+function syncUserAgent(wc, url) {
+  const want = userAgentFor(url);
+  if (!wc.isDestroyed() && wc.getUserAgent() !== want) wc.setUserAgent(want);
+}
+
 function applyLanguages(ses) {
-  const ua = app.userAgentFallback.replace(/ Electron\/\S+/, '').replace(` ${app.getName()}/${app.getVersion()}`, '');
-  ses.setUserAgent(ua, preferredLanguages().join(','));
+  ses.setUserAgent(DEFAULT_UA(), preferredLanguages().join(','));
   ses.setSpellCheckerEnabled(store.data.settings.spellcheck);
   // macOS uses the system spellchecker, which picks languages itself
   if (!isMac) {
@@ -1354,6 +1400,11 @@ function configureSession(ses) {
   // Global Privacy Control: asks sites not to sell or share the user's data.
   ses.webRequest.onBeforeSendHeaders({ urls: ['<all_urls>'] }, (details, callback) => {
     if (store.data.settings.gpc) details.requestHeaders['Sec-GPC'] = '1';
+    if (GOOGLE_SIGN_IN.test(details.url)) {
+      for (const k of Object.keys(details.requestHeaders)) if (k.toLowerCase() === 'user-agent') delete details.requestHeaders[k];
+      details.requestHeaders['User-Agent'] = CHROME_UA();
+    }
+    addClientHints(details);
     if (details.resourceType === 'mainFrame' && details.method === 'POST') rememberPostType(details);
     callback({ requestHeaders: details.requestHeaders });
   });
@@ -1478,6 +1529,7 @@ function createTab(w, url, { background = false, after = null, history = null, l
       tab.readerable = false;
       tab.mixedContent = false;
       if (tab.media) setMediaState(tab, null);
+      syncUserAgent(wc, details.url);
     }
   });
   // A page may start one download on its own; more need the user's OK unless they clicked or
@@ -1612,6 +1664,8 @@ function popupOptions(features, w) {
 // browser's own pages, and opens its own links as tabs in the opener's window.
 function setupPopup(popup, opener) {
   const pwc = popup.webContents;
+  syncUserAgent(pwc, pwc.getURL());
+  pwc.on('did-start-navigation', (d) => d.isMainFrame && !d.isSameDocument && syncUserAgent(pwc, d.url));
   const titled = () => {
     if (popup.isDestroyed()) return;
     const host = siteOf(pwc.getURL()) || pwc.getURL();

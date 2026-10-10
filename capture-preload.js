@@ -9,6 +9,75 @@
 
 const { contextBridge, ipcRenderer } = require('electron');
 
+// ---- Look like the Chrome we say we are. Pages (and bot checks such as Cloudflare's) expect a
+// browser presenting as Chrome to have window.chrome.app / csi / loadTimes, which Electron
+// lacks, and they flag functions whose source shows they were replaced. So: fill in those
+// objects, and have every function Operecs adds to pages report itself as built-in code.
+// Runs first, so the later wrappers in this file can register through it.
+if (/^https?:$/.test(location.protocol)) {
+  try {
+    contextBridge.executeInMainWorld({
+      func: () => {
+        const ours = new WeakSet();
+        const toString = Function.prototype.toString;
+        const patched = {
+          toString() {
+            return ours.has(this) ? `function ${this.name || ''}() { [native code] }` : toString.call(this);
+          },
+        }.toString;
+        ours.add(patched);
+        Object.defineProperty(Function.prototype, 'toString', { value: patched, writable: true, configurable: true });
+        Object.defineProperty(window, Symbol.for('operecs.native'), {
+          value: (fn, name) => {
+            if (typeof fn !== 'function') return fn;
+            if (name && !fn.name) Object.defineProperty(fn, 'name', { value: name }); // assigned functions have no name
+            ours.add(fn);
+            return fn;
+          },
+        });
+
+        const chrome = window.chrome || {};
+        const fn = (name, impl) => {
+          Object.defineProperty(impl, 'name', { value: name });
+          ours.add(impl);
+          return impl;
+        };
+        if (!chrome.app) {
+          chrome.app = {
+            isInstalled: false,
+            InstallState: { DISABLED: 'disabled', INSTALLED: 'installed', NOT_INSTALLED: 'not_installed' },
+            RunningState: { CANNOT_RUN: 'cannot_run', READY_TO_RUN: 'ready_to_run', RUNNING: 'running' },
+            getDetails: fn('getDetails', () => null),
+            getIsInstalled: fn('getIsInstalled', () => false),
+            installState: fn('installState', (cb) => cb && cb('not_installed')),
+            runningState: fn('runningState', () => 'cannot_run'),
+          };
+        }
+        const nav = () => performance.getEntriesByType('navigation')[0] || {};
+        if (!chrome.csi) {
+          chrome.csi = fn('csi', () => ({ startE: Math.round(performance.timeOrigin), onloadT: Math.round(performance.timeOrigin + (nav().loadEventEnd || 0)), pageT: performance.now(), tran: 15 }));
+        }
+        if (!chrome.loadTimes) {
+          chrome.loadTimes = fn('loadTimes', () => {
+            const n = nav();
+            const t = (ms) => (performance.timeOrigin + (ms || 0)) / 1000;
+            return {
+              requestTime: t(n.requestStart), startLoadTime: t(n.startTime), commitLoadTime: t(n.responseStart),
+              finishDocumentLoadTime: t(n.domContentLoadedEventEnd), finishLoadTime: t(n.loadEventEnd), firstPaintTime: t(n.domInteractive),
+              firstPaintAfterLoadTime: 0, navigationType: 'Other', wasFetchedViaSpdy: n.nextHopProtocol === 'h2',
+              wasNpnNegotiated: n.nextHopProtocol === 'h2', npnNegotiatedProtocol: n.nextHopProtocol || 'unknown',
+              wasAlternateProtocolAvailable: false, connectionInfo: n.nextHopProtocol || 'http/1.1',
+            };
+          });
+        }
+        if (!window.chrome) Object.defineProperty(window, 'chrome', { value: chrome, writable: true, configurable: true, enumerable: true });
+      },
+    });
+  } catch {
+    // page world not available
+  }
+}
+
 if (/^https?:$/.test(location.protocol)) {
   let stopAll = null;
   try {
@@ -116,6 +185,9 @@ if (/^https?:$/.test(location.protocol) && typeof window.Notification === 'funct
           }
         }
         window.Notification = Notification;
+        (window[Symbol.for('operecs.native')] || ((f) => f))(Notification);
+        (window[Symbol.for('operecs.native')] || ((f) => f))(Object.getOwnPropertyDescriptor(Notification, 'permission').get);
+        (window[Symbol.for('operecs.native')] || ((f) => f))(Notification.requestPermission);
         const query = Permissions.prototype.query;
         Permissions.prototype.query = function (desc) {
           return query.call(this, desc).then((status) => {
@@ -123,6 +195,7 @@ if (/^https?:$/.test(location.protocol) && typeof window.Notification === 'funct
             return Object.create(status, { state: { get: () => 'prompt' } });
           });
         };
+        (window[Symbol.for('operecs.native')] || ((f) => f))(Permissions.prototype.query, 'query');
       },
       args: [() => ipcRenderer.send('notification:click'), location.hostname.replace(/^www\./, ''), undecided],
     });
@@ -146,10 +219,12 @@ if (/^https?:$/.test(location.protocol)) {
           if (this === window && type === 'beforeunload' && fn) handlers.add(fn);
           return add.call(this, type, fn, options);
         };
+        (window[Symbol.for('operecs.native')] || ((f) => f))(EventTarget.prototype.addEventListener, 'addEventListener');
         EventTarget.prototype.removeEventListener = function (type, fn, options) {
           if (this === window && type === 'beforeunload') handlers.delete(fn);
           return remove.call(this, type, fn, options);
         };
+        (window[Symbol.for('operecs.native')] || ((f) => f))(EventTarget.prototype.removeEventListener, 'removeEventListener');
         Object.defineProperty(window, Symbol.for('operecs.wouldWarnOnUnload'), {
           value: () => {
             if (navigator.userActivation && !navigator.userActivation.hasBeenActive) return false;
@@ -363,6 +438,7 @@ if (/^https?:$/.test(location.protocol)) {
               }
               return img;
             };
+            (window[Symbol.for('operecs.native')] || ((f) => f))(CanvasRenderingContext2D.prototype.getImageData);
             const toDataURL = HTMLCanvasElement.prototype.toDataURL;
             HTMLCanvasElement.prototype.toDataURL = function (...args) {
               try {
@@ -379,6 +455,7 @@ if (/^https?:$/.test(location.protocol)) {
               } catch {}
               return toDataURL.apply(this, args);
             };
+            (window[Symbol.for('operecs.native')] || ((f) => f))(HTMLCanvasElement.prototype.toDataURL, 'toDataURL');
             for (const Proto of [ window.WebGLRenderingContext?.prototype, window.WebGL2RenderingContext?.prototype ]) {
               if (!Proto || !Proto.getParameter) continue;
               const orig = Proto.getParameter;
@@ -399,6 +476,7 @@ if (/^https?:$/.test(location.protocol)) {
                 }
                 return data;
               };
+              (window[Symbol.for('operecs.native')] || ((f) => f))(AudioBuffer.prototype.getChannelData, 'getChannelData');
             }
             try {
               Object.defineProperty(Navigator.prototype, 'hardwareConcurrency', { get: () => 8, configurable: true });
@@ -417,6 +495,7 @@ if (/^https?:$/.test(location.protocol)) {
               }
               return origPlay.apply(this, args);
             };
+            (window[Symbol.for('operecs.native')] || ((f) => f))(HTMLMediaElement.prototype.play, 'play');
           }
 
           const SAFE_SCHEMES = new Set(['bitcoin', 'geo', 'im', 'irc', 'ircs', 'magnet', 'mailto', 'Matrix', 'mms', 'news', 'nntp', 'openpgp4fpr', 'sftp', 'sip', 'sms', 'smsto', 'ssh', 'tel', 'urn', 'webcal', 'wtai', 'xmpp']);
@@ -431,6 +510,7 @@ if (/^https?:$/.test(location.protocol)) {
             }
             reportProtocol(s, resolved.href);
           };
+          (window[Symbol.for('operecs.native')] || ((f) => f))(Navigator.prototype.registerProtocolHandler, 'registerProtocolHandler');
         },
         args: [
           !!siteFeatures.fingerprintingProtection,
