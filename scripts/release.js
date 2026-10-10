@@ -5,6 +5,8 @@
 //   npm run release            -> bumps the patch version (0.2.0 -> 0.2.1)
 //   npm run release -- 0.3.0   -> releases that exact version (Apple silicon Mac)
 //   npm run release -- 0.3.0 --all-platforms -> also Intel Mac, Windows (CI) and Linux (CI)
+//   npm run release -- --resume [--all-platforms] -> finishes a release whose tag is already
+//                                pushed but that stopped before publishing (e.g. a failed build)
 //
 // 1. bumps the version, commits, tags and pushes; the tag makes GitHub Actions build the
 //    Windows installer and Linux AppImage/.deb (and smoke-test them)
@@ -63,22 +65,8 @@ function waitForCi(tag, sha, env) {
   throw new Error(`Timed out waiting for CI${runId ? ` (run ${runId})` : ''}`);
 }
 
-function main() {
-  if (!fs.existsSync(PRIVATE_KEY)) throw new Error(`Missing signing key ${PRIVATE_KEY}. Run: npm run keygen`);
-  if (out('git', ['status', '--porcelain'])) throw new Error('Commit or stash your changes first.');
-  const privateKey = fs.readFileSync(PRIVATE_KEY, 'utf8');
-
-  const pkgPath = path.join(ROOT, 'package.json');
-  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
-  const args = process.argv.slice(2);
-  // Focus is Apple silicon Mac (see CLAUDE.md); --all-platforms also ships Intel Mac, Windows and Linux.
-  const ALL = args.includes('--all-platforms');
-  // --critical: a security fix; installed copies ask to restart now and restart by themselves soon
-  const CRITICAL = args.includes('--critical');
-  const version = nextVersion(pkg.version, args.find((a) => !a.startsWith('--')));
-  const tag = `v${version}`;
-  const env = { ...process.env, GH_TOKEN: out('gh', ['auth', 'token', '--user', OWNER]) };
-
+// Steps 0 and 1 of a new release; returns the tagged commit.
+function tagAndPush(pkg, pkgPath, version, tag) {
   // 0. release notes: pages/changelog.json's "next" becomes this version (shown on What's new)
   const logPath = path.join(ROOT, 'pages', 'changelog.json');
   const log = JSON.parse(fs.readFileSync(logPath, 'utf8'));
@@ -95,7 +83,35 @@ function main() {
   sh('git', ['commit', '-q', '-am', `Release ${tag}`]);
   sh('git', ['tag', tag]);
   sh('git', ['push', '-q', 'origin', 'HEAD', tag]);
-  const sha = out('git', ['rev-parse', 'HEAD']);
+  return out('git', ['rev-parse', 'HEAD']);
+}
+
+// --resume: the tag is already pushed. Only build and test tooling may have changed since then,
+// never the app itself, so the build matches the tagged source.
+function resumeFrom(tag) {
+  const changed = out('git', ['diff', '--name-only', tag, 'HEAD']).split('\n').filter(Boolean);
+  const appChanges = changed.filter((f) => !f.startsWith('scripts/') && f !== 'HANDOFF.md');
+  if (appChanges.length) throw new Error(`Can't resume ${tag}: the app changed since it (${appChanges.join(', ')})`);
+  return out('git', ['rev-parse', `${tag}^{commit}`]);
+}
+
+function main() {
+  if (!fs.existsSync(PRIVATE_KEY)) throw new Error(`Missing signing key ${PRIVATE_KEY}. Run: npm run keygen`);
+  if (out('git', ['status', '--porcelain'])) throw new Error('Commit or stash your changes first.');
+  const privateKey = fs.readFileSync(PRIVATE_KEY, 'utf8');
+
+  const pkgPath = path.join(ROOT, 'package.json');
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+  const args = process.argv.slice(2);
+  // Focus is Apple silicon Mac (see CLAUDE.md); --all-platforms also ships Intel Mac, Windows and Linux.
+  const ALL = args.includes('--all-platforms');
+  // --critical: a security fix; installed copies ask to restart now and restart by themselves soon
+  const CRITICAL = args.includes('--critical');
+  const RESUME = args.includes('--resume');
+  const version = RESUME ? pkg.version : nextVersion(pkg.version, args.find((a) => !a.startsWith('--')));
+  const tag = `v${version}`;
+  const env = { ...process.env, GH_TOKEN: out('gh', ['auth', 'token', '--user', OWNER]) };
+  const sha = RESUME ? resumeFrom(tag) : tagAndPush(pkg, pkgPath, version, tag);
 
   // 2. the Mac build, here
   const dist = path.join(ROOT, 'dist');

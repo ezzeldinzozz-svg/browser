@@ -81,7 +81,14 @@ async function main() {
 
   await check('browser starts and shows its toolbar', () => up);
   if (up) {
-    await check('toolbar API is available', () => evaluate('browser://ui/', 'typeof browserAPI === "object"'));
+    // the toolbar page can be up a moment before its preload has run
+    await check('toolbar API is available', async () => {
+      for (let i = 0; i < 20; i++) {
+        if (await evaluate('browser://ui/', 'typeof browserAPI === "object"').catch(() => false)) return true;
+        await sleep(500);
+      }
+      return false;
+    });
     await check('new tab page loads', async () => (await targets()).some((t) => t.url.startsWith('browser://newtab')));
     await check('extension toolbar element is defined', () =>
       evaluate('browser://ui/', "!!customElements.get('browser-action-list')"),
