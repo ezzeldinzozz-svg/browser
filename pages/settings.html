@@ -211,6 +211,8 @@
           <label class="check"><input id="fingerprinting-protection" type="checkbox"> Protect against browser fingerprinting (adds subtle noise to canvas, WebGL and audio)</label>
           <label class="check"><input id="tpc" type="checkbox"> Block third-party cookies (sites can still ask to use theirs when embedded)</label>
           <p id="tpc-restart" class="hint" hidden>Takes effect after restarting Operecs. <button id="tpc-restart-now">Restart now</button></p>
+          <label class="check" id="crash-reports-row"><input id="crash-reports" type="checkbox"> Send crash reports to help fix Operecs (no addresses or page content)</label>
+          <p id="crash-reports-restart" class="hint" hidden>Takes effect after restarting Operecs. <button id="crash-reports-restart-now">Restart now</button></p>
           <label class="check"><input id="gpc" type="checkbox"> Ask sites not to sell or share my data (Global Privacy Control)</label>
           <label class="check"><input id="strip-tracking" type="checkbox"> Remove tracking parameters (utm_, fbclid, gclid…) from addresses I open</label>
           <label class="check"><input id="https-only" type="checkbox"> Always use secure connections (HTTPS-Only: warn before opening sites that only support HTTP)</label>

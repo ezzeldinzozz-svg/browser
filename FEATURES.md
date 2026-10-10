@@ -75,7 +75,7 @@ Edit freely: move lines between sections, delete what you don't want, add your o
 - [ ] iCloud Passwords (needs Developer ID + Apple's web-browser entitlement)
 - [ ] Netflix / Spotify / Disney+ (DRM: castLabs Electron build + Widevine signing)
 - [ ] Safe Browsing / phishing and malware warnings (Google Web Risk is paid)
-- [ ] Opt-in crash reporting (needs a Sentry/Backtrace account)
+- [ ] Opt-in crash reporting: built in (Settings → Privacy, off by default); waiting for the Sentry project's DSN in `SENTRY_DSN` (main.js)
 
 ## Parked until we go public
 

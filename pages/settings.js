@@ -303,6 +303,9 @@ async function loadSettings() {
   renderEngines(s.searchEngines);
   document.getElementById('tpc').checked = s.blockThirdPartyCookies;
   document.getElementById('tpc-restart').hidden = s.blockThirdPartyCookies === s.thirdPartyCookiesBlockedNow;
+  document.getElementById('crash-reports-row').hidden = !s.crashReportsAvailable;
+  document.getElementById('crash-reports').checked = !!s.crashReports;
+  document.getElementById('crash-reports-restart').hidden = !s.crashReportsAvailable || !!s.crashReports === s.crashReportsNow;
   document.getElementById('download-dir').textContent = s.downloadDirShown;
   document.getElementById('ask-download').checked = s.askDownloadLocation;
   adblock.checked = s.adblock;
@@ -653,6 +656,14 @@ document.getElementById('tpc').addEventListener('change', async (e) => {
   loadSettings();
 });
 document.getElementById('tpc-restart-now').addEventListener('click', () => browserAPI.relaunch());
+
+// ---- Crash reports (opt-in)
+
+document.getElementById('crash-reports').addEventListener('change', async (e) => {
+  await browserAPI.setSetting('crashReports', e.target.checked);
+  loadSettings();
+});
+document.getElementById('crash-reports-restart-now').addEventListener('click', () => browserAPI.relaunch());
 
 // ---- On startup / home
 

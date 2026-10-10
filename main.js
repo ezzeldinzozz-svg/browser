@@ -169,6 +169,7 @@ function defaultSettings() {
   return {
     restoreSession: true,
     blockThirdPartyCookies: true,
+    crashReports: false, // opt-in: send crash reports to Sentry (read at startup)
     startup: null, // 'continue' | 'newtab' | 'pages' (null: derived from restoreSession)
     startupPages: [],
     showHomeButton: false,
@@ -5270,6 +5271,8 @@ function setupIpc() {
     searchEngines: allEngines().map((e) => ({ id: e.id, name: e.name, keyword: e.keyword, url: e.url, custom: !!e.custom })),
     searchEngineName: searchEngine().name,
     thirdPartyCookiesBlockedNow: thirdPartyCookiesBlocked,
+    crashReportsNow: crashReportsOn,
+    crashReportsAvailable: !!SENTRY_DSN,
     startupMode: startupMode(),
     downloadDirShown: downloadDir(),
     systemLanguages: app.getPreferredSystemLanguages(),
@@ -5317,6 +5320,7 @@ function setupIpc() {
         'adblock',
         'askDownloadLocation',
         'blockThirdPartyCookies',
+        'crashReports',
         'showHomeButton',
         'showBookmarksBar',
         'confirmClose',
@@ -6549,6 +6553,36 @@ function readEarlySettings() {
 // on by default like Safari and Brave. Embedded sites can still ask via the Storage Access API.
 const thirdPartyCookiesBlocked = readEarlySettings().blockThirdPartyCookies !== false;
 if (thirdPartyCookiesBlocked) app.commandLine.appendSwitch('test-third-party-cookie-phaseout');
+
+// Crash reports: opt-in (Settings → Privacy, off by default; applies after a restart), installed
+// copies only. Crashes and uncaught errors in Operecs itself go to Sentry. Sentry gets no hook
+// into web pages (no preload, no protocol), and reports carry no breadcrumbs, addresses, device
+// name or home folder, so nothing about your browsing is sent.
+const SENTRY_DSN = '';
+const crashReportsOn = !!SENTRY_DSN && app.isPackaged && readEarlySettings().crashReports === true;
+if (crashReportsOn) {
+  const Sentry = require('@sentry/electron/main');
+  const home = os.homedir();
+  const scrub = (event) => {
+    delete event.request;
+    delete event.user;
+    delete event.server_name;
+    const json = JSON.stringify(event)
+      .split(home)
+      .join('~')
+      .replace(/\b(https?|file|wss?):\/\/[^\s"'\\]+/gi, '<url>');
+    return JSON.parse(json);
+  };
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    release: `operecs@${app.getVersion()}`,
+    sendDefaultPii: false,
+    getSessions: () => [],
+    ipcMode: Sentry.IPCMode.Classic,
+    beforeBreadcrumb: () => null,
+    beforeSend: scrub,
+  });
+}
 
 // Every renderer is sandboxed, including any created by Electron internals.
 app.enableSandbox();

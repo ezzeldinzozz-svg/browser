@@ -149,7 +149,7 @@ Blocked or decided against (don't pick up without the user):
 - DRM (Netflix/Spotify): castLabs Electron fork + Widevine signing
 - Safe Browsing: Google Web Risk is paid
 - Built-in password manager: the user wants none (extensions only)
-- Opt-in crash reporting: needs a Sentry/Backtrace account
+- Opt-in crash reporting: built (`@sentry/electron` 7.19.0, `SENTRY_DSN` in main.js, setting `crashReports`, off by default, read at startup by `readEarlySettings`, packaged builds only). Needs the DSN from the Sentry org `operecs` (Project Settings → Client Keys); with an empty DSN the setting is hidden. Sentry gets `getSessions: () => []` and `ipcMode: Classic` (no preload in pages, no `sentry-ipc://` protocol), no breadcrumbs, and `beforeSend` drops request/user/server name and replaces URLs and the home folder
 
 See `research/browser-lessons.md` for the full research on how Brave and others are built.
 
